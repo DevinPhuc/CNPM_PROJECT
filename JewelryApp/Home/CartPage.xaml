@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JewelryApp.Home.CartPage"
+             BackgroundColor="#EFEFEF"
+             NavigationPage.HasNavigationBar="False"
+             Shell.TabBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto, *, Auto">
+
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *, Auto" Padding="20,20,20,20" BackgroundColor="#2B235A">
+            <ImageButton Source="undo.svg" WidthRequest="40" HeightRequest="40" BackgroundColor="#4A4177" CornerRadius="20" Padding="10" Clicked="OnBackButtonClicked"/>
+            <Label Grid.Column="1" Text="Giỏ hàng" FontSize="20" FontAttributes="Bold" FontFamily="Serif" VerticalOptions="Center" HorizontalOptions="Center" TextColor="White"/>
+            <Label x:Name="HeaderCountLabel" Grid.Column="2" Text="2 sản phẩm" FontSize="14" TextColor="#D9D9D9" VerticalOptions="Center"/>
+        </Grid>
+
+        <ScrollView Grid.Row="1" Padding="20,20,20,40">
+            <VerticalStackLayout Spacing="15">
+
+                <Border x:Name="Product1Container" Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                    <Grid ColumnDefinitions="Auto, Auto, *">
+                        <CheckBox x:Name="Check1" Grid.Column="0" IsChecked="True" Color="#B08920" VerticalOptions="Center" Margin="0,0,10,0" CheckedChanged="OnCheck1Changed" />
+                        <Image Grid.Column="1" Source="ring_img.png" WidthRequest="75" HeightRequest="75" Aspect="AspectFill">
+                            <Image.Clip>
+                                <RoundRectangleGeometry CornerRadius="10" Rect="0,0,75,75"/>
+                            </Image.Clip>
+                        </Image>
+
+                        <Grid Grid.Column="2" RowDefinitions="Auto, Auto, Auto, Auto" Margin="10,0,0,0">
+                            <Label Grid.Row="0" Text="Nhẫn Kim Cương Eternity" FontAttributes="Bold" FontSize="15" TextColor="#222222" FontFamily="Serif"/>
+                            <Label Grid.Row="1" Text="Vàng trắng / Size 17" TextColor="#888888" FontSize="12" Margin="0,2,0,0"/>
+                            <Label Grid.Row="2" Text="12.500.000đ" TextColor="#B08920" FontAttributes="Bold" FontSize="14" Margin="0,5,0,0"/>
+
+                            <Grid Grid.Row="3" ColumnDefinitions="*, Auto" Margin="0,15,0,0">
+                                <HorizontalStackLayout Grid.Column="0" Spacing="15" VerticalOptions="Center" HorizontalOptions="Start">
+                                    <ImageButton Source="minus.svg" Clicked="OnMinus2Clicked" BackgroundColor="#F9F6F0" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="8"/>
+                                    <Label x:Name="Qty2Label" Text="1" FontAttributes="Bold" TextColor="#222222" VerticalOptions="Center"/>
+                                    <ImageButton Source="plus.svg" Clicked="OnPlus2Clicked" BackgroundColor="#B08920" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="8"/>
+                                </HorizontalStackLayout>
+                                <ImageButton Grid.Column="1" Source="trash.svg" Clicked="OnTrash2Clicked" BackgroundColor="#FFEAEA" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="7" HorizontalOptions="End" VerticalOptions="Center"/>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="Product2Container" Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                    <Grid ColumnDefinitions="Auto, Auto, *">
+                        <CheckBox x:Name="Check2" Grid.Column="0" IsChecked="True" Color="#B08920" VerticalOptions="Center" Margin="0,0,10,0" CheckedChanged="OnCheck2Changed" />
+                        <Image Grid.Column="1" Source="necklace_img.png" WidthRequest="75" HeightRequest="75" Aspect="AspectFill">
+                            <Image.Clip>
+                                <RoundRectangleGeometry CornerRadius="10" Rect="0,0,75,75"/>
+                            </Image.Clip>
+                        </Image>
+
+                        <Grid Grid.Column="2" RowDefinitions="Auto, Auto, Auto, Auto" Margin="10,0,0,0">
+                            <Label Grid.Row="0" Text="Dây Chuyền Vàng 18K" FontAttributes="Bold" FontSize="15" TextColor="#222222" FontFamily="Serif"/>
+                            <Label Grid.Row="1" Text="Vàng 18K / 45cm" TextColor="#888888" FontSize="12" Margin="0,2,0,0"/>
+                            <Label Grid.Row="2" Text="8.200.000đ" TextColor="#B08920" FontAttributes="Bold" FontSize="14" Margin="0,5,0,0"/>
+
+                            <Grid Grid.Row="3" ColumnDefinitions="*, Auto" Margin="0,15,0,0">
+                                <HorizontalStackLayout Grid.Column="0" Spacing="15" VerticalOptions="Center" HorizontalOptions="Start">
+                                    <ImageButton Source="minus.svg" Clicked="OnMinus1Clicked" BackgroundColor="#F9F6F0" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="8"/>
+                                    <Label x:Name="Qty1Label" Text="1" FontAttributes="Bold" TextColor="#222222" VerticalOptions="Center"/>
+                                    <ImageButton Source="plus.svg" Clicked="OnPlus1Clicked" BackgroundColor="#B08920" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="8"/>
+                                </HorizontalStackLayout>
+                                <ImageButton Grid.Column="1" Source="trash.svg" Clicked="OnTrash1Clicked" BackgroundColor="#FFEAEA" CornerRadius="15" WidthRequest="30" HeightRequest="30" MinimumWidthRequest="30" Padding="7" HorizontalOptions="End" VerticalOptions="Center"/>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <Border Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                    <VerticalStackLayout Spacing="12">
+                        <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                            <Image Source="truck.svg" WidthRequest="18" HeightRequest="18"/>
+                            <Label Text="Phương thức vận chuyển" FontAttributes="Bold" FontSize="13" TextColor="#222222"/>
+                        </HorizontalStackLayout>
+                        <Grid ColumnDefinitions="*, Auto">
+                            <VerticalStackLayout>
+                                <Label Text="Giao hàng tiêu chuẩn" FontSize="13" TextColor="#333333" />
+                                <Label Text="Nhận hàng trong 2-3 ngày làm việc" FontSize="11" TextColor="#888888" />
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                <Label Text="Miễn phí" TextColor="#2E7D32" FontAttributes="Bold" FontSize="13"/>
+                                <Label Text="v" TextColor="#888888" FontSize="12" Margin="5,0,0,0" FontFamily="Consolas"/>
+                            </HorizontalStackLayout>
+                        </Grid>
+                        <Frame BackgroundColor="#F2FBF5" HasShadow="False" CornerRadius="10" Padding="10" BorderColor="Transparent">
+                            <Label Text="✓ Bạn được miễn phí vận chuyển cho đơn trên 10.000.000đ" TextColor="#2E7D32" FontSize="11"/>
+                        </Frame>
+                    </VerticalStackLayout>
+                </Border>
+
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <Frame Grid.Row="2" BackgroundColor="White" HasShadow="True" Padding="20,15,20,25" CornerRadius="0" BorderColor="Transparent">
+            <Grid ColumnDefinitions="*, Auto">
+                <VerticalStackLayout VerticalOptions="Center">
+                    <Label Text="Tổng thanh toán" FontSize="11" TextColor="#888888"/>
+                    <Label x:Name="BottomTotalLabel" Text="20.700.000đ" FontSize="18" FontAttributes="Bold" TextColor="#B08920"/>
+                </VerticalStackLayout>
+
+                <Button x:Name="OrderButton" 
+                        Grid.Column="1" 
+                        Text="Đặt hàng (2)"
+                        Clicked="OnOrderButtonClicked"
+                        BackgroundColor="#B08920" 
+                        TextColor="White" 
+                        FontAttributes="Bold" 
+                        FontSize="14" 
+                        CornerRadius="15" 
+                        Padding="25,12" 
+                        HeightRequest="50"/>
+            </Grid>
+        </Frame>
+
+    </Grid>
+</ContentPage>

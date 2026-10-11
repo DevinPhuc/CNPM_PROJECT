@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JewelryApp.Home.HomePage"
+             BackgroundColor="#F9F6F0">
+
+    <ScrollView Padding="20">
+        <VerticalStackLayout Spacing="25">
+
+            <Grid ColumnDefinitions="*, Auto, Auto" ColumnSpacing="15">
+                <VerticalStackLayout Grid.Column="0" VerticalOptions="Center">
+                    <Label Text="Chào mừng trở lại" TextColor="#888888" FontSize="12" />
+                    <Label Text="Hương Jewelry" TextColor="#222222" FontSize="22" FontAttributes="Bold" FontFamily="Serif" />
+                </VerticalStackLayout>
+
+                <ImageButton Grid.Column="1" 
+                             Source="search.svg" 
+                             WidthRequest="40" HeightRequest="40" 
+                             BackgroundColor="#F0EBE1" CornerRadius="20" Padding="10"
+                             VerticalOptions="Center"/>
+
+                <Grid Grid.Column="2" WidthRequest="50" HeightRequest="50" VerticalOptions="Center">
+
+                    <ImageButton Source="cart.svg" 
+                                 Clicked="OnCartClicked"
+                                 WidthRequest="40" HeightRequest="40" 
+                                 HorizontalOptions="Center" 
+                                 VerticalOptions="Center"
+                                 BackgroundColor="#F0EBE1" 
+                                 CornerRadius="20" 
+                                 Padding="10" />
+
+                    <!-- Chấm đỏ số 2 -->
+                    <Frame BackgroundColor="#E63946" CornerRadius="10" HeightRequest="20" WidthRequest="20" 
+                           HorizontalOptions="End" VerticalOptions="Start" Padding="0" HasShadow="False" Margin="0,3,3,0">
+                        <Label Text="2" TextColor="White" FontSize="10" HorizontalTextAlignment="Center" VerticalTextAlignment="Center"/>
+                    </Frame>
+                </Grid>
+            </Grid>
+
+            <VerticalStackLayout Spacing="15">
+                <Grid ColumnDefinitions="*, Auto">
+                    <Label Grid.Column="0" Text="Danh mục" FontSize="18" FontAttributes="Bold" TextColor="#222222" FontFamily="Serif"/>
+                    <Label Grid.Column="1" Text="Xem thêm" FontSize="12" TextColor="#D4AF37" VerticalOptions="Center"/>
+                </Grid>
+
+                <HorizontalStackLayout Spacing="15" HorizontalOptions="Center">
+                    <VerticalStackLayout Spacing="5" HorizontalOptions="Center">
+                        <Frame BackgroundColor="White" CornerRadius="15" HeightRequest="70" WidthRequest="70" HasShadow="False" BorderColor="#EFEFEF">
+                            <Image Source="ring_icon.png" Aspect="AspectFit" Margin="10"/>
+                        </Frame>
+                        <Label Text="Nhẫn" FontSize="12" TextColor="#333" HorizontalOptions="Center"/>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5" HorizontalOptions="Center">
+                        <Frame BackgroundColor="White" CornerRadius="15" HeightRequest="70" WidthRequest="70" HasShadow="False" BorderColor="#EFEFEF">
+                            <Image Source="necklace_icon.png" Aspect="AspectFit" Margin="10"/>
+                        </Frame>
+                        <Label Text="Dây chuyền" FontSize="12" TextColor="#333" HorizontalOptions="Center"/>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5" HorizontalOptions="Center">
+                        <Frame BackgroundColor="White" CornerRadius="15" HeightRequest="70" WidthRequest="70" HasShadow="False" BorderColor="#EFEFEF">
+                            <Image Source="bracelet_icon.png" Aspect="AspectFit" Margin="10"/>
+                        </Frame>
+                        <Label Text="Vòng tay" FontSize="12" TextColor="#333" HorizontalOptions="Center"/>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="5" HorizontalOptions="Center">
+                        <Frame BackgroundColor="White" CornerRadius="15" HeightRequest="70" WidthRequest="70" HasShadow="False" BorderColor="#EFEFEF">
+                            <Image Source="earring_icon.png" Aspect="AspectFit" Margin="10"/>
+                        </Frame>
+                        <Label Text="Bông tai" FontSize="12" TextColor="#333" HorizontalOptions="Center"/>
+                    </VerticalStackLayout>
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="15">
+                <Grid ColumnDefinitions="*, Auto">
+                    <Label Grid.Column="0" Text="Nổi bật" FontSize="18" FontAttributes="Bold" TextColor="#222222" FontFamily="Serif"/>
+                    <Label Grid.Column="1" Text="Xem thêm" FontSize="12" TextColor="#D4AF37" VerticalOptions="Center"/>
+                </Grid>
+
+                <Frame BackgroundColor="White" CornerRadius="15" Padding="10" HasShadow="False" BorderColor="#EFEFEF">
+                    <Grid ColumnDefinitions="90, *, Auto" ColumnSpacing="15">
+                        <Image Grid.Column="0" Source="ring_img.png" Aspect="AspectFill" HeightRequest="90" WidthRequest="90">
+                            <Image.Clip>
+                                <RoundRectangleGeometry CornerRadius="10" Rect="0,0,90,90"/>
+                            </Image.Clip>
+                        </Image>
+
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="5">
+                            <Frame BackgroundColor="#FFF8E7" Padding="8,4" CornerRadius="5" HorizontalOptions="Start" HasShadow="False">
+                                <Label Text="BÁN CHẠY" FontSize="10" TextColor="#D4AF37" FontAttributes="Bold"/>
+                            </Frame>
+                            <Label Text="Nhẫn Kim Cương Eternity" FontSize="14" FontAttributes="Bold" TextColor="#222222" FontFamily="Serif"/>
+                            <HorizontalStackLayout Spacing="2">
+                                <Label Text="★★★★★" TextColor="#FFC107" FontSize="12"/>
+                                <Label Text="(128)" TextColor="#888888" FontSize="12"/>
+                            </HorizontalStackLayout>
+                            <Label Text="12.500.000đ" FontSize="14" FontAttributes="Bold" TextColor="#D4AF37"/>
+                        </VerticalStackLayout>
+
+                        <Grid Grid.Column="2" VerticalOptions="Fill" HorizontalOptions="End">
+                            <ImageButton Source="heart_outline.png" WidthRequest="24" HeightRequest="24" BackgroundColor="Transparent" VerticalOptions="Start"/>
+                            <Label Text="&gt;" FontSize="18" TextColor="#CCCCCC" HorizontalOptions="Center" VerticalOptions="End" Margin="0,0,0,5"/>
+                        </Grid>
+                    </Grid>
+                </Frame>
+
+                <Frame BackgroundColor="White" CornerRadius="15" Padding="10" HasShadow="False" BorderColor="#EFEFEF">
+                    <Grid ColumnDefinitions="90, *, Auto" ColumnSpacing="15">
+                        <Image Grid.Column="0" Source="necklace_img.png" Aspect="AspectFill" HeightRequest="90" WidthRequest="90">
+                            <Image.Clip>
+                                <RoundRectangleGeometry CornerRadius="10" Rect="0,0,90,90"/>
+                            </Image.Clip>
+                        </Image>
+
+                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="5">
+                            <Frame BackgroundColor="#FFF8E7" Padding="8,4" CornerRadius="5" HorizontalOptions="Start" HasShadow="False">
+                                <Label Text="MỚI" FontSize="10" TextColor="#D4AF37" FontAttributes="Bold"/>
+                            </Frame>
+                            <Label Text="Dây Chuyền Vàng 18K" FontSize="14" FontAttributes="Bold" TextColor="#222222" FontFamily="Serif"/>
+                            <HorizontalStackLayout Spacing="2">
+                                <Label Text="★★★★★" TextColor="#FFC107" FontSize="12"/>
+                                <Label Text="(128)" TextColor="#888888" FontSize="12"/>
+                            </HorizontalStackLayout>
+                            <Label Text="8.200.000đ" FontSize="14" FontAttributes="Bold" TextColor="#D4AF37"/>
+                        </VerticalStackLayout>
+
+                        <Grid Grid.Column="2" VerticalOptions="Fill" HorizontalOptions="End">
+                            <ImageButton Source="heart_outline.png" WidthRequest="24" HeightRequest="24" BackgroundColor="Transparent" VerticalOptions="Start"/>
+                            <Label Text="&gt;" FontSize="18" TextColor="#CCCCCC" HorizontalOptions="Center" VerticalOptions="End" Margin="0,0,0,5"/>
+                        </Grid>
+                    </Grid>
+                </Frame>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

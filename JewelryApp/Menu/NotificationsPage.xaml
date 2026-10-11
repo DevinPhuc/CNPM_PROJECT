@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JewelryApp.Menu.NotificationsPage"
+             BackgroundColor="#F9F6F0">
+
+    <VerticalStackLayout Padding="20" Spacing="20">
+
+        <Grid ColumnDefinitions="*, Auto">
+            <Label Grid.Column="0" Text="Thông báo" FontSize="26" FontAttributes="Bold" TextColor="#222222" FontFamily="Serif" VerticalOptions="Center"/>
+
+            <Frame Grid.Column="1" Padding="10,5" CornerRadius="15" BackgroundColor="#F0EBE1" HasShadow="False">
+                <Frame.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnReadAllTapped" />
+                </Frame.GestureRecognizers>
+                <HorizontalStackLayout Spacing="5">
+                    <Image Source="check.svg" WidthRequest="16" HeightRequest="16" VerticalOptions="Center"/>
+                    <Label Text="Đọc tất cả" FontSize="12" TextColor="#888888" VerticalOptions="Center"/>
+                </HorizontalStackLayout>
+            </Frame>
+        </Grid>
+
+        <Frame BackgroundColor="#F0EBE1" Padding="5" CornerRadius="25" HasShadow="False">
+            <Grid ColumnDefinitions="*, *">
+
+                <Frame x:Name="TabAllFrame" Grid.Column="0" BackgroundColor="Transparent" CornerRadius="20" Padding="10" HasShadow="False">
+                    <Frame.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnTabAllTapped" />
+                    </Frame.GestureRecognizers>
+                    <Label x:Name="TabAllText" Text="Tất cả" HorizontalTextAlignment="Center" VerticalTextAlignment="Center" TextColor="#888888" FontSize="14" FontAttributes="Bold"/>
+                </Frame>
+
+                <Frame x:Name="TabUnreadFrame" Grid.Column="1" BackgroundColor="White" CornerRadius="20" Padding="10" HasShadow="False">
+                    <Frame.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnTabUnreadTapped" />
+                    </Frame.GestureRecognizers>
+                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="5">
+                        <Label x:Name="TabUnreadText" Text="Chưa đọc" TextColor="#D4AF37" FontSize="14" FontAttributes="Bold" VerticalOptions="Center"/>
+
+                        <Frame x:Name="BadgeUnreadFrame" BackgroundColor="#E63946" CornerRadius="10" HeightRequest="20" WidthRequest="20" Padding="0" HasShadow="False">
+                            <Label x:Name="BadgeUnreadText" Text="3" TextColor="White" FontSize="10" HorizontalTextAlignment="Center" VerticalTextAlignment="Center"/>
+                        </Frame>
+                    </HorizontalStackLayout>
+                </Frame>
+            </Grid>
+        </Frame>
+
+        <ScrollView>
+            <VerticalStackLayout Spacing="15">
+
+                <Frame x:Name="Notif1" BackgroundColor="White" CornerRadius="15" Padding="15" HasShadow="False" BorderColor="#D4AF37">
+                    <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="15">
+                        <Grid Grid.Column="0" VerticalOptions="Start">
+                            <Frame BackgroundColor="#FFF8E7" CornerRadius="25" HeightRequest="50" WidthRequest="50" HasShadow="False" Padding="0">
+                                <Image Source="bell_gold.png" WidthRequest="24" HeightRequest="24" HorizontalOptions="Center" VerticalOptions="Center"/>
+                            </Frame>
+                            <Frame x:Name="Dot1" BackgroundColor="#E63946" CornerRadius="5" HeightRequest="10" WidthRequest="10" HorizontalOptions="End" VerticalOptions="Start" Padding="0" HasShadow="False"/>
+                        </Grid>
+
+                        <VerticalStackLayout Grid.Column="1" Spacing="5">
+                            <Label Text="ĐƠN HÀNG CỦA BẠN ĐÃ ĐƯỢC XÁC NHẬN" FontSize="12" FontAttributes="Bold" TextColor="#333333"/>
+                            <Label Text="Nhẫn Kim Cương Eternity - Mã đơn HD2610001 đang được xử lý." FontSize="12" TextColor="#666666" LineBreakMode="WordWrap"/>
+                            <Label Text="05/10/2026 09:30" FontSize="10" TextColor="#D4AF37"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="&gt;" FontSize="18" TextColor="#CCCCCC" VerticalOptions="Center"/>
+                    </Grid>
+                </Frame>
+
+                <Frame x:Name="Notif2" BackgroundColor="White" CornerRadius="15" Padding="15" HasShadow="False" BorderColor="#EFEFEF">
+                    <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="15">
+                        <Grid Grid.Column="0" VerticalOptions="Start">
+                            <Frame BackgroundColor="#FFF8E7" CornerRadius="25" HeightRequest="50" WidthRequest="50" HasShadow="False" Padding="0">
+                                <Image Source="bell_gold.png" WidthRequest="24" HeightRequest="24" HorizontalOptions="Center" VerticalOptions="Center"/>
+                            </Frame>
+                            <Frame x:Name="Dot2" BackgroundColor="#E63946" CornerRadius="5" HeightRequest="10" WidthRequest="10" HorizontalOptions="End" VerticalOptions="Start" Padding="0" HasShadow="False"/>
+                        </Grid>
+                        <VerticalStackLayout Grid.Column="1" Spacing="5">
+                            <Label Text="KHUYẾN MÃI ĐẶC BIỆT CUỐI TUẦN" FontSize="12" FontAttributes="Bold" TextColor="#E63946"/>
+                            <Label Text="Giảm 20% toàn bộ bộ sưu tập Vàng Hồng từ 07-08/10/2026." FontSize="12" TextColor="#666666" LineBreakMode="WordWrap"/>
+                            <Label Text="04/10/2026 14:00" FontSize="10" TextColor="#D4AF37"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="&gt;" FontSize="18" TextColor="#CCCCCC" VerticalOptions="Center"/>
+                    </Grid>
+                </Frame>
+
+                <!-- THÔNG BÁO 3 -->
+                <Frame x:Name="Notif3" BackgroundColor="White" CornerRadius="15" Padding="15" HasShadow="False" BorderColor="#EFEFEF">
+                    <Grid ColumnDefinitions="Auto, *, Auto" ColumnSpacing="15">
+                        <Grid Grid.Column="0" VerticalOptions="Start">
+                            <Frame BackgroundColor="#FFF8E7" CornerRadius="25" HeightRequest="50" WidthRequest="50" HasShadow="False" Padding="0">
+                                <Image Source="bell_gold.png" WidthRequest="24" HeightRequest="24" HorizontalOptions="Center" VerticalOptions="Center"/>
+                            </Frame>
+                            <Frame x:Name="Dot3" BackgroundColor="#E63946" CornerRadius="5" HeightRequest="10" WidthRequest="10" HorizontalOptions="End" VerticalOptions="Start" Padding="0" HasShadow="False"/>
+                        </Grid>
+                        <VerticalStackLayout Grid.Column="1" Spacing="5">
+                            <Label Text="GIAO HÀNG THÀNH CÔNG" FontSize="12" FontAttributes="Bold" TextColor="#E63946"/>
+                            <Label Text="Vòng tay vàng 18K đã được giao đến địa chỉ của bạn." FontSize="12" TextColor="#666666" LineBreakMode="WordWrap"/>
+                            <Label Text="03/10/2026 11:20" FontSize="10" TextColor="#D4AF37"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" Text="&gt;" FontSize="18" TextColor="#CCCCCC" VerticalOptions="Center"/>
+                    </Grid>
+                </Frame>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </VerticalStackLayout>
+</ContentPage>

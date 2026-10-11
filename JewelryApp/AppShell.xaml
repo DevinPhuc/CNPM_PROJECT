@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="JewelryApp.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:local="clr-namespace:JewelryApp"
+    xmlns:Menu="clr-namespace:JewelryApp.Menu"
+    xmlns:Home="clr-namespace:JewelryApp.Home"
+    xmlns:User="clr-namespace:JewelryApp.User"
+    Shell.FlyoutBehavior="Disabled"
+    Shell.NavBarIsVisible="False"
+    Shell.TabBarBackgroundColor="#FFFFFF"
+    Shell.TabBarUnselectedColor="#A0A0A0"
+    Shell.TabBarForegroundColor="#D4AF37"
+    Shell.TabBarTitleColor="#D4AF37">
+
+    <TabBar>
+        <Tab Title="Trang chủ" Icon="home.svg">
+            <ShellContent ContentTemplate="{DataTemplate Home:HomePage}" />
+        </Tab>
+
+        <Tab Title="Thông báo" Icon="bell.svg">
+            <ShellContent ContentTemplate="{DataTemplate Menu:NotificationsPage}" />
+        </Tab>
+
+        <Tab Title="Cá nhân" Icon="user.svg">
+            <ShellContent ContentTemplate="{DataTemplate User:Personal}" />
+        </Tab>
+    </TabBar>
+</Shell>

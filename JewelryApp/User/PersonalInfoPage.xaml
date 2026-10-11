@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JewelryApp.User.PersonalInfoPage"
+             BackgroundColor="#F9F6F0"
+             NavigationPage.HasNavigationBar="False"
+             Shell.TabBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto, *">
+        <!-- Header -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Padding="20,20,20,20" BackgroundColor="#B08920">
+            <ImageButton Source="undo.svg" WidthRequest="40" HeightRequest="40" BackgroundColor="#C89D35" CornerRadius="20" Padding="10" Clicked="OnBackButtonClicked"/>
+            <Label Grid.Column="1" Text="Thông tin cá nhân" FontSize="18" FontAttributes="Bold" FontFamily="Serif" VerticalOptions="Center" Margin="15,0,0,0" TextColor="White"/>
+        </Grid>
+
+        <ScrollView Grid.Row="1" Padding="20">
+            <VerticalStackLayout Spacing="25">
+
+                <!-- Avatar & Camera Icon -->
+                <VerticalStackLayout HorizontalOptions="Center" Spacing="10" Margin="0,10,0,10">
+                    <Grid WidthRequest="100" HeightRequest="100" HorizontalOptions="Center">
+                        <Frame WidthRequest="90" HeightRequest="90" CornerRadius="45" BorderColor="#B08920" BackgroundColor="#F0EBE1" HasShadow="False" Padding="0" HorizontalOptions="Center" VerticalOptions="Center">
+                            <Image Source="user_large.svg" WidthRequest="40" HeightRequest="40" VerticalOptions="Center" HorizontalOptions="Center"/>
+                        </Frame>
+                        <!-- Nút Camera -->
+                        <Frame WidthRequest="30" HeightRequest="30" CornerRadius="15" BackgroundColor="#B08920" HasShadow="False" Padding="6" HorizontalOptions="End" VerticalOptions="End" Margin="0,0,5,5" BorderColor="White">
+                            <Image Source="camera.svg" WidthRequest="15" HeightRequest="15"/>
+                        </Frame>
+                    </Grid>
+                    <Label Text="Nguyễn Thị Lan" FontSize="16" FontAttributes="Bold" TextColor="#222222" HorizontalOptions="Center"/>
+                    <Label Text="Thành viên Vàng · Hương Jewelry" FontSize="12" TextColor="#888888" HorizontalOptions="Center"/>
+                </VerticalStackLayout>
+
+                <!-- Form Thông Tin -->
+                <Border Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="0">
+                    <VerticalStackLayout>
+
+                        <VerticalStackLayout Padding="15,12">
+                            <HorizontalStackLayout Spacing="5">
+                                <Image Source="user_small.svg" WidthRequest="12" HeightRequest="12" VerticalOptions="Center"/>
+                                <Label Text="HỌ VÀ TÊN" FontSize="10" TextColor="#888888" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <Entry Text="Nguyễn Thị Lan" TextColor="#222222" FontSize="14" BackgroundColor="Transparent" Margin="0,5,0,0"/>
+                        </VerticalStackLayout>
+                        <BoxView HeightRequest="1" Color="#EFEFEF"/>
+
+                        <VerticalStackLayout Padding="15,12">
+                            <HorizontalStackLayout Spacing="5">
+                                <Image Source="phone.svg" WidthRequest="12" HeightRequest="12" VerticalOptions="Center"/>
+                                <Label Text="SỐ ĐIỆN THOẠI" FontSize="10" TextColor="#888888" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <Entry Text="039****177" TextColor="#222222" FontSize="14" BackgroundColor="Transparent" Margin="0,5,0,0"/>
+                        </VerticalStackLayout>
+                        <BoxView HeightRequest="1" Color="#EFEFEF"/>
+
+                        <VerticalStackLayout Padding="15,12">
+                            <HorizontalStackLayout Spacing="5">
+                                <Image Source="calendar.svg" WidthRequest="12" HeightRequest="12" VerticalOptions="Center"/>
+                                <Label Text="NGÀY SINH" FontSize="10" TextColor="#888888" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <Entry Text="15/03/1995" TextColor="#222222" FontSize="14" BackgroundColor="Transparent" Margin="0,5,0,0"/>
+                        </VerticalStackLayout>
+                        <BoxView HeightRequest="1" Color="#EFEFEF"/>
+
+                        <VerticalStackLayout Padding="15,12">
+                            <HorizontalStackLayout Spacing="5">
+                                <Image Source="mail.svg" WidthRequest="12" HeightRequest="12" VerticalOptions="Center"/>
+                                <Label Text="EMAIL" FontSize="10" TextColor="#888888" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <Entry Text="lan.nguyen@email.com" TextColor="#222222" FontSize="14" BackgroundColor="Transparent" Margin="0,5,0,0"/>
+                        </VerticalStackLayout>
+                        <BoxView HeightRequest="1" Color="#EFEFEF"/>
+
+                        <VerticalStackLayout Padding="15,12">
+                            <HorizontalStackLayout Spacing="5">
+                                <Image Source="location_small.svg" WidthRequest="12" HeightRequest="12" VerticalOptions="Center"/>
+                                <Label Text="ĐỊA CHỈ" FontSize="10" TextColor="#888888" VerticalOptions="Center"/>
+                            </HorizontalStackLayout>
+                            <Entry Text="123 Nguyễn Huệ, Q.1, TP.HCM" TextColor="#222222" FontSize="14" BackgroundColor="Transparent" Margin="0,5,0,0"/>
+                        </VerticalStackLayout>
+
+                    </VerticalStackLayout>
+                </Border>
+
+                <Button Text="Lưu thay đổi" BackgroundColor="#B08920" TextColor="White" FontAttributes="Bold" CornerRadius="15" HeightRequest="50" Margin="0,10,0,30"/>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,106 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="JewelryApp.User.Personal"
+             BackgroundColor="#F9F6F0"
+             NavigationPage.HasNavigationBar="False"
+             Shell.NavBarIsVisible="False">
+
+    <ScrollView>
+        <VerticalStackLayout>
+
+            <Grid HeightRequest="220" BackgroundColor="#C49B57">
+                <VerticalStackLayout HorizontalOptions="Center" VerticalOptions="Center" Spacing="8" Margin="0,20,0,0">
+
+                    <Border StrokeShape="RoundRectangle 50" Stroke="White" StrokeThickness="3" 
+                            HeightRequest="100" WidthRequest="100" HorizontalOptions="Center">
+
+                        <Image Source="dotnet_bot.png" Aspect="AspectFill" BackgroundColor="#E8E8E8"/>
+                    </Border>
+
+                    <Label Text="Trương Hồng Vân" 
+                           TextColor="White" 
+                           FontAttributes="Bold" 
+                           FontSize="22" 
+                           HorizontalOptions="Center" />
+
+                    <Label Text="039****377" 
+                           TextColor="White" 
+                           FontSize="14" 
+                           HorizontalOptions="Center" />
+                </VerticalStackLayout>
+            </Grid>
+
+            <VerticalStackLayout Padding="20" Spacing="25">
+
+                <!-- Nhóm 1: Thông tin & Mật khẩu -->
+                <VerticalStackLayout Spacing="10">
+
+                    <!-- Nút Thông tin cá nhân -->
+                    <Border Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                        <!-- ĐƯA SỰ KIỆN CHẠM RA NGOÀI BORDER -->
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnPersonalInfoTapped" />
+                        </Border.GestureRecognizers>
+
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <Image Grid.Column="0" Source="user_outline.svg" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" Margin="0,0,15,0"/>
+                            <Label Grid.Column="1" Text="Thông tin cá nhân" FontSize="15" TextColor="#222222" VerticalOptions="Center"/>
+                            <Label Grid.Column="2" Text="&gt;" FontSize="16" TextColor="#AAAAAA" VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Stroke="#EFEFEF" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnChangePasswordTapped" />
+                        </Border.GestureRecognizers>
+
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <Image Grid.Column="0" Source="key.svg" WidthRequest="20" HeightRequest="20" VerticalOptions="Center" Margin="0,0,15,0"/>
+                            <Label Grid.Column="1" Text="Thay đổi mật khẩu" FontSize="15" TextColor="#222222" VerticalOptions="Center"/>
+                            <Label Grid.Column="2" Text="&gt;" FontSize="16" TextColor="#AAAAAA" VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="CÀI ĐẶT" TextColor="#888888" FontSize="13" FontAttributes="Bold" Margin="5,0,0,0"/>
+
+                    <Border Stroke="#EAEAEA" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <Image Grid.Column="0" Source="bell.svg" WidthRequest="24" HeightRequest="24" Margin="0,0,15,0" VerticalOptions="Center"/>
+                            <Label Grid.Column="1" Text="Nhận thông báo" TextColor="#333333" FontSize="16" VerticalOptions="Center"/>
+                            <Switch Grid.Column="2" IsToggled="True" OnColor="#C49B57" VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="THÔNG TIN PHÁP LÝ" TextColor="#888888" FontSize="13" FontAttributes="Bold" Margin="5,0,0,0"/>
+
+                    <Border Stroke="#EAEAEA" StrokeThickness="1" StrokeShape="RoundRectangle 15" BackgroundColor="White" Padding="15">
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <Image Grid.Column="0" Source="scroll.svg" WidthRequest="24" HeightRequest="24" Margin="0,0,15,0" VerticalOptions="Center"/>
+                            <Label Grid.Column="1" Text="Điều khoản dịch vụ" TextColor="#333333" FontSize="16" VerticalOptions="Center"/>
+                            <Label Grid.Column="2" Text="&gt;" TextColor="#999999" FontSize="18" VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+                <Button Text="Đăng xuất" 
+                        TextColor="#E53935" 
+                        BackgroundColor="#FFEAEA" 
+                        CornerRadius="15" 
+                        HeightRequest="55"
+                        FontAttributes="Bold"
+                        FontSize="16"
+                        BorderColor="#FFCDCD"
+                        BorderWidth="1"
+                        Clicked="OnLogoutClicked"
+                        Margin="0,10,0,30"/>
+
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
