@@ -88,7 +88,7 @@ function renderProducts() {
   document.getElementById("ownedProducts").innerHTML = products.map((product) => `
     <article class="owned-product">
       <div class="owned-product-image">
-        <img src="jewels-jewellery-ecommerce-free-website-template/images/${product.image}" alt="${product.name}" loading="lazy">
+        <img src="../../assets/images/${product.image}" alt="${product.name}" loading="lazy">
         <span class="product-status">Đã giao</span>
       </div>
       <h3>${product.name}</h3>

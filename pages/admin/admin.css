@@ -495,15 +495,15 @@ body {
 }
 
 .product-thumb-one {
-  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("jewels-jewellery-ecommerce-free-website-template/images/product-item3.jpg") center/cover no-repeat;
+  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("assets/images/product-item3.jpg") center/cover no-repeat;
 }
 
 .product-thumb-two {
-  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("jewels-jewellery-ecommerce-free-website-template/images/product-item8.jpg") center/cover no-repeat;
+  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("assets/images/product-item8.jpg") center/cover no-repeat;
 }
 
 .product-thumb-three {
-  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("jewels-jewellery-ecommerce-free-website-template/images/product-item11.jpg") center/cover no-repeat;
+  background: linear-gradient(135deg, rgba(112, 66, 4, 0.15), rgba(112, 66, 4, 0.5)), url("assets/images/product-item11.jpg") center/cover no-repeat;
 }
 
 .product-card h3 {

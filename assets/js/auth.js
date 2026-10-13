@@ -24,12 +24,14 @@ const demoAccount = {
   passwordHash: "ef22097bbc381829325eb9b079984ef8879476529f0e7985771580e415e35c43"
 };
 const shouldOpenAdminLogin = new URLSearchParams(window.location.search).get("admin") === "1";
+const homeUrl = document.body.dataset.homeUrl || "home.html";
+const adminUrl = document.body.dataset.adminUrl || "admin.html";
 
 if (document.body.dataset.authSuccess === "home") {
   try {
     const session = JSON.parse(localStorage.getItem("jewels-auth-session"));
     if (session && session.email) {
-      window.location.replace("home.html");
+      window.location.replace(homeUrl);
       return;
     }
   } catch {
@@ -160,7 +162,7 @@ authForm.addEventListener("submit", async (event) => {
   try {
     if (!isRegister && email === adminAccount.email && password === adminAccount.password) {
       localStorage.setItem(adminSessionKey, JSON.stringify({ name: adminAccount.name, email: adminAccount.email }));
-      window.location.href = "admin.html";
+      window.location.href = adminUrl;
       return;
     }
 
@@ -208,7 +210,7 @@ authForm.addEventListener("submit", async (event) => {
   }
 
   if (document.body.dataset.authSuccess === "home") {
-    window.location.href = "home.html";
+    window.location.href = homeUrl;
     return;
   }
 

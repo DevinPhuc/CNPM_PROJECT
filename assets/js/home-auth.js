@@ -9,12 +9,12 @@
   }
 
   if (!session || !session.email) {
-    window.location.replace("index.html");
+    window.location.replace("../../index.html");
     return;
   }
 
   document.getElementById("signOutButton").addEventListener("click", () => {
     localStorage.removeItem("jewels-auth-session");
-    window.location.href = "index.html";
+    window.location.href = "../../index.html";
   });
 })();
