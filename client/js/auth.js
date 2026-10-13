@@ -160,7 +160,7 @@ authForm.addEventListener("submit", async (event) => {
   try {
     if (!isRegister && email === adminAccount.email && password === adminAccount.password) {
       localStorage.setItem(adminSessionKey, JSON.stringify({ name: adminAccount.name, email: adminAccount.email }));
-      window.location.href = "admin.html";
+      window.location.href = "../admin/dashboard.html";
       return;
     }
 

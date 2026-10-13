@@ -5,12 +5,12 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="description" content="Quản lý hồ sơ, sản phẩm đã mua và hóa đơn của bạn tại Jewels.">
 	<title>Tài khoản của tôi - Jewels</title>
-	<link rel="stylesheet" href="../css/vendor/bootstrap.min.css">
-	<link rel="stylesheet" href="../css/style.css">
+	<link rel="stylesheet" href="../shared/css/vendor/bootstrap.min.css">
+	<link rel="stylesheet" href="../shared/css/style.css">
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:ital,wght@0,1..1000;1,1..1000&display=swap" rel="stylesheet">
-	<link rel="stylesheet" href="../css/user.css">
+	<link rel="stylesheet" href="css/user.css">
 </head>
 <body>
 	<svg xmlns="http://www.w3.org/2000/svg" class="d-none" aria-hidden="true">
@@ -23,14 +23,14 @@
 		<nav id="header-nav" class="navbar navbar-expand-lg px-3">
 			<div class="container-fluid">
 				<a class="navbar-brand" href="home.html">
-					<img src="../assets/images/main-logo.png" class="logo" alt="Jewels">
+					<img src="../shared/images/main-logo.png" class="logo" alt="Jewels">
 				</a>
 				<button class="navbar-toggler d-flex d-lg-none order-3 p-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#accountNavbar" aria-controls="accountNavbar" aria-label="Mở điều hướng">
 					<svg class="navbar-icon" width="42" height="42"><use href="#account-menu"></use></svg>
 				</button>
 				<div class="offcanvas offcanvas-end" tabindex="-1" id="accountNavbar" aria-label="Điều hướng chính">
 					<div class="offcanvas-header px-4 pb-0">
-						<a class="navbar-brand" href="home.html"><img src="../assets/images/main-logo.png" class="logo" alt="Jewels"></a>
+						<a class="navbar-brand" href="home.html"><img src="../shared/images/main-logo.png" class="logo" alt="Jewels"></a>
 						<button type="button" class="btn-close btn-close-black" data-bs-dismiss="offcanvas" aria-label="Đóng menu"></button>
 					</div>
 					<div class="offcanvas-body">
@@ -130,7 +130,7 @@
 		<div class="invoice-dialog-actions"><button type="button" class="cancel-edit" id="closeInvoiceFooter">Đóng</button><button type="button" class="save-profile" id="printInvoice">In hóa đơn</button></div>
 	</dialog>
 
-	<script src="../js/vendor/bootstrap.bundle.min.js"></script>
-	<script src="../js/user.js"></script>
+	<script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
+	<script src="js/user.js"></script>
 </body>
 </html>
