@@ -1,10 +1,12 @@
 # CNPM_PROJECT
 
-## Project Structure
+## Cấu trúc dự án
 
-- `admin/`: admin login, dashboard, styles, and scripts.
-- `client/`: storefront, shop, cart, and account pages with their styles and scripts.
-- `shared/`: shared Bootstrap files, base styles, and image assets.
-- `docs/`: project documentation.
+- `index.html`: trang chính của cửa hàng.
+- `pages/about/`: trang giới thiệu.
+- `pages/account/`: trang tài khoản và các tài nguyên riêng của trang.
+- `pages/admin/`: trang đăng nhập, bảng quản trị và tài nguyên quản trị.
+- `pages/shop/`: storefront, giỏ hàng, danh mục cửa hàng và tài nguyên riêng của trang.
+- `assets/css/`, `assets/js/`, `assets/images/`: CSS, JavaScript và hình ảnh dùng chung; `assets/vendor/` lưu ghi chú nguồn template.
 
-Open `client/index.html` to start the storefront or `admin/login.html` to open the admin login.
+Mở `index.html` qua máy chủ tĩnh cục bộ để sử dụng trang chính. Các trang chức năng được liên kết từ menu của cửa hàng.
