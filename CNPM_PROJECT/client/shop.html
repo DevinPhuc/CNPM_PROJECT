@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cửa hàng trang sức Jewels: lọc theo danh mục, giá, tìm kiếm và sắp xếp sản phẩm.">
+  <title>Cửa hàng - Jewels</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/store.css">
+</head>
+<body data-page="shop">
+  <header id="site-header"></header>
+  <main>
+    <div class="page-head">
+      <div class="container"><p class="eyebrow">Jewels</p><h1 id="shopTitle">Cửa hàng</h1><p class="muted" id="shopSub">Trang sức chọn lọc cho mọi khoảnh khắc</p></div>
+    </div>
+    <div class="container shop">
+      <aside class="filters" aria-label="Bộ lọc">
+        <div><h4>Danh mục</h4><div class="filter-list" id="catFilter"></div></div>
+        <div>
+          <h4>Khoảng giá</h4>
+          <div class="filter-list" id="priceFilter">
+            <button data-range="" class="active"><span class="f-check">✓</span> Tất cả</button>
+            <button data-range="0-2000000"><span class="f-check"></span> Dưới 2 triệu</button>
+            <button data-range="2000000-10000000"><span class="f-check"></span> 2 – 10 triệu</button>
+            <button data-range="10000000-"><span class="f-check"></span> Trên 10 triệu</button>
+          </div>
+        </div>
+        <button class="btn outline sm" id="clearFilters" type="button" style="width:100%;font-weight:600">Tất cả</button>
+      </aside>
+      <section>
+        <div class="toolbar">
+          <span class="muted" id="resultCount">Đang tải…</span>
+          <select id="sortSel" aria-label="Sắp xếp">
+            <option value="new">Mới nhất</option>
+            <option value="price-asc">Giá tăng dần</option>
+            <option value="price-desc">Giá giảm dần</option>
+            <option value="name">Tên A–Z</option>
+          </select>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="pager" id="pager"></div>
+      </section>
+    </div>
+  </main>
+  <footer id="site-footer"></footer>
+  <script src="js/app.js"></script>
+  <script src="js/pages/shop.js"></script>
+</body>
+</html>

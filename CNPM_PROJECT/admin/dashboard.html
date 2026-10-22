@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Hệ thống quản trị cửa hàng trang sức cao cấp Jewels kết nối cơ sở dữ liệu Supabase.">
+  <title>Bảng Quản Trị - Jewels</title>
+  <link rel="stylesheet" href="../shared/css/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="../shared/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <main class="admin-page">
+    <!-- SIDEBAR -->
+    <aside class="admin-sidebar">
+      <div class="admin-brand-block">
+        <div class="admin-brand-mark">J</div>
+        <div>
+          <span class="admin-brand-label">Jewels</span>
+          <strong>Bảng Quản Trị</strong>
+        </div>
+      </div>
+
+      <!-- AVATAR PROFILE CÓ POPUP ĐĂNG XUẤT KHI NHẤP -->
+      <div class="admin-profile-card" id="adminProfileTrigger" role="button" tabindex="0" title="Nhấp vào avatar để đăng xuất">
+        <div class="admin-avatar" id="adminAvatar">QT</div>
+        <div class="admin-profile-meta">
+          <strong id="adminProfileName">Quản trị viên</strong>
+          <span id="adminProfileEmail">admin@jewels.vn</span>
+        </div>
+        <svg class="admin-profile-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+
+        <!-- DROPDOWN ĐĂNG XUẤT KHI NHẤP VÀO AVATAR -->
+        <div class="admin-profile-dropdown" id="adminProfileDropdown" hidden>
+          <div class="dropdown-header">
+            <strong id="dropdownName">Quản trị viên</strong>
+            <span class="status-badge badge-success">Quản trị viên</span>
+          </div>
+          <div class="dropdown-body">
+            <p style="margin:4px 0; font-size:11px; color:#555;"><strong>Email:</strong> <span id="dropdownEmail">admin@jewels.vn</span></p>
+            <p style="margin:4px 0; font-size:11px; color:#555;"><strong>Quyền:</strong> Toàn quyền hệ thống</p>
+          </div>
+          <div class="dropdown-footer">
+            <button type="button" class="admin-logout-btn" id="dropdownLogoutBtn" style="width:100%;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Đăng xuất tài khoản
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <nav class="admin-nav" aria-label="Menu quản lý">
+        <a class="admin-nav-item is-active" href="#overview">Tổng quan</a>
+        <a class="admin-nav-item" href="#accounts" style="display:flex; align-items:center; justify-content:space-between;">
+          <span>1. Quản lý tài khoản & vai trò</span>
+          <span class="admin-nav-badge" id="navUnlockBadge" style="display:none; background:#e11d48; color:#fff; font-size:10px; padding:1px 6px; border-radius:10px; font-weight:700;">0</span>
+        </a>
+        <a class="admin-nav-item" href="#staff">2. Quản lý nhân viên</a>
+        <a class="admin-nav-item" href="#customers">3. Quản lý khách hàng</a>
+        <a class="admin-nav-item" href="#products">4. Quản lý sản phẩm</a>
+        <a class="admin-nav-item" href="#invoices">5. Quản lý hóa đơn</a>
+        <a class="admin-nav-item" href="#promotions">6. Quản lý khuyến mãi</a>
+        <a class="admin-nav-item" href="#orders">7. Quản lý đơn đặt hàng</a>
+        <a class="admin-nav-item" href="#stock">8. Quản lý nhập hàng</a>
+        <a class="admin-nav-item" href="#suppliers">9. Quản lý nhà cung cấp</a>
+        <a class="admin-nav-item" href="#analytics">10. Thống kê & Báo cáo</a>
+      </nav>
+
+      <div class="admin-system-status">
+        <span>Cơ sở dữ liệu</span>
+        <strong>Đã kết nối Supabase</strong>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <section class="admin-main">
+      <header class="admin-topbar">
+        <div>
+          <p class="account-eyebrow" id="topbarEyebrow">HỆ THỐNG QUẢN TRỊ</p>
+          <h1 id="topbarTitle">Bảng điều khiển</h1>
+        </div>
+        <div class="admin-topbar-actions">
+          <a href="../client/home.html" target="_blank" class="admin-secondary-btn" style="text-decoration:none; display:inline-flex; align-items:center;">Xem Cửa Hàng</a>
+          <button type="button" class="admin-secondary-btn" id="openUnlockRequestsBtn" title="Xem danh sách yêu cầu mở khóa tài khoản" style="display:inline-flex; align-items:center; gap:6px;">
+            <span style="font-size:14px;">🔔</span>
+            <span>Yêu cầu mở khóa</span>
+            <span class="unlock-counter-badge" id="unlockBadge" style="display:none; background:#e11d48; color:#fff; font-size:11px; padding:2px 7px; border-radius:10px; font-weight:700;">0</span>
+          </button>
+          <button type="button" class="admin-secondary-btn" id="refreshDataBtn">Làm mới dữ liệu</button>
+          
+          <!-- TOPBAR AVATAR CÓ MENU ĐĂNG XUẤT -->
+          <div class="topbar-avatar-wrap" id="topbarAvatarTrigger" role="button" tabindex="0" title="Nhấp vào avatar để đăng xuất">
+            <div class="admin-avatar mini-avatar">QT</div>
+            <span class="topbar-user-name" id="topbarUserName">Quản trị viên</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            
+            <div class="admin-profile-dropdown topbar-dropdown" id="topbarProfileDropdown" hidden>
+              <div class="dropdown-header">
+                <strong id="topbarDropName">Quản trị viên</strong>
+                <small id="topbarDropEmail" style="color:#666; display:block;">admin@jewels.vn</small>
+              </div>
+              <button type="button" class="admin-logout-btn" id="topbarLogoutBtn" style="width:100%; margin-top:8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- KPI BANNER -->
+      <div class="admin-kpis">
+        <article class="admin-kpi">
+          <span>Tổng doanh thu</span>
+          <strong id="kpiRevenue">0 đ</strong>
+          <small id="kpiInvoicesCount">Từ hóa đơn Supabase</small>
+        </article>
+        <article class="admin-kpi">
+          <span>Đơn đặt hàng</span>
+          <strong id="kpiOrders">0</strong>
+          <small id="kpiOrdersSub">Toàn thời gian</small>
+        </article>
+        <article class="admin-kpi">
+          <span>Khách hàng</span>
+          <strong id="kpiCustomers">0</strong>
+          <small id="kpiCustomersSub">Đã đăng ký</small>
+        </article>
+        <article class="admin-kpi">
+          <span>Tổng tồn kho</span>
+          <strong id="kpiStock">0</strong>
+          <small id="kpiProductsSub">Sản phẩm trong kho</small>
+        </article>
+      </div>
+
+      <!-- MODULE 0: TỔNG QUAN -->
+      <div class="admin-module active" data-module="overview">
+        <div class="admin-content-grid">
+          <section class="admin-panel admin-panel-wide">
+            <div class="panel-heading">
+              <div>
+                <p class="account-eyebrow">ĐƠN HÀNG MỚI NHẤT</p>
+                <h2>Đơn đặt hàng gần đây</h2>
+              </div>
+              <button class="mini-btn" onclick="switchTab('orders')">Xem chi tiết</button>
+            </div>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="overviewOrders"></div>
+            </div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="account-eyebrow">HÓA ĐƠN</p>
+                <h2>Hóa đơn mới lập</h2>
+              </div>
+              <button class="mini-btn" onclick="switchTab('invoices')">Xem chi tiết</button>
+            </div>
+            <div class="mini-table" id="overviewInvoices"></div>
+          </section>
+
+          <section class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="account-eyebrow">NHẬP KHO</p>
+                <h2>Phiếu nhập hàng mới</h2>
+              </div>
+              <button class="mini-btn" onclick="switchTab('stock')">Xem chi tiết</button>
+            </div>
+            <div class="admin-table-wrap">
+              <div class="admin-list compact-list" id="overviewStock"></div>
+            </div>
+          </section>
+
+          <!-- BẢNG SẢN PHẨM & SỐ LƯỢNG TỒN KHO TRÊN TRANG TỔNG QUAN -->
+          <section class="admin-panel admin-panel-wide">
+            <div class="panel-heading">
+              <div>
+                <p class="account-eyebrow">KHO SẢN PHẨM</p>
+                <h2>Bảng thống kê sản phẩm & số lượng tồn kho</h2>
+              </div>
+              <button class="mini-btn" onclick="switchTab('products')">Xem chi tiết</button>
+            </div>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="overviewProducts"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- MODULE 1: QUẢN LÝ TÀI KHOẢN VÀ VAI TRÒ -->
+      <div class="admin-module" data-module="accounts" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">1. HỆ THỐNG PHÂN QUYỀN</p>
+              <h2>Quản lý tài khoản và vai trò</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="accountSearch" class="admin-search" type="search" placeholder="Tìm kiếm tên, email, sđt...">
+              <button type="button" class="admin-primary-btn" data-add="accounts">+ Thêm tài khoản</button>
+            </div>
+          </div>
+          <!-- KHỐI YÊU CẦU MỞ KHÓA TÀI KHOẢN -->
+          <div class="unlock-requests-card" id="unlockRequestsSection" style="margin-bottom:20px; background:#fffbf7; border:1px solid #fed7aa; border-radius:12px; padding:16px 20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+              <div>
+                <h3 style="margin:0; font-size:16px; font-weight:700; display:flex; align-items:center; gap:8px; color:#9a3412;">
+                  <span>📩 Yêu cầu xin mở lại tài khoản</span>
+                  <span id="pendingUnlockCountBadge" class="table-tag" style="background:#ffedd5; color:#c2410c; border:1px solid #fdba74; font-size:12px; font-weight:700;">0 chờ xử lý</span>
+                </h3>
+                <small style="color:#78350f;">Khách hàng có tài khoản bị khóa gửi yêu cầu hỗ trợ mở lại qua trang đăng nhập</small>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button type="button" class="mini-btn" id="refreshUnlockRequestsBtn">Làm mới yêu cầu</button>
+              </div>
+            </div>
+            <div id="unlockRequestsTable" class="admin-list" style="margin:0;"></div>
+          </div>
+
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="accountsTable"></div>
+            </div>
+            <form id="accountForm" class="admin-form">
+              <h3 id="accountFormTitle">Thêm tài khoản mới</h3>
+              <input type="hidden" name="id">
+              <label>Họ và tên<input name="name" type="text" placeholder="Nguyễn Văn A" required></label>
+              <label>Email<input name="email" type="email" placeholder="example@jewels.vn" required></label>
+              <label>Số điện thoại<input name="phone" type="tel" placeholder="0901234567"></label>
+              <label>Mật khẩu (để trống nếu không đổi)<input name="password" type="password" placeholder="Tối thiểu 6 ký tự"></label>
+              <label>Vai trò hệ thống
+                <select name="role">
+                  <option value="CUSTOMER">CUSTOMER (Khách hàng)</option>
+                  <option value="SALES_STAFF">SALES_STAFF (Nhân viên bán hàng)</option>
+                  <option value="ADMIN">ADMIN (Quản trị viên toàn quyền)</option>
+                </select>
+              </label>
+              <label>Trạng thái
+                <select name="status">
+                  <option value="Hoạt động">Hoạt động</option>
+                  <option value="Khóa">Khóa tài khoản</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu vào Supabase</button>
+                <button type="button" class="admin-secondary-btn" data-reset="accounts">Làm mới</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 2: QUẢN LÝ NHÂN VIÊN -->
+      <div class="admin-module" data-module="staff" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">2. NHÂN SỰ NỘI BỘ</p>
+              <h2>Quản lý nhân viên</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="staffSearch" class="admin-search" type="search" placeholder="Tìm kiếm nhân viên...">
+              <button type="button" class="admin-primary-btn" data-add="staff">+ Thêm nhân viên</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="staffTable"></div>
+            </div>
+            <form id="staffForm" class="admin-form">
+              <h3 id="staffFormTitle">Thêm nhân viên</h3>
+              <input type="hidden" name="id">
+              <label>Họ và tên<input name="name" type="text" placeholder="Trần Thị B" required></label>
+              <label>Email<input name="email" type="email" placeholder="nhanvien@jewels.vn" required></label>
+              <label>Số điện thoại<input name="phone" type="tel" placeholder="0912345678"></label>
+              <label>Chức vụ
+                <select name="position">
+                  <option value="Nhân viên bán hàng">Nhân viên bán hàng</option>
+                  <option value="Quản lý chi nhánh">Quản lý chi nhánh</option>
+                  <option value="Quản trị viên">Quản trị viên</option>
+                </select>
+              </label>
+              <label>Địa chỉ làm việc<input name="address" type="text" placeholder="Trụ sở Jewels - Q.1, TP.HCM"></label>
+              <label>Trạng thái
+                <select name="status">
+                  <option value="Làm việc">Đang làm việc</option>
+                  <option value="Nghỉ việc">Nghỉ việc</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu nhân viên</button>
+                <button type="button" class="admin-secondary-btn" data-reset="staff">Làm mới</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 3: QUẢN LÝ KHÁCH HÀNG -->
+      <div class="admin-module" data-module="customers" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">3. QUAN HỆ KHÁCH HÀNG</p>
+              <h2>Quản lý khách hàng</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="customerSearch" class="admin-search" type="search" placeholder="Tìm khách hàng...">
+              <button type="button" class="admin-primary-btn" data-add="customers">+ Thêm khách hàng</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="customersTable"></div>
+            </div>
+            <form id="customerForm" class="admin-form">
+              <h3 id="customerFormTitle">Hồ sơ khách hàng</h3>
+              <input type="hidden" name="id">
+              <label>Họ và tên<input name="name" type="text" required></label>
+              <label>Email<input name="email" type="email" required></label>
+              <label>Số điện thoại<input name="phone" type="tel" required></label>
+              <label>Ngày sinh<input name="dob" type="date"></label>
+              <label>Địa chỉ giao hàng<input name="address" type="text" placeholder="Địa chỉ mặc định"></label>
+              <label>Trạng thái
+                <select name="status">
+                  <option value="Hoạt động">Hoạt động</option>
+                  <option value="Khóa">Khóa tài khoản</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu khách hàng</button>
+                <button type="button" class="admin-secondary-btn" data-reset="customers">Hủy</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 4: QUẢN LÝ SẢN PHẨM -->
+      <div class="admin-module" data-module="products" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">4. DANH MỤC TRANG SỨC</p>
+              <h2>Quản lý sản phẩm</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="productSearch" class="admin-search" type="search" placeholder="Tìm sản phẩm, chất liệu...">
+              <button type="button" class="admin-primary-btn" data-add="products">+ Thêm sản phẩm</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="productsTable"></div>
+            </div>
+            <form id="productForm" class="admin-form">
+              <h3 id="productFormTitle">Thông tin sản phẩm</h3>
+              <input type="hidden" name="id">
+              <label>Tên sản phẩm<input name="name" type="text" placeholder="Nhẫn Kim Cương Vàng 18K" required></label>
+              <label>Danh mục
+                <select name="categoryId" id="productCategorySelect">
+                  <option value="1">Nhẫn cưới & Cặp</option>
+                  <option value="2">Dây chuyền</option>
+                  <option value="3">Hoa tai</option>
+                  <option value="4">Lắc & Vòng tay</option>
+                  <option value="5">Kim cương viên</option>
+                </select>
+              </label>
+              <label>Giá bán niêm yết (VNĐ)<input name="price" type="number" min="0" placeholder="15000000" required></label>
+              <label>Số lượng tồn kho<input name="stock" type="number" min="0" placeholder="10" required></label>
+              <label>Đường dẫn hình ảnh<input name="image" type="text" placeholder="../shared/images/product-item1.jpg"></label>
+              <label>Mô tả chi tiết<textarea name="description" rows="2" style="width:100%; padding:8px; border:1px solid #dce1da; font-size:12px;"></textarea></label>
+              <label>Trạng thái kinh doanh
+                <select name="status">
+                  <option value="Đang mở bán">Đang mở bán</option>
+                  <option value="Hết hàng tạm thời">Hết hàng tạm thời</option>
+                  <option value="Tạm ngừng kinh doanh">Tạm ngừng kinh doanh</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu sản phẩm</button>
+                <button type="button" class="admin-secondary-btn" data-reset="products">Làm mới</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 5: QUẢN LÝ HÓA ĐƠN -->
+      <div class="admin-module" data-module="invoices" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">5. CHỨNG TỪ BÁN HÀNG</p>
+              <h2>Quản lý hóa đơn</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="invoiceSearch" class="admin-search" type="search" placeholder="Tìm mã HĐ, tên người mua, sđt...">
+              <button type="button" class="admin-primary-btn" data-add="invoices">+ Lập hóa đơn mới</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="invoicesTable"></div>
+            </div>
+            <form id="invoiceForm" class="admin-form">
+              <h3>Lập hóa đơn tại quầy</h3>
+              <input type="hidden" name="id">
+              <label>Tên khách hàng / Người mua<input name="customer" type="text" placeholder="Nguyễn Văn A" required></label>
+              <label>Số điện thoại<input name="phone" type="tel" placeholder="0901234567"></label>
+              <label>Địa chỉ người mua<input name="address" type="text" placeholder="TP. Hồ Chí Minh"></label>
+              <label>Tổng thanh toán (VNĐ)<input name="amount" type="number" min="0" placeholder="5000000" required></label>
+              <label>Thuế VAT (%)<input name="vatRate" type="number" value="8" min="0" max="20"></label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Xuất & Lưu hóa đơn</button>
+                <button type="button" class="admin-secondary-btn" data-reset="invoices">Hủy</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 6: QUẢN LÝ KHUYẾN MÃI -->
+      <div class="admin-module" data-module="promotions" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">6. MARKETING & ƯU ĐÃI</p>
+              <h2>Quản lý khuyến mãi</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="promotionSearch" class="admin-search" type="search" placeholder="Tìm mã khuyến mãi, tên CT...">
+              <button type="button" class="admin-primary-btn" data-add="promotions">+ Tạo mã ưu đãi</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="promotionsTable"></div>
+            </div>
+            <form id="promotionForm" class="admin-form">
+              <h3 id="promotionFormTitle">Chương trình khuyến mãi</h3>
+              <input type="hidden" name="id">
+              <label>Tên chương trình<input name="name" type="text" placeholder="Flash Sale Mùa Cưới" required></label>
+              <label>Mã Voucher<input name="code" type="text" placeholder="JEWELS20" style="text-transform:uppercase;" required></label>
+              <label>Mức giảm (%)<input name="discount" type="number" min="1" max="100" placeholder="20" required></label>
+              <label>Ngày bắt đầu<input name="beginDate" type="date"></label>
+              <label>Ngày kết thúc<input name="endDate" type="date"></label>
+              <label>Số lượng mã tối đa<input name="usageLimit" type="number" min="1" value="100"></label>
+              <label>Trạng thái
+                <select name="status">
+                  <option value="Hoạt động">Đang hoạt động</option>
+                  <option value="Hết hạn">Hết hạn / Tạm dừng</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu khuyến mãi</button>
+                <button type="button" class="admin-secondary-btn" data-reset="promotions">Làm mới</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 7: QUẢN LÝ ĐƠN ĐẶT HÀNG -->
+      <div class="admin-module" data-module="orders" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">7. XỬ LÝ ĐƠN HÀNG</p>
+              <h2>Quản lý đơn đặt hàng</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="orderSearch" class="admin-search" type="search" placeholder="Tìm mã đơn, tên khách, sđt...">
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="ordersTable"></div>
+            </div>
+            <form id="orderForm" class="admin-form">
+              <h3>Cập nhật trạng thái đơn</h3>
+              <input type="hidden" name="id">
+              <label>Mã đơn hàng<input name="code" type="text" readonly style="background:#eef1ec;"></label>
+              <label>Khách hàng<input name="customer" type="text" readonly style="background:#eef1ec;"></label>
+              <label>Tổng tiền<input name="total" type="text" readonly style="background:#eef1ec;"></label>
+              <label>Trạng thái xử lý
+                <select name="status">
+                  <option value="Đang chờ duyệt">Đang chờ duyệt</option>
+                  <option value="Đã xác nhận">Đã xác nhận</option>
+                  <option value="Đang giao hàng">Đang giao hàng</option>
+                  <option value="Đã giao thành công">Đã giao thành công (Tự lập hóa đơn)</option>
+                  <option value="Đã hủy">Đã hủy (Hoàn tồn kho)</option>
+                  <option value="Đã hoàn hàng">Đã hoàn hàng</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Cập nhật đơn hàng</button>
+                <button type="button" class="admin-secondary-btn" data-reset="orders">Đóng</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 8: QUẢN LÝ NHẬP HÀNG -->
+      <div class="admin-module" data-module="stock" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">8. KHO & NHẬP HÀNG</p>
+              <h2>Quản lý nhập hàng</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="stockSearch" class="admin-search" type="search" placeholder="Tìm phiếu nhập, nhà cung cấp...">
+              <button type="button" class="admin-primary-btn" data-add="stock">+ Tạo phiếu nhập kho</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="stockTable"></div>
+            </div>
+            <form id="stockForm" class="admin-form">
+              <h3>Phiếu nhập kho mới</h3>
+              <input type="hidden" name="id">
+              <label>Nhà cung cấp
+                <select name="supplierId" id="stockSupplierSelect" required>
+                  <option value="">-- Chọn nhà cung cấp --</option>
+                </select>
+              </label>
+              <label>Sản phẩm cần nhập kho
+                <select name="productId" id="stockProductSelect" required>
+                  <option value="">-- Chọn sản phẩm --</option>
+                </select>
+              </label>
+              <label>Số lượng sản phẩm nhập<input name="quantity" type="number" min="1" placeholder="20" required></label>
+              <label>Tổng giá trị nhập (VNĐ)<input name="amount" type="number" min="0" placeholder="50000000" required></label>
+              <label>Ngày nhập hàng<input name="date" type="date"></label>
+              <label>Ghi chú nhập kho<textarea name="note" rows="2" style="width:100%; padding:8px; border:1px solid #dce1da; font-size:12px;" placeholder="Nhập lô đá ruby / nhẫn vàng..."></textarea></label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu phiếu & Cộng tồn kho</button>
+                <button type="button" class="admin-secondary-btn" data-reset="stock">Hủy</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 9: QUẢN LÝ NHÀ CUNG CẤP -->
+      <div class="admin-module" data-module="suppliers" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">9. ĐỐI TÁC CUNG ỨNG</p>
+              <h2>Quản lý nhà cung cấp</h2>
+            </div>
+            <div class="admin-module-actions">
+              <input id="supplierSearch" class="admin-search" type="search" placeholder="Tìm tên đối tác, email, sđt...">
+              <button type="button" class="admin-primary-btn" data-add="suppliers">+ Thêm nhà cung cấp</button>
+            </div>
+          </div>
+          <div class="admin-management-layout">
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="suppliersTable"></div>
+            </div>
+            <form id="supplierForm" class="admin-form">
+              <h3 id="supplierFormTitle">Thông tin nhà cung cấp</h3>
+              <input type="hidden" name="id">
+              <label>Tên nhà cung cấp<input name="name" type="text" placeholder="Công ty Vàng Kim Phát" required></label>
+              <label>Số điện thoại<input name="phone" type="tel" placeholder="0281000001"></label>
+              <label>Email liên hệ<input name="email" type="email" placeholder="contact@kimphat.vn"></label>
+              <label>Địa chỉ văn phòng / xưởng<input name="address" type="text" placeholder="Quận 5, TP.HCM"></label>
+              <label>Trạng thái hợp tác
+                <select name="status">
+                  <option value="Hoạt động">Đang hợp tác</option>
+                  <option value="Ngừng hợp tác">Ngừng hợp tác</option>
+                </select>
+              </label>
+              <div class="admin-form-actions">
+                <button type="submit" class="admin-primary-btn">Lưu nhà cung cấp</button>
+                <button type="button" class="admin-secondary-btn" data-reset="suppliers">Làm mới</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 10: THỐNG KÊ & BÁO CÁO -->
+      <div class="admin-module" data-module="analytics" hidden>
+        <section class="admin-panel admin-panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="account-eyebrow">10. DỮ LIỆU KINH DOANH</p>
+              <h2>Báo cáo và thống kê</h2>
+            </div>
+            <div class="admin-module-actions">
+              <button type="button" class="admin-primary-btn" onclick="window.print()">In báo cáo</button>
+            </div>
+          </div>
+
+          <!-- BỘ LỌC DOANH THU THEO THỜI GIAN -->
+          <div class="analytics-filter-container">
+            <div class="analytics-filter-tabs" role="tablist">
+              <button type="button" class="analytics-tab-btn active" data-period="month">Theo tháng</button>
+              <button type="button" class="analytics-tab-btn" data-period="day">Theo ngày</button>
+              <button type="button" class="analytics-tab-btn" data-period="year">Theo năm</button>
+            </div>
+
+            <div class="analytics-filter-controls">
+              <!-- Mode Tháng -->
+              <div class="filter-group" id="filterGroupMonth">
+                <label for="analyticsMonthInput">Chọn tháng:</label>
+                <input type="month" id="analyticsMonthInput" class="admin-search" value="2026-10">
+              </div>
+
+              <!-- Mode Ngày -->
+              <div class="filter-group" id="filterGroupDay" style="display:none;">
+                <label for="analyticsStartDate">Từ ngày:</label>
+                <input type="date" id="analyticsStartDate" class="admin-search" value="2026-09-01">
+                <label for="analyticsEndDate">Đến ngày:</label>
+                <input type="date" id="analyticsEndDate" class="admin-search" value="2026-10-31">
+              </div>
+
+              <!-- Mode Năm -->
+              <div class="filter-group" id="filterGroupYear" style="display:none;">
+                <label for="analyticsYearSelect">Chọn năm:</label>
+                <select id="analyticsYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px;">
+                  <option value="2026" selected>Năm 2026</option>
+                  <option value="2025">Năm 2025</option>
+                  <option value="2027">Năm 2027</option>
+                </select>
+              </div>
+
+              <button type="button" class="admin-primary-btn" id="analyticsApplyBtn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: -1px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                Lọc dữ liệu
+              </button>
+              <span id="analyticsFilterNotice" class="filter-notice"></span>
+            </div>
+          </div>
+
+          <div class="admin-stat-grid" style="margin-bottom: 24px;">
+            <div class="stat-box">
+              <span>Doanh thu trong kỳ</span>
+              <strong id="analyticsTotalRevenue">0 đ</strong>
+            </div>
+            <div class="stat-box">
+              <span>Chi phí nhập kho trong kỳ</span>
+              <strong id="analyticsTotalCost">0 đ</strong>
+            </div>
+            <div class="stat-box">
+              <span>Lợi nhuận gộp ước tính</span>
+              <strong id="analyticsEstimatedProfit">0 đ</strong>
+            </div>
+            <div class="stat-box">
+              <span>Đơn giao thành công</span>
+              <strong id="analyticsCompletedOrders">0</strong>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="chart-card revenue-chart-card">
+              <div class="chart-header">
+                <div>
+                  <h3 id="analyticsBarChartTitle" style="margin-bottom:2px;">Doanh thu các ngày trong tháng</h3>
+                  <p class="chart-caption" id="analyticsChartCaption">Trục dọc: Doanh thu (VNĐ) • Trục ngang: Ngày trong tháng</p>
+                </div>
+                <div class="chart-header-stat">
+                  <span id="analyticsBarSubtitle" style="font-size:13px; font-weight:600; color:var(--admin-green);"></span>
+                  <small id="analyticsPeakDayBadge" class="peak-day-badge"></small>
+                </div>
+              </div>
+              <div class="bar-chart-container" id="barChartContainer">
+                <div class="y-axis" id="analyticsYAxis">
+                  <!-- Y-axis ticks like 20 tr, 10 tr, 0 đ -->
+                </div>
+                <div class="bars-area-wrap">
+                  <div class="grid-lines" id="analyticsGridLines">
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                  </div>
+                  <div class="bars" id="analyticsBars" aria-label="Biểu đồ cột doanh thu"></div>
+                  <div class="x-axis" id="analyticsXAxis"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>Tỷ lệ trạng thái đơn hàng</h3>
+                <span id="donutOrderCount" style="font-size:12px; color:var(--admin-muted); font-weight:600;"></span>
+              </div>
+              <div class="donut-chart-layout">
+                <div class="donut-wrap">
+                  <svg id="analyticsDonutSvg" viewBox="0 0 42 42" class="donut-svg" aria-label="Biểu đồ tròn tỷ lệ trạng thái đơn hàng">
+                    <!-- Dynamic SVG Donut Segments -->
+                  </svg>
+                  <div class="donut-center-info">
+                    <span id="donutCenterValue">0</span>
+                    <small>Đơn hàng</small>
+                  </div>
+                </div>
+                <div class="ring-list" id="analyticsStatusRing"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BẢNG SỐ LIỆU CHI TIẾT THEO THỜI GIAN -->
+          <div style="margin-top:28px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h3 style="font-family:var(--heading-font); font-size:20px; margin-bottom:0;" id="breakdownTableTitle">Bảng số liệu chi tiết doanh thu & chi phí</h3>
+              <span style="font-size:12px; color:var(--admin-muted);">Kèm tỷ lệ hoàn tất & lợi nhuận</span>
+            </div>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="analyticsBreakdownTable"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:28px;">
+            <h3 style="font-family:var(--heading-font); font-size:20px; margin-bottom:12px;">Top sản phẩm bán chạy nhất</h3>
+            <div class="admin-list" id="analyticsTopProducts"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- DETAIL MODAL -->
+  <div class="admin-modal-backdrop" id="detailModal" hidden>
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3 id="modalTitle">Chi tiết</h3>
+        <button type="button" class="admin-modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="adminToasts"></div>
+
+  <script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

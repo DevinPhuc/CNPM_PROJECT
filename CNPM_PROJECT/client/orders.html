@@ -1,0 +1,27 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Theo dõi và quản lý đơn hàng của bạn tại Jewels.">
+  <title>Đơn hàng của tôi - Jewels</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/store.css">
+</head>
+<body data-page="orders">
+  <header id="site-header"></header>
+  <main>
+    <div class="page-head"><div class="container"><p class="eyebrow">Lịch sử mua hàng</p><h1>Đơn hàng của tôi</h1></div></div>
+    <div class="container" style="max-width:900px;padding-bottom:70px" id="ordersRoot"><div class="skeleton" style="min-height:240px"></div></div>
+  </main>
+  <dialog id="orderDialog">
+    <button class="dlg-close" type="button" data-close aria-label="Đóng">×</button>
+    <div class="dlg-body" id="orderDetail"></div>
+  </dialog>
+  <footer id="site-footer"></footer>
+  <script src="js/app.js"></script>
+  <script src="js/pages/orders.js"></script>
+</body>
+</html>

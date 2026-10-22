@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Đăng nhập tài khoản khách hàng thân thiết tại Jewels.">
+  <title>Đăng Nhập - Jewels Everyday Treasures</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/store.css">
+  <style>
+    .auth-page-wrap {
+      min-height: calc(100vh - 80px - 250px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+    }
+    .auth-box {
+      width: min(960px, 100%);
+      background: #fff;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px -15px rgba(30, 20, 10, 0.12), 0 0 0 1px var(--line);
+    }
+  </style>
+</head>
+<body data-page="login">
+  <header id="site-header"></header>
+
+  <main class="auth-page-wrap">
+    <div class="auth-box auth-login-view">
+      <div class="auth-layout">
+        <aside class="auth-aside">
+          <div>
+            <span class="auth-badge">✦ Jewels Atelier ✦</span>
+            <div class="auth-aside-body">
+              <h3>Mỗi món trang sức là một câu chuyện vô giá.</h3>
+              <p>Chào mừng quý khách quay lại với không gian mua sắm thượng lưu của Jewels.</p>
+            </div>
+          </div>
+          <div class="auth-aside-foot">
+            <span>Bảo mật chuẩn SSL 256-bit</span>
+            <span>Hotline VIP: 1900 8899</span>
+          </div>
+        </aside>
+
+        <section class="auth-main">
+          <div class="auth-head">
+            <p class="eyebrow">Khách hàng thân thiết</p>
+            <h2>Đăng Nhập</h2>
+            <p>Nhập email và mật khẩu để quản lý đơn hàng & tích lũy điểm thưởng.</p>
+          </div>
+
+          <form class="auth-form" id="pageLoginForm">
+            <label class="field">
+              Email
+              <input name="email" type="email" autocomplete="email" placeholder="ban@email.com" required>
+            </label>
+            <label class="field">
+              Mật khẩu
+              <div class="pw-wrap">
+                <input name="password" type="password" minlength="8" placeholder="Nhập mật khẩu" required autocomplete="current-password">
+                <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+              </div>
+            </label>
+            <div class="auth-util-row">
+              <label><input type="checkbox" name="remember" checked> Ghi nhớ đăng nhập</label>
+              <a href="javascript:void(0)" onclick="Jewels.toast('Vui lòng liên hệ CSKH qua hotline 1900 8899 để đặt lại mật khẩu.', 'ok')">Quên mật khẩu?</a>
+            </div>
+            <button class="btn block gold" type="submit" id="pageLoginBtn">Đăng Nhập Ngay →</button>
+            <p class="feedback" id="pageLoginFb" role="status" aria-live="polite"></p>
+          </form>
+
+          <div class="auth-switch-card">
+            <div>
+              <strong>Chưa có tài khoản thành viên?</strong>
+              <p>Gia nhập hội viên nhận ngay Voucher giảm giá 10%</p>
+            </div>
+            <a href="register.html" class="auth-switch-btn">Đăng ký mới →</a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer id="site-footer"></footer>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+      const urlParams = new URLSearchParams(location.search);
+      const isLockedParam = urlParams.get("locked") === "1";
+      const lockedEmail = urlParams.get("email") || "";
+
+      if (isLockedParam) {
+        localStorage.removeItem("jewels_token");
+        localStorage.removeItem("jewels_user_email");
+        localStorage.removeItem("jewels_user_id");
+        if (Jewels.state) Jewels.state.user = null;
+      } else {
+        await Jewels.ready;
+        if (Jewels.state.user) {
+          location.href = "user.html";
+          return;
+        }
+      }
+      const form = document.getElementById("pageLoginForm");
+      const btn = document.getElementById("pageLoginBtn");
+      const fb = document.getElementById("pageLoginFb");
+
+      // Nút ẩn/hiện mật khẩu
+      form.querySelectorAll(".pw-toggle-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          const inp = b.previousElementSibling;
+          if (!inp) return;
+          const isPw = inp.type === "password";
+          inp.type = isPw ? "text" : "password";
+          b.textContent = isPw ? "🙈" : "👁️";
+        });
+      });
+
+      if (isLockedParam && lockedEmail) {
+        const emailInput = form.querySelector('[name="email"]');
+        if (emailInput) emailInput.value = lockedEmail;
+        showLockedBox(lockedEmail, "pending", "Khách hàng bị khóa bởi Quản trị viên.");
+      }
+
+      window._showLockedAlert = (email) => {
+        showLockedBox(email, "pending", "");
+      };
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(form));
+        btn.disabled = true;
+        fb.innerHTML = "";
+        try {
+          const data = await Jewels.api("/auth/login", { method: "POST", body: { email: f.email, password: f.password } });
+          localStorage.setItem("jewels_token", data.token);
+          if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
+          if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+          Jewels.state.user = data.user;
+          Jewels.toast("Chào mừng trở lại, " + data.user.name + "!", "ok");
+          setTimeout(() => location.href = "home.html", 500);
+        } catch (err) {
+          if (err.isLocked) {
+            showLockedBox(f.email, err.unlockStatus, err.unlockReason);
+          } else {
+            fb.innerHTML = `<span style="color:#e11d48; font-size:13px;">${err.message}</span>`;
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      function showLockedBox(email, status, reason) {
+        const isPending = status === "pending";
+        fb.innerHTML = `
+          <div class="locked-alert-box" style="margin-top:16px; padding:16px 18px; background:#fff1f2; border:1px solid #fecdd3; border-radius:12px; text-align:left;">
+            <div style="display:flex; align-items:center; gap:8px; color:#be123c; font-weight:700; font-size:14px; margin-bottom:6px;">
+              <span style="font-size:18px;">🔒</span> Tài khoản của bạn đã bị khóa
+            </div>
+            <p style="margin:0 0 10px; font-size:13px; color:#881337; line-height:1.5;">
+              Tài khoản <strong>${email || "của bạn"}</strong> đã bị tạm khóa bởi quản trị viên nên phiên đăng nhập đã kết thúc.
+            </p>
+            ${isPending ? `
+              <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 12px; color:#92400e; font-size:13px; margin-bottom:12px;">
+                ⏳ <strong>Yêu cầu mở khóa của bạn đang chờ phê duyệt.</strong><br>
+                Ban Quản Trị đã nhận được yêu cầu và sẽ mở lại tài khoản cho bạn sớm nhất có thể.
+              </div>
+            ` : `
+              <p style="margin:0 0 10px; font-size:13px; color:#881337; line-height:1.5;">
+                Quý khách vui lòng nhập lời nhắn (tùy chọn) và bấm nút bên dưới để gửi yêu cầu xin mở lại tài khoản tới ban quản trị.
+              </p>
+            `}
+            <div style="margin-bottom:10px;">
+              <textarea id="unlockReason" placeholder="${isPending ? 'Cập nhật thêm lời nhắn gửi ban quản trị...' : 'Nhập lý do hoặc lời nhắn gửi ban quản trị (không bắt buộc)...'}" style="width:100%; border:1px solid #fecdd3; border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical; min-height:52px; box-sizing:border-box;">${reason || ''}</textarea>
+            </div>
+            <button type="button" class="btn block gold" id="btnRequestUnlock" style="padding:10px 14px; font-size:13px; width:100%; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
+              ${isPending ? '📩 Cập nhật yêu cầu xin mở tài khoản' : '📩 Xin mở lại tài khoản'}
+            </button>
+            <div id="unlockNotice" style="margin-top:10px; font-size:13px; font-weight:600;"></div>
+          </div>
+        `;
+        const unlockBtn = document.getElementById("btnRequestUnlock");
+        const unlockNotice = document.getElementById("unlockNotice");
+        const reasonInput = document.getElementById("unlockReason");
+        unlockBtn.addEventListener("click", async () => {
+          unlockBtn.disabled = true;
+          unlockBtn.textContent = "Đang gửi yêu cầu xin mở lại tài khoản...";
+          try {
+            const res = await Jewels.api("/auth/request-unlock", {
+              method: "POST",
+              body: { email, reason: reasonInput ? reasonInput.value : "" }
+            });
+            unlockNotice.style.color = "#047857";
+            unlockNotice.innerHTML = "✅ " + (res.message || "Yêu cầu xin mở lại tài khoản đã được gửi thành công!");
+            unlockBtn.textContent = "📩 Cập nhật lại yêu cầu";
+            unlockBtn.disabled = false;
+          } catch (uErr) {
+            unlockNotice.style.color = "#b91c1c";
+            unlockNotice.textContent = "Lỗi: " + uErr.message;
+            unlockBtn.disabled = false;
+            unlockBtn.textContent = "📩 Thử gửi lại yêu cầu";
+          }
+        });
+
+        // Polling kiểm tra tự động xem Admin đã mở khóa chưa
+        if (window._unlockPollTimer) clearInterval(window._unlockPollTimer);
+        window._unlockPollTimer = setInterval(async () => {
+          try {
+            const st = await Jewels.api("/auth/unlock-status?email=" + encodeURIComponent(email));
+            if (st && st.isActive) {
+              clearInterval(window._unlockPollTimer);
+              window._unlockPollTimer = null;
+              triggerUnlockedNotice();
+            }
+          } catch {}
+        }, 3000);
+      }
+
+      function triggerUnlockedNotice() {
+        const notice = document.getElementById("unlockNotice");
+        const unlockBox = document.querySelector(".locked-alert-box");
+        const unlockBtn = document.getElementById("btnRequestUnlock");
+        if (unlockBtn) unlockBtn.style.display = "none";
+        const reasonInput = document.getElementById("unlockReason");
+        if (reasonInput) reasonInput.disabled = true;
+        if (notice) {
+          notice.style.color = "#047857";
+          notice.innerHTML = `
+            <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:10px 12px; color:#065f46; font-size:13px; margin-top:8px;">
+              🎉 <strong>Tài khoản đã được Quản trị viên mở khóa!</strong><br>
+              Quý khách có thể bấm <strong>Đăng Nhập Ngay</strong> ở trên để vào hệ thống.
+            </div>
+          `;
+        }
+        if (unlockBox) {
+          unlockBox.style.borderColor = "#a7f3d0";
+          unlockBox.style.background = "#f0fdf4";
+        }
+        btn.disabled = false;
+      }
+
+      // Lắng nghe sự kiện SSE khi admin mở khóa tài khoản
+      if (window.EventSource) {
+        try {
+          const sse = new EventSource("/api/realtime/events");
+          sse.onmessage = (ev) => {
+            try {
+              const payload = JSON.parse(ev.data);
+              const curEmail = form.querySelector('[name="email"]')?.value.trim().toLowerCase();
+              if (!curEmail) return;
+
+              const isUnlockEvent = payload.type === "UNLOCK_APPROVED" ||
+                (payload.type === "ACCOUNT_CHANGED" && payload.data?.isActive);
+
+              if (isUnlockEvent && payload.data?.email?.toLowerCase() === curEmail) {
+                if (window._unlockPollTimer) {
+                  clearInterval(window._unlockPollTimer);
+                  window._unlockPollTimer = null;
+                }
+                triggerUnlockedNotice();
+              }
+            } catch {}
+          };
+        } catch {}
+      }
+    })();
+  </script>
+</body>
+</html>

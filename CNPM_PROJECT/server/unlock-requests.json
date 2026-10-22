@@ -1,0 +1,30 @@
+[
+  {
+    "id": "req_1792597858320_ik53n",
+    "userId": "ad4c5472-2bc7-4c21-b8fe-19c06af2459a",
+    "email": "thanhtuan@gmail.com",
+    "name": "Nguyen Phan Thanh Tuan",
+    "phone": "0963355779",
+    "reason": "- Toi muon mo khoa tai khoan",
+    "status": "approved",
+    "createdAt": "2026-10-21T15:50:58.320Z",
+    "updatedAt": "2026-10-21T15:50:58.320Z",
+    "resolvedAt": "2026-10-21T15:51:09.764Z",
+    "resolvedBy": "",
+    "adminNote": null
+  },
+  {
+    "id": "req_1792561465280_1np90",
+    "userId": "ad921b6a-e089-4d0c-af61-b6aea97db9a5",
+    "email": "trongtin@gmail.com",
+    "name": "Đỗ Trọng Tín",
+    "phone": "0123456784",
+    "reason": "- Tôi bị khóa tài khoản",
+    "status": "approved",
+    "createdAt": "2026-10-21T05:44:25.280Z",
+    "updatedAt": "2026-10-21T05:44:25.280Z",
+    "resolvedAt": "2026-10-21T05:44:38.754Z",
+    "resolvedBy": "",
+    "adminNote": null
+  }
+]

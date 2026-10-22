@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Đăng ký tài khoản hội viên Jewels Privilege nhận ngay Voucher giảm giá 10% và quà tặng sinh nhật.">
+  <title>Đăng Ký Hội Viên - Jewels Privilege VIP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:wght@300..800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/store.css">
+  <style>
+    .auth-page-wrap {
+      min-height: calc(100vh - 80px - 250px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+    }
+    .auth-box {
+      width: min(1040px, 100%);
+      background: #fff;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px -15px rgba(30, 20, 10, 0.12), 0 0 0 1px var(--line);
+    }
+  </style>
+</head>
+<body data-page="register">
+  <header id="site-header"></header>
+
+  <main class="auth-page-wrap">
+    <div class="auth-box auth-register-view">
+      <div class="auth-layout">
+        <aside class="auth-aside">
+          <div>
+            <span class="auth-badge">💎 Jewels Privilege VIP</span>
+            <div class="auth-aside-body">
+              <h3>Đặc Quyền Thành Viên Mới</h3>
+              <p>Khám phá thế giới trang sức cao cấp cùng những đặc quyền dành riêng cho bạn:</p>
+              <div class="auth-perks">
+                <div class="perk-item">
+                  <div class="perk-icon">🏷️</div>
+                  <div class="perk-text">
+                    <strong>Voucher Chào Mừng 10%</strong>
+                    <span>Áp dụng ngay cho đơn hàng đầu tiên</span>
+                  </div>
+                </div>
+                <div class="perk-item">
+                  <div class="perk-icon">🎂</div>
+                  <div class="perk-text">
+                    <strong>Quà Sinh Nhật Độc Quyền</strong>
+                    <span>Món quà sang trọng gửi tận nơi mỗi năm</span>
+                  </div>
+                </div>
+                <div class="perk-item">
+                  <div class="perk-icon">✨</div>
+                  <div class="perk-text">
+                    <strong>Làm Sáng & Bảo Trì Trọn Đời</strong>
+                    <span>Miễn phí bảo dưỡng định kỳ vô điều kiện</span>
+                  </div>
+                </div>
+                <div class="perk-item">
+                  <div class="perk-icon">🚚</div>
+                  <div class="perk-text">
+                    <strong>Miễn Phí Giao Hàng Hỏa Tốc</strong>
+                    <span>Đóng gói hộp quà cao cấp kèm thiệp</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="auth-aside-foot">
+            <span>Tham gia hoàn toàn miễn phí</span>
+            <span>Tích lũy trọn đời</span>
+          </div>
+        </aside>
+
+        <section class="auth-main">
+          <div class="auth-head">
+            <p class="eyebrow">Gia nhập thành viên mới</p>
+            <h2>Tạo Tài Khoản</h2>
+            <p>Chỉ mất 30 giây để kích hoạt toàn bộ đặc quyền hội viên VIP Jewels.</p>
+          </div>
+
+          <form class="auth-form" id="pageRegForm">
+            <div class="form-row-2">
+              <label class="field">
+                Họ và tên
+                <input name="name" autocomplete="name" placeholder="Nguyễn Văn A" required>
+              </label>
+              <label class="field">
+                Số điện thoại
+                <input name="phone" type="tel" maxlength="10" inputmode="numeric" placeholder="0901234567" required>
+              </label>
+            </div>
+            <label class="field">
+              Email nhận thông báo & ưu đãi
+              <input name="email" type="email" autocomplete="email" placeholder="ban@gmail.com" required>
+            </label>
+            <div class="form-row-2">
+              <label class="field">
+                Mật khẩu
+                <div class="pw-wrap">
+                  <input name="password" type="password" minlength="8" placeholder="Tối thiểu 8 ký tự" required autocomplete="new-password">
+                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                </div>
+              </label>
+              <label class="field">
+                Xác nhận mật khẩu
+                <div class="pw-wrap">
+                  <input name="confirm" type="password" minlength="8" placeholder="Nhập lại mật khẩu" required autocomplete="new-password">
+                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                </div>
+              </label>
+            </div>
+            <label class="auth-agree-label">
+              <input type="checkbox" required checked>
+              <span>Tôi đồng ý với Điều khoản dịch vụ và Chính sách bảo mật hội viên Jewels.</span>
+            </label>
+            <button class="btn block gold" type="submit" id="pageRegBtn">Hoàn Tất Đăng Ký & Nhận Ưu Đãi 10% →</button>
+            <p class="feedback" id="pageRegFb" role="status" aria-live="polite"></p>
+          </form>
+
+          <div class="auth-switch-card">
+            <div>
+              <strong>Đã là thành viên của Jewels?</strong>
+              <p>Đăng nhập để theo dõi đơn và tích điểm thưởng</p>
+            </div>
+            <a href="login.html" class="auth-switch-btn">Đăng nhập ngay →</a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer id="site-footer"></footer>
+  <script src="js/app.js"></script>
+  <script>
+    (async () => {
+      await Jewels.ready;
+      if (Jewels.state.user) {
+        location.href = "user.html";
+        return;
+      }
+      const form = document.getElementById("pageRegForm");
+      const btn = document.getElementById("pageRegBtn");
+      const fb = document.getElementById("pageRegFb");
+
+      // Nút ẩn/hiện mật khẩu
+      form.querySelectorAll(".pw-toggle-btn").forEach((b) => {
+        b.addEventListener("click", () => {
+          const inp = b.previousElementSibling;
+          if (!inp) return;
+          const isPw = inp.type === "password";
+          inp.type = isPw ? "text" : "password";
+          b.textContent = isPw ? "🙈" : "👁️";
+        });
+      });
+
+      // Ràng buộc chỉ nhập số và tối đa 10 số
+      const phoneInput = form.querySelector("input[name=phone]");
+      phoneInput?.addEventListener("input", (e) => {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const f = Object.fromEntries(new FormData(form));
+        if (!f.name || f.name.trim().length < 2) return (fb.textContent = "Vui lòng nhập họ và tên.");
+        const cleanPhone = (f.phone || "").trim().replace(/\D/g, "");
+        if (!/^\d{10}$/.test(cleanPhone)) return (fb.textContent = "Số điện thoại phải bao gồm đúng 10 chữ số.");
+        const cleanMail = String(f.email || "").trim().toLowerCase();
+        if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(cleanMail)) {
+          return (fb.textContent = "Email đăng ký phải có đầy đủ cú pháp @gmail.com sau cùng (ví dụ: ban@gmail.com).");
+        }
+        if (f.password !== f.confirm) return (fb.textContent = "Mật khẩu xác nhận chưa khớp.");
+        btn.disabled = true;
+        fb.textContent = "";
+        try {
+          const data = await Jewels.api("/auth/register", { method: "POST", body: { name: f.name, email: cleanMail, phone: cleanPhone, password: f.password } });
+          localStorage.setItem("jewels_token", data.token);
+          Jewels.state.user = data.user;
+          Jewels.toast("Chúc mừng " + data.user.name + " đã gia nhập thành viên Jewels!", "ok");
+          setTimeout(() => location.href = "home.html", 500);
+        } catch (err) {
+          fb.textContent = err.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
