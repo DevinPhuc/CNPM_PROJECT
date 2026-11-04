@@ -275,14 +275,9 @@
       window.location.href = "dashboard.html";
     }
 
-    try {
-      const session = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || "null");
-      if (session && session.email === ADMIN_ACCOUNT.email) {
-        redirectToDashboard();
-      }
-    } catch {
-      localStorage.removeItem(ADMIN_SESSION_KEY);
-    }
+    // Khi vào trang đăng nhập Admin: luôn sẵn sàng hiển thị form đăng nhập cho Quản trị viên
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(ADMIN_SESSION_KEY);
 
     loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -305,20 +300,15 @@
           name: data.user?.name || ADMIN_ACCOUNT.name,
           email: data.user?.email || ADMIN_ACCOUNT.email,
           token: data.token,
+          serverInstance: data.serverInstance,
           remember,
         };
+        sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
         localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
         feedback.textContent = "";
         redirectToDashboard();
       } catch (err) {
-        if (email === ADMIN_ACCOUNT.email && password === ADMIN_ACCOUNT.password) {
-          const session = { name: ADMIN_ACCOUNT.name, email: ADMIN_ACCOUNT.email, remember };
-          localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
-          feedback.textContent = "";
-          redirectToDashboard();
-          return;
-        }
-        feedback.textContent = err.message;
+        feedback.textContent = err.message || "Đăng nhập thất bại.";
       }
     });
   </script>

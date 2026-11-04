@@ -5,20 +5,18 @@
   "use strict";
 
   const ADMIN_SESSION_KEY = "jewels-admin-session";
-  const ADMIN_DEFAULT = {
-    name: "Quản trị viên",
-    email: "admin@jewels.vn",
-    roles: ["ADMIN", "SALES_STAFF"],
-  };
 
-  // Đảm bảo luôn có phiên admin (hỗ trợ chạy song song ngay mà không bị redirect)
+  // Kiểm tra phiên đăng nhập admin (ưu tiên sessionStorage)
   let session = null;
   try {
-    session = JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || "null");
-  } catch {}
-  if (!session || !session.email) {
-    session = ADMIN_DEFAULT;
-    localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+    session = JSON.parse(sessionStorage.getItem(ADMIN_SESSION_KEY) || localStorage.getItem(ADMIN_SESSION_KEY) || "null");
+  } catch { }
+
+  if (!session || !session.token) {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    window.location.replace("login.html");
+    return;
   }
 
   // Cập nhật thông tin profile trên sidebar và topbar
@@ -61,6 +59,7 @@
     if (logout) {
       logout.addEventListener("click", () => {
         if (confirm("Bạn có chắc chắn muốn đăng xuất khỏi hệ thống quản trị?")) {
+          sessionStorage.removeItem(ADMIN_SESSION_KEY);
           localStorage.removeItem(ADMIN_SESSION_KEY);
           window.location.href = "login.html";
         }
@@ -91,6 +90,12 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) {
+        sessionStorage.removeItem(ADMIN_SESSION_KEY);
+        localStorage.removeItem(ADMIN_SESSION_KEY);
+        window.location.replace("login.html");
+        return;
+      }
       throw new Error(data.error || "Có lỗi xảy ra trên máy chủ.");
     }
     return data;
@@ -222,8 +227,21 @@
           ordersBox.innerHTML = '<div class="admin-empty">Chưa có đơn hàng nào</div>';
         } else {
           const grid = "minmax(85px, 0.9fr) minmax(130px, 1.4fr) minmax(110px, 1.1fr) minmax(110px, 1.1fr) minmax(95px, 0.9fr)";
+          const sortedRecent = (data.recentOrders || []).slice().sort((a, b) => {
+            const getPrio = (s) => {
+              const str = String(s || "").toLowerCase();
+              if (str.includes("chờ") || str === "pending") return 1;
+              if (str.includes("xác nhận") || str === "processing") return 2;
+              if (str.includes("giao") || str === "shipped") return 3;
+              if (str.includes("thành công") || str === "delivered") return 4;
+              return 5;
+            };
+            const diff = getPrio(a.status) - getPrio(b.status);
+            if (diff !== 0) return diff;
+            return new Date(b.date || 0) - new Date(a.date || 0);
+          });
           ordersBox.innerHTML = buildRowHeader(["Mã đơn", "Khách hàng", "Tổng tiền", "Trạng thái", "Ngày tạo"], grid) +
-            data.recentOrders.map((o) => `
+            sortedRecent.map((o) => `
               <div class="admin-row" style="grid-template-columns: ${grid};">
                 <strong>${o.code}</strong>
                 <span>${o.customer}</span>
@@ -255,7 +273,7 @@
         const grid = "minmax(90px, 1fr) minmax(140px, 1.5fr) minmax(100px, 1fr)";
         stockBox.innerHTML = (data.recentReceipts && data.recentReceipts.length > 0)
           ? buildRowHeader(["Mã phiếu", "Nhà cung cấp", "Tổng tiền"], grid) +
-            data.recentReceipts.map((r) => `
+          data.recentReceipts.map((r) => `
               <div class="admin-row" style="grid-template-columns: ${grid};">
                 <strong>${r.code}</strong>
                 <span>${r.supplier}</span>
@@ -296,6 +314,14 @@
       )
     );
 
+    // Sắp xếp trạng thái hiện hữu (Hoạt động) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const isActA = Boolean(a.isActive || a.status === "Hoạt động" || a.status === "Đang hoạt động");
+      const isActB = Boolean(b.isActive || b.status === "Hoạt động" || b.status === "Đang hoạt động");
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy tài khoản nào</div>';
       return;
@@ -312,12 +338,12 @@
           <span>${item.phone || "--"}</span>
           <span>
             ${(item.roles || []).map((r) => {
-              const isAdm = r === "ADMIN" || r === "Quản trị viên";
-              const isStf = r === "SALES_STAFF" || r === "Nhân viên";
-              const cls = isAdm ? "tag-admin" : isStf ? "tag-staff" : "tag-customer";
-              const lbl = isAdm ? "Quản trị viên" : isStf ? "Nhân viên" : "Khách hàng";
-              return `<span class="table-tag ${cls}">${lbl}</span>`;
-            }).join(" ")}
+        const isAdm = r === "ADMIN" || r === "Quản trị viên";
+        const isStf = r === "SALES_STAFF" || r === "Nhân viên";
+        const cls = isAdm ? "tag-admin" : isStf ? "tag-staff" : "tag-customer";
+        const lbl = isAdm ? "Quản trị viên" : isStf ? "Nhân viên" : "Khách hàng";
+        return `<span class="table-tag ${cls}">${lbl}</span>`;
+      }).join(" ")}
           </span>
           <span>
             ${renderStatusBadge(item.status)}
@@ -355,6 +381,7 @@
     const statusSelect = form.querySelector('[name="status"]');
     if (statusSelect) statusSelect.value = item.status;
     document.getElementById("accountFormTitle").textContent = "Cập nhật tài khoản";
+    openFormModal("accountsModal");
   };
 
   window.toggleAccount = async (id) => {
@@ -422,7 +449,12 @@
     const table = document.getElementById("unlockRequestsTable");
     if (!table) return;
 
-    const list = state.unlockRequests || [];
+    const list = (state.unlockRequests || []).slice().sort((a, b) => {
+      const prioA = a.status === "pending" ? 1 : 2;
+      const prioB = b.status === "pending" ? 1 : 2;
+      if (prioA !== prioB) return prioA - prioB;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
     if (list.length === 0) {
       table.innerHTML = '<div class="admin-empty" style="padding:16px;">Hiện chưa có yêu cầu xin mở lại tài khoản nào.</div>';
       return;
@@ -436,8 +468,8 @@
         const statusBadge = isPending
           ? '<span class="table-tag" style="background:#fef3c7; color:#b45309; font-weight:700;">⏳ Chờ mở lại</span>'
           : isApproved
-          ? '<span class="table-tag" style="background:#dcfce7; color:#15803d; font-weight:700;">✅ Đã mở khóa</span>'
-          : '<span class="table-tag" style="background:#fee2e2; color:#b91c1c; font-weight:700;">❌ Từ chối</span>';
+            ? '<span class="table-tag" style="background:#dcfce7; color:#15803d; font-weight:700;">✅ Đã mở khóa</span>'
+            : '<span class="table-tag" style="background:#fee2e2; color:#b91c1c; font-weight:700;">❌ Từ chối</span>';
 
         const actionButtons = isPending
           ? `
@@ -587,6 +619,14 @@
       )
     );
 
+    // Sắp xếp trạng thái hiện hữu (Đang làm việc / Làm việc) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const isActA = Boolean(a.isActive || a.status === "Làm việc" || a.status === "Đang làm việc");
+      const isActB = Boolean(b.isActive || b.status === "Làm việc" || b.status === "Đang làm việc");
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy nhân viên nào</div>';
       return;
@@ -624,6 +664,7 @@
     form.querySelector('[name="position"]').value = item.position || "Nhân viên bán hàng";
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("staffFormTitle").textContent = "Cập nhật nhân viên";
+    openFormModal("staffModal");
   };
 
   window.deleteStaff = async (id) => {
@@ -658,6 +699,14 @@
       c.email.toLowerCase().includes(filter) ||
       c.phone.toLowerCase().includes(filter)
     );
+
+    // Sắp xếp trạng thái hiện hữu (Hoạt động) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const isActA = Boolean(a.isActive || a.status === "Hoạt động" || a.status === "Đang hoạt động");
+      const isActB = Boolean(b.isActive || b.status === "Hoạt động" || b.status === "Đang hoạt động");
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return Number(b.totalSpent || 0) - Number(a.totalSpent || 0);
+    });
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy khách hàng nào</div>';
@@ -716,6 +765,7 @@
     form.querySelector('[name="address"]').value = item.address || "";
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("customerFormTitle").textContent = "Cập nhật khách hàng";
+    openFormModal("customersModal");
   };
 
   // ---------- 4. QUẢN LÝ SẢN PHẨM ----------
@@ -741,8 +791,19 @@
             overviewBox.innerHTML = '<div class="admin-empty">Chưa có sản phẩm nào trong kho</div>';
           } else {
             const grid = "60px minmax(160px, 2fr) minmax(110px, 1.2fr) minmax(110px, 1.1fr) minmax(95px, 1fr) minmax(120px, 1.2fr) minmax(90px, 0.9fr)";
+            const sortedOverviewProducts = products.slice().sort((a, b) => {
+              const getPrio = (p) => {
+                const s = String(p.status || "").toLowerCase();
+                if (s.includes("mở bán") || (p.isActive && p.stock > 0)) return 1;
+                if (s.includes("hết hàng") || (p.isActive && p.stock <= 0)) return 2;
+                return 3;
+              };
+              const diff = getPrio(a) - getPrio(b);
+              if (diff !== 0) return diff;
+              return (b.id || 0) - (a.id || 0);
+            });
             overviewBox.innerHTML = buildRowHeader(["Ảnh", "Tên sản phẩm", "Danh mục", "Đơn giá", "Số lượng tồn", "Tình trạng kho", "Thao tác"], grid) +
-              products.slice(0, 6).map((p) => {
+              sortedOverviewProducts.slice(0, 6).map((p) => {
                 let stockBadge = "";
                 if (p.stock <= 0) {
                   stockBadge = '<span class="status-badge badge-danger">Hết hàng</span>';
@@ -789,6 +850,19 @@
       p.category.toLowerCase().includes(filter)
     );
 
+    // Sắp xếp trạng thái hiện hữu (Đang mở bán) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const getPrio = (p) => {
+        const s = String(p.status || "").toLowerCase();
+        if (s.includes("mở bán") || (p.isActive && p.stock > 0)) return 1;
+        if (s.includes("hết hàng") || (p.isActive && p.stock <= 0)) return 2;
+        return 3;
+      };
+      const diff = getPrio(a) - getPrio(b);
+      if (diff !== 0) return diff;
+      return (b.id || 0) - (a.id || 0);
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy sản phẩm nào</div>';
       return;
@@ -828,6 +902,7 @@
     form.querySelector('[name="image"]').value = item.image || "";
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("productFormTitle").textContent = "Cập nhật sản phẩm #" + item.id;
+    openFormModal("productsModal");
   };
 
   window.deleteProduct = async (id) => {
@@ -864,49 +939,237 @@
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy hóa đơn nào</div>';
+      const panel = document.getElementById("invoiceDetailPanel");
+      if (panel) {
+        panel.innerHTML = `
+          <div class="admin-detail-placeholder">
+            <span style="font-size:36px; display:block; margin-bottom:12px;">🧾</span>
+            <h4>Không có hóa đơn</h4>
+            <p>Không tìm thấy hóa đơn phù hợp với điều kiện tìm kiếm.</p>
+          </div>
+        `;
+      }
       return;
     }
 
-    const grid = "minmax(90px, 1fr) minmax(140px, 1.4fr) minmax(105px, 1fr) minmax(95px, 1fr) minmax(90px, 0.9fr) minmax(110px, 1.1fr) minmax(100px, 1fr)";
-    table.innerHTML = buildRowHeader(["Mã HĐ", "Khách hàng", "Số điện thoại", "Ngày xuất", "Thuế VAT", "Tổng tiền", "Thao tác"], grid) +
+    // Tự động chọn hóa đơn đầu tiên nếu chưa chọn hoặc id không tồn tại trong danh sách
+    if (!state.selectedInvoiceId || !rows.some((r) => r.id === state.selectedInvoiceId)) {
+      state.selectedInvoiceId = rows[0].id;
+    }
+
+    const grid = "minmax(90px, 1fr) minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(95px, 0.9fr) minmax(90px, 0.9fr) minmax(110px, 1.1fr)";
+    table.innerHTML = buildRowHeader(["Mã HĐ", "Khách hàng", "Số điện thoại", "Ngày xuất", "Thuế VAT", "Tổng tiền"], grid) +
       rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
+        <div class="admin-row clickable-row ${state.selectedInvoiceId === item.id ? 'selected-row' : ''}"
+             id="invoice-row-${item.id}"
+             onclick="selectInvoiceRow(${item.id})"
+             style="grid-template-columns: ${grid};">
           <strong>${item.code}</strong>
           <span>${item.customer}</span>
           <span>${item.phone || "--"}</span>
           <small>${formatDate(item.date)}</small>
           <small style="color:#666;">${formatMoney(item.vatAmount)}</small>
           <strong style="color:var(--admin-green);">${formatMoney(item.amount)}</strong>
-          <div class="table-actions">
-            <button type="button" class="mini-btn" onclick="viewInvoiceDetail(${item.id})">Xem chi tiết</button>
-          </div>
         </div>
       `).join("");
+
+    renderInvoiceDetailPanel(state.selectedInvoiceId);
   }
 
-  window.viewInvoiceDetail = (id) => {
+  window.selectInvoiceRow = (id) => {
+    state.selectedInvoiceId = id;
+    const allRows = document.querySelectorAll("#invoicesTable .admin-row");
+    allRows.forEach((r) => r.classList.remove("selected-row"));
+    const activeRow = document.getElementById(`invoice-row-${id}`);
+    if (activeRow) activeRow.classList.add("selected-row");
+    renderInvoiceDetailPanel(id);
+  };
+
+  window.renderInvoiceDetailPanel = (id) => {
+    const panel = document.getElementById("invoiceDetailPanel");
+    if (!panel) return;
     const inv = state.invoices.find((i) => i.id === id);
-    if (!inv) return;
-    showModal(`Chi tiết hóa đơn ${inv.code}`, `
-      <div style="font-size:13px; display:grid; gap:8px;">
-        <p><strong>Người mua hàng:</strong> ${inv.customer} (${inv.phone || "Không có SĐT"})</p>
-        <p><strong>Địa chỉ:</strong> ${inv.address || "Tại quầy"}</p>
-        <p><strong>Ngày lập hóa đơn:</strong> ${formatDate(inv.date)}</p>
-        <div style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
-          <h4 style="font-size:14px; font-weight:600; margin-bottom:8px;">Các món hàng:</h4>
-          ${(inv.items || []).map((it) => `
-            <div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #f0f0f0;">
-              <span>${it.product_name || "Sản phẩm"} x ${it.quantity}</span>
-              <strong>${formatMoney(it.subtotal)}</strong>
-            </div>
-          `).join("") || '<p style="color:#888;">(Hóa đơn dịch vụ / Khách mua lẻ)</p>'}
+    if (!inv) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">🧾</span>
+          <h4>Chi tiết hóa đơn</h4>
+          <p>Nhấp vào một dòng trong bảng bên cạnh để xem toàn bộ thông tin chi tiết hóa đơn.</p>
         </div>
-        <div style="margin-top:12px; border-top:2px solid #ddd; padding-top:8px; display:flex; justify-content:space-between; font-size:15px;">
-          <strong>Tổng thanh toán:</strong>
-          <strong style="color:var(--admin-green); font-size:16px;">${formatMoney(inv.amount)}</strong>
+      `;
+      return;
+    }
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header">
+          <div>
+            <span class="detail-badge">Hóa đơn bán hàng</span>
+            <h3 style="margin: 6px 0 2px 0; font-size: 19px; font-weight: 700; color: var(--admin-green-dark);">${inv.code}</h3>
+            <small style="color: #777;">Ngày tạo: ${formatDate(inv.date)}</small>
+          </div>
+          <span class="table-tag" style="background:#e8f5e9; color:#1b5e20; font-size:11px; font-weight:600; padding:4px 8px;">Đã thanh toán</span>
+        </div>
+
+        <div style="margin: 16px 0;">
+          <h4 class="side-detail-title">Thông tin khách hàng</h4>
+          <div class="detail-info-grid">
+            <div><span class="lbl">Khách hàng:</span> <strong>${inv.customer}</strong></div>
+            <div><span class="lbl">Điện thoại:</span> <span>${inv.phone || "Không có SĐT"}</span></div>
+            <div><span class="lbl">Địa chỉ:</span> <span>${inv.address || "Mua trực tiếp tại showroom"}</span></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <h4 class="side-detail-title">Chi tiết mặt hàng (${(inv.items || []).length} món)</h4>
+          <div class="invoice-items-list">
+            ${(inv.items && inv.items.length) ? inv.items.map((it) => `
+              <div class="invoice-item-row">
+                <div class="item-name">
+                  <strong>${it.product_name || "Trang sức cao cấp"}</strong>
+                  <small>Số lượng: ${it.quantity} ${it.unit_price ? `&times; ${formatMoney(it.unit_price)}` : ''}</small>
+                </div>
+                <div class="item-price">
+                  <strong>${formatMoney(it.subtotal || (it.quantity * (it.unit_price || 0)))}</strong>
+                </div>
+              </div>
+            `).join('') : `
+              <div style="color: #777; font-size: 12px; font-style: italic; padding: 6px 0;">
+                Hóa đơn dịch vụ / Mua sắm lẻ tại quầy
+              </div>
+            `}
+          </div>
+        </div>
+
+        <div class="invoice-summary">
+          <div class="summary-line">
+            <span>Tạm tính tiền hàng:</span>
+            <span>${formatMoney(inv.subtotal)}</span>
+          </div>
+          ${inv.discountAmount > 0 ? `
+            <div class="summary-line" style="color: #2e7d32;">
+              <span>Chiết khấu Voucher:</span>
+              <span>-${formatMoney(inv.discountAmount)}</span>
+            </div>
+          ` : ''}
+          <div class="summary-line">
+            <span>Thuế VAT (${inv.vatRate || 8}%):</span>
+            <span style="color: #b45309; font-weight: 600;">+${formatMoney(inv.vatAmount || 0)}</span>
+          </div>
+          <div class="summary-line">
+            <span>Phí vận chuyển:</span>
+            <span>${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}</span>
+          </div>
+          <div class="summary-line total-line">
+            <span>Tổng thanh toán:</span>
+            <span style="color: var(--admin-green); font-size: 18px; font-weight: 800;">${formatMoney(inv.amount)}</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; gap: 8px;">
+          <button type="button" class="admin-primary-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center;" onclick="printInvoiceDetail(${inv.id})">
+            🖨️ In hóa đơn điện tử
+          </button>
         </div>
       </div>
+    `;
+  };
+
+  window.printInvoiceDetail = (id) => {
+    const inv = state.invoices.find((i) => i.id === id);
+    if (!inv) return;
+    const printWindow = window.open("", "_blank", "width=800,height=700");
+    if (!printWindow) {
+      alert("Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.");
+      return;
+    }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Hóa đơn ${inv.code}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #222; }
+          .inv-header { display: flex; justify-content: space-between; border-bottom: 2px solid #b98a3e; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo { font-size: 22px; font-weight: 700; color: #1b382b; }
+          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 13px; }
+          th { background: #f8f6f0; }
+          .text-right { text-align: right; }
+          .total-box { margin-top: 20px; float: right; width: 320px; }
+          .total-box div { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+          .total-final { font-size: 16px; font-weight: 700; color: #1b382b; border-top: 1px solid #333; margin-top: 6px; padding-top: 6px; }
+          @media print {
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="inv-header">
+          <div>
+            <div class="logo">SAIGON JEWELRY</div>
+            <p style="margin: 4px 0; font-size: 12px; color: #666;">Trụ sở chính: TP. Hồ Chí Minh | MST: 0312345678</p>
+          </div>
+          <div style="text-align: right;">
+            <h2 style="margin: 0; font-size: 18px; color: #b98a3e;">HÓA ĐƠN BÁN HÀNG</h2>
+            <p style="margin: 4px 0; font-weight: 600;">Số: ${inv.code}</p>
+            <p style="margin: 0; font-size: 12px; color: #666;">Ngày: ${formatDate(inv.date)}</p>
+          </div>
+        </div>
+        <div>
+          <p><strong>Khách hàng:</strong> ${inv.customer}</p>
+          <p><strong>Số điện thoại:</strong> ${inv.phone || '--'}</p>
+          <p><strong>Địa chỉ:</strong> ${inv.address || 'Tại quầy'}</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Mặt hàng</th>
+              <th class="text-right">SL</th>
+              <th class="text-right">Đơn giá</th>
+              <th class="text-right">Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(inv.items && inv.items.length) ? inv.items.map((it, idx) => `
+              <tr>
+                <td>${idx + 1}</td>
+                <td>${it.product_name || "Trang sức cao cấp"}</td>
+                <td class="text-right">${it.quantity}</td>
+                <td class="text-right">${formatMoney(it.unit_price || it.subtotal / it.quantity)}</td>
+                <td class="text-right">${formatMoney(it.subtotal || it.quantity * (it.unit_price || 0))}</td>
+              </tr>
+            `).join('') : `
+              <tr>
+                <td>1</td>
+                <td>Sản phẩm trang sức mua lẻ tại quầy</td>
+                <td class="text-right">1</td>
+                <td class="text-right">${formatMoney(inv.amount - (inv.vatAmount || 0))}</td>
+                <td class="text-right">${formatMoney(inv.amount - (inv.vatAmount || 0))}</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
+        <div class="total-box">
+          <div><span>Tạm tính tiền hàng:</span> <span>${formatMoney(inv.subtotal)}</span></div>
+          ${inv.discountAmount > 0 ? `<div><span>Chiết khấu Voucher:</span> <span>-${formatMoney(inv.discountAmount)}</span></div>` : ''}
+          <div><span>Thuế VAT (${inv.vatRate || 8}%):</span> <span>+${formatMoney(inv.vatAmount || 0)}</span></div>
+          <div><span>Phí vận chuyển:</span> <span>${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}</span></div>
+          <div class="total-final"><span>Tổng cộng thanh toán:</span> <span>${formatMoney(inv.amount)}</span></div>
+        </div>
+        <div style="clear: both; padding-top: 40px; text-align: center; color: #777; font-size: 12px;">
+          <p>Cảm ơn quý khách đã tin tưởng và ủng hộ Saigon Jewelry!</p>
+          <button onclick="window.print()" style="margin-top: 15px; padding: 8px 18px; cursor: pointer; background: #1b382b; color: #fff; border: none; border-radius: 4px;">In ngay</button>
+        </div>
+      </body>
+      </html>
     `);
+    printWindow.document.close();
+  };
+
+  window.viewInvoiceDetail = (id) => {
+    selectInvoiceRow(id);
   };
 
   // ---------- 6. QUẢN LÝ KHUYẾN MÃI ----------
@@ -929,28 +1192,132 @@
       p.code.toLowerCase().includes(filter)
     );
 
+    // Sắp xếp trạng thái hiện hữu (Hoạt động / Đang hoạt động) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const isActA = Boolean(a.isActive || a.status === "Hoạt động" || a.status === "Đang hoạt động");
+      const isActB = Boolean(b.isActive || b.status === "Hoạt động" || b.status === "Đang hoạt động");
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return (b.id || 0) - (a.id || 0);
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy mã khuyến mãi nào</div>';
+      const panel = document.getElementById("promotionDetailPanel");
+      if (panel) {
+        panel.innerHTML = `
+          <div class="admin-detail-placeholder">
+            <span style="font-size:36px; display:block; margin-bottom:12px;">🏷️</span>
+            <h4>Không có chương trình ưu đãi</h4>
+            <p>Không tìm thấy khuyến mãi nào phù hợp với bộ lọc.</p>
+          </div>
+        `;
+      }
       return;
     }
 
-    const grid = "minmax(130px, 1.4fr) minmax(100px, 1.1fr) minmax(85px, 0.9fr) minmax(130px, 1.2fr) minmax(85px, 0.9fr) minmax(100px, 1fr) minmax(90px, 1fr)";
+    // Tự động chọn chương trình đầu tiên nếu chưa chọn hoặc id không nằm trong danh sách
+    if (!state.selectedPromotionId || !rows.some((r) => r.id === state.selectedPromotionId)) {
+      state.selectedPromotionId = rows[0].id;
+    }
+
+    const grid = "minmax(130px, 1.3fr) minmax(95px, 1fr) minmax(80px, 0.8fr) minmax(130px, 1.2fr) minmax(80px, 0.8fr) minmax(95px, 0.9fr) minmax(85px, 0.9fr)";
     table.innerHTML = buildRowHeader(["Tên CT", "Mã Voucher", "Mức giảm", "Hạn áp dụng", "Lượt dùng", "Trạng thái", "Thao tác"], grid) +
       rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
+        <div class="admin-row clickable-row ${state.selectedPromotionId === item.id ? 'selected-row' : ''}"
+             id="promo-row-${item.id}"
+             onclick="selectPromotionRow(${item.id})"
+             style="grid-template-columns: ${grid};">
           <strong>${item.name}</strong>
           <span><code style="background:#eee; padding:2px 6px; font-weight:700; color:var(--admin-gold);">${item.code}</code></span>
           <strong style="color:var(--admin-green);">${item.discount}%</strong>
           <small>${formatDate(item.beginDate)} - ${formatDate(item.endDate)}</small>
           <span>${item.timesUsed} / ${item.usageLimit}</span>
           <span>${renderStatusBadge(item.status)}</span>
-          <div class="table-actions">
+          <div class="table-actions" onclick="event.stopPropagation()">
             <button type="button" class="mini-btn" onclick="editPromotion(${item.id})">Sửa</button>
             <button type="button" class="mini-btn danger" onclick="deletePromotion(${item.id})">Hủy</button>
           </div>
         </div>
       `).join("");
+
+    renderPromotionDetailPanel(state.selectedPromotionId);
   }
+
+  window.selectPromotionRow = (id) => {
+    state.selectedPromotionId = id;
+    const allRows = document.querySelectorAll("#promotionsTable .admin-row");
+    allRows.forEach((r) => r.classList.remove("selected-row"));
+    const activeRow = document.getElementById(`promo-row-${id}`);
+    if (activeRow) activeRow.classList.add("selected-row");
+    renderPromotionDetailPanel(id);
+  };
+
+  window.renderPromotionDetailPanel = (id) => {
+    const panel = document.getElementById("promotionDetailPanel");
+    if (!panel) return;
+    const promo = state.promotions.find((p) => p.id === id);
+    if (!promo) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">🏷️</span>
+          <h4>Chi tiết chương trình ưu đãi</h4>
+          <p>Nhấp vào một dòng trong bảng bên cạnh để xem thông số và quản lý chương trình.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const percentUsed = Math.min(100, Math.round(((promo.timesUsed || 0) / (promo.usageLimit || 1)) * 100));
+    const remaining = Math.max(0, (promo.usageLimit || 0) - (promo.timesUsed || 0));
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header">
+          <div>
+            <span class="detail-badge">Chương trình ưu đãi</span>
+            <h3 style="margin: 6px 0 2px 0; font-size: 18px; font-weight: 700; color: var(--admin-dark);">${promo.name}</h3>
+            <code style="background:#fdf6ec; border:1px solid #e7d6b8; padding:3px 8px; border-radius:4px; font-weight:800; font-size:14px; color:var(--admin-gold); display:inline-block; margin-top:4px;">${promo.code}</code>
+          </div>
+          <div>${renderStatusBadge(promo.status)}</div>
+        </div>
+
+        <div style="margin: 16px 0; background: #faf8f5; border-radius: 8px; padding: 14px; border: 1px solid #f0ede8;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase;">Mức giảm ưu đãi</span>
+            <span style="font-size: 24px; font-weight: 800; color: var(--admin-green);">${promo.discount}%</span>
+          </div>
+          <div style="font-size: 12px; color: #777;">
+            Áp dụng cho đơn hàng đáp ứng điều kiện khuyến mãi của thương hiệu.
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <h4 class="side-detail-title">Thời hạn & Tiến độ sử dụng</h4>
+          <div class="detail-info-grid">
+            <div><span class="lbl">Bắt đầu:</span> <strong>${formatDate(promo.beginDate)}</strong></div>
+            <div><span class="lbl">Kết thúc:</span> <strong>${formatDate(promo.endDate)}</strong></div>
+            <div>
+              <span class="lbl">Lượt dùng:</span>
+              <strong>${promo.timesUsed} / ${promo.usageLimit} lượt</strong>
+              <span style="color:#777; font-size:12px; margin-left:4px;">(Còn ${remaining} lượt)</span>
+            </div>
+          </div>
+          <div style="margin-top: 10px; background: #e5e7eb; border-radius: 999px; height: 8px; overflow: hidden;">
+            <div style="width: ${percentUsed}%; background: var(--admin-green); height: 100%; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; gap: 8px; border-top: 1px solid #f0ede8; padding-top: 16px;">
+          <button type="button" class="admin-primary-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center;" onclick="editPromotion(${promo.id})">
+            ✏️ Chỉnh sửa
+          </button>
+          <button type="button" class="admin-secondary-btn" style="padding: 8px 12px; font-size: 12px; color: var(--admin-red); border-color: #fca5a5;" onclick="deletePromotion(${promo.id})">
+            Dừng CT
+          </button>
+        </div>
+      </div>
+    `;
+  };
 
   window.editPromotion = (id) => {
     const item = state.promotions.find((p) => p.id === id);
@@ -965,6 +1332,7 @@
     form.querySelector('[name="usageLimit"]').value = item.usageLimit || 100;
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("promotionFormTitle").textContent = "Cập nhật khuyến mãi";
+    openFormModal("promotionsModal");
   };
 
   window.deletePromotion = async (id) => {
@@ -999,6 +1367,21 @@
       o.phone.toLowerCase().includes(filter)
     );
 
+    // Sắp xếp trạng thái hiện hữu (Đang chờ duyệt, Đã xác nhận, Đang giao hàng) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const getPrio = (o) => {
+        const s = String(o.status || "").toLowerCase();
+        if (s.includes("chờ") || s === "pending") return 1;
+        if (s.includes("xác nhận") || s === "processing") return 2;
+        if (s.includes("giao hàng") || s.includes("đang giao") || s === "shipped") return 3;
+        if (s.includes("thành công") || s === "delivered") return 4;
+        return 5;
+      };
+      const diff = getPrio(a) - getPrio(b);
+      if (diff !== 0) return diff;
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy đơn hàng nào</div>';
       return;
@@ -1031,11 +1414,19 @@
     form.querySelector('[name="customer"]').value = item.customer;
     form.querySelector('[name="total"]').value = formatMoney(item.total);
     form.querySelector('[name="status"]').value = item.status;
+    openFormModal("ordersModal");
   };
 
   window.viewOrderDetail = (id) => {
     const order = state.orders.find((o) => o.id === id);
     if (!order) return;
+    const itemsSub = order.subtotal != null ? Number(order.subtotal) : (order.items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+    const disc = Number(order.discountAmount || 0);
+    const taxable = Math.max(0, itemsSub - disc);
+    const vat = order.vatAmount != null ? Number(order.vatAmount) : Math.round(taxable * 0.08);
+    const ship = Number(order.shippingFee || 0);
+    const total = taxable + vat + ship;
+
     showModal(`Chi tiết đơn hàng ${order.code}`, `
       <div style="font-size:13px; display:grid; gap:8px;">
         <p><strong>Người nhận:</strong> ${order.customer} - ${order.phone || "Không có SĐT"}</p>
@@ -1054,9 +1445,15 @@
             </div>
           `).join("")}
         </div>
-        <div style="margin-top:12px; border-top:2px solid #ddd; padding-top:8px; display:flex; justify-content:space-between; font-size:15px;">
-          <strong>Tổng thanh toán:</strong>
-          <strong style="color:var(--admin-green); font-size:16px;">${formatMoney(order.total)}</strong>
+        <div style="margin-top:12px; border-top:1px solid #eee; padding-top:8px; display:grid; gap:4px; font-size:13px;">
+          <div style="display:flex; justify-content:space-between;"><span>Tạm tính tiền hàng:</span> <span>${formatMoney(itemsSub)}</span></div>
+          ${disc > 0 ? `<div style="display:flex; justify-content:space-between; color:#2e7d32;"><span>Giảm giá:</span> <span>-${formatMoney(disc)}</span></div>` : ''}
+          <div style="display:flex; justify-content:space-between;"><span>Thuế VAT (8%):</span> <span style="color:#b45309; font-weight:600;">+${formatMoney(vat)}</span></div>
+          <div style="display:flex; justify-content:space-between;"><span>Phí vận chuyển:</span> <span>${ship > 0 ? formatMoney(ship) : "Miễn phí"}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:700; border-top:1px solid #333; margin-top:6px; padding-top:6px;">
+            <span>Tổng thanh toán:</span>
+            <span style="color:var(--admin-green);">${formatMoney(total)}</span>
+          </div>
         </div>
       </div>
     `);
@@ -1145,6 +1542,14 @@
       s.email.toLowerCase().includes(filter)
     );
 
+    // Sắp xếp trạng thái hiện hữu (Hoạt động / Đang hợp tác) xếp từ trên xuống dưới
+    rows.sort((a, b) => {
+      const isActA = Boolean(a.isActive || a.status === "Hoạt động" || a.status === "Đang hợp tác");
+      const isActB = Boolean(b.isActive || b.status === "Hoạt động" || b.status === "Đang hợp tác");
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy nhà cung cấp nào</div>';
       return;
@@ -1178,6 +1583,7 @@
     form.querySelector('[name="address"]').value = item.address || "";
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("supplierFormTitle").textContent = "Cập nhật nhà cung cấp";
+    openFormModal("suppliersModal");
   };
 
   window.deleteSupplier = async (id) => {
@@ -1520,6 +1926,22 @@
   }
 
   // ---------- MODAL POPUP TIỆN ÍCH ----------
+  window.openFormModal = (modalId) => {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.hidden = false;
+      modal.removeAttribute("hidden");
+    }
+  };
+
+  window.closeFormModal = (modalId) => {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("hidden", "");
+    }
+  };
+
   function showModal(title, html) {
     const backdrop = document.getElementById("detailModal");
     const titleEl = document.getElementById("modalTitle");
@@ -1665,6 +2087,7 @@
         accountForm.reset();
         accountForm.querySelector('[name="id"]').value = "";
         document.getElementById("accountFormTitle").textContent = "Thêm tài khoản mới";
+        closeFormModal("accountsModal");
         loadAccounts();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1698,6 +2121,7 @@
         staffForm.reset();
         staffForm.querySelector('[name="id"]').value = "";
         document.getElementById("staffFormTitle").textContent = "Thêm nhân viên";
+        closeFormModal("staffModal");
         loadStaff();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1733,6 +2157,7 @@
         }
         customerForm.reset();
         customerForm.querySelector('[name="id"]').value = "";
+        closeFormModal("customersModal");
         loadCustomers();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1767,6 +2192,7 @@
         productForm.reset();
         productForm.querySelector('[name="id"]').value = "";
         document.getElementById("productFormTitle").textContent = "Thông tin sản phẩm";
+        closeFormModal("productsModal");
         loadProducts();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1791,6 +2217,7 @@
         await api("/invoices", { method: "POST", body });
         toast("Đã lưu hóa đơn thành công!");
         invoiceForm.reset();
+        closeFormModal("invoicesModal");
         loadInvoices();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1825,6 +2252,7 @@
         promotionForm.reset();
         promotionForm.querySelector('[name="id"]').value = "";
         document.getElementById("promotionFormTitle").textContent = "Chương trình khuyến mãi";
+        closeFormModal("promotionsModal");
         loadPromotions();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1851,6 +2279,7 @@
           status: fd.get("status"),
         });
         orderForm.reset();
+        closeFormModal("ordersModal");
         loadOrders();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1876,6 +2305,7 @@
         await api("/receipts", { method: "POST", body });
         toast("Đã tạo phiếu nhập & tự động cộng tồn kho thành công!");
         stockForm.reset();
+        closeFormModal("stockModal");
         loadStock();
         loadProducts();
       } catch (err) {
@@ -1938,6 +2368,7 @@
         supplierForm.reset();
         supplierForm.querySelector('[name="id"]').value = "";
         document.getElementById("supplierFormTitle").textContent = "Thông tin nhà cung cấp";
+        closeFormModal("suppliersModal");
         loadSuppliers();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
@@ -1972,7 +2403,7 @@
     }
   });
 
-  // Nút Thêm mới (reset form)
+  // Nút Thêm mới (reset form và mở khung modal)
   document.querySelectorAll("[data-add]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const type = btn.getAttribute("data-add");
@@ -1982,8 +2413,21 @@
         const idInp = form.querySelector('[name="id"]');
         if (idInp) idInp.value = "";
         const title = form.querySelector("h3");
-        if (title) title.textContent = "Thêm mới";
+        if (title) {
+          const typeNames = {
+            accounts: "Thêm tài khoản mới",
+            staff: "Thêm nhân viên",
+            customers: "Thêm khách hàng",
+            products: "Thêm sản phẩm",
+            invoices: "Lập hóa đơn tại quầy",
+            promotions: "Tạo chương trình ưu đãi",
+            stock: "Phiếu nhập kho mới",
+            suppliers: "Thêm nhà cung cấp",
+          };
+          title.textContent = typeNames[type] || "Thêm mới";
+        }
       }
+      openFormModal(`${type}Modal`);
     });
   });
 
@@ -1997,7 +2441,36 @@
         const idInp = form.querySelector('[name="id"]');
         if (idInp) idInp.value = "";
       }
+      closeFormModal(`${type}Modal`);
     });
+  });
+
+  // Nút đóng modal (dấu x)
+  document.querySelectorAll("[data-close-modal]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const modalId = btn.getAttribute("data-close-modal");
+      closeFormModal(modalId);
+    });
+  });
+
+  // Đóng modal khi bấm ra ngoài nền tối
+  document.querySelectorAll(".admin-modal-backdrop").forEach((backdrop) => {
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) {
+        backdrop.hidden = true;
+        backdrop.setAttribute("hidden", "");
+      }
+    });
+  });
+
+  // Đóng modal khi nhấn phím Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      document.querySelectorAll(".admin-modal-backdrop").forEach((b) => {
+        b.hidden = true;
+        b.setAttribute("hidden", "");
+      });
+    }
   });
 
   // ---------- ÂM THANH THÔNG BÁO TỨC THÌ ----------
@@ -2017,7 +2490,7 @@
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.6);
-    } catch {}
+    } catch { }
   }
 
   // ---------- KẾT NỐI THỜI GIAN THỰC (REALTIME SSE & BROADCASTCHANNEL) ----------
@@ -2025,7 +2498,7 @@
 
   function broadcast(type, data = {}) {
     if (realtimeChannel) {
-      try { realtimeChannel.postMessage({ type, data, timestamp: Date.now() }); } catch {}
+      try { realtimeChannel.postMessage({ type, data, timestamp: Date.now() }); } catch { }
     }
   }
 
@@ -2116,16 +2589,20 @@
       es.onmessage = (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.type && payload.type !== "CONNECTED") {
+          if (payload.type === "CONNECTED") {
+            if (payload.instanceId && session) {
+              session.serverInstance = payload.instanceId;
+            }
+          } else if (payload.type) {
             handleAdminRealtime(payload.type, payload.data);
           }
-        } catch {}
+        } catch { }
       };
       es.onerror = () => {
         es.close();
         setTimeout(initAdminSse, 4000);
       };
-    } catch {}
+    } catch { }
   }
   initAdminSse();
 

@@ -5,6 +5,23 @@
   const state = { user: null, cartCount: 0 };
   const listeners = [];
 
+  const getAuthToken = () => sessionStorage.getItem(TOKEN_KEY);
+  const setAuthToken = (token) => {
+    if (token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+  };
+  const clearAuth = () => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem("jewels_user_email");
+    sessionStorage.removeItem("jewels_user_id");
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("jewels_user_email");
+    localStorage.removeItem("jewels_user_id");
+  };
+
   const money = (n) => Number(n || 0).toLocaleString("vi-VN") + "đ";
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -13,7 +30,7 @@
 
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "Content-Type": "application/json" };
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     if (token) headers.Authorization = "Bearer " + token;
     let res;
     try {
@@ -28,9 +45,7 @@
           handleAccountLocked();
           return;
         }
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem("jewels_user_email");
-        localStorage.removeItem("jewels_user_id");
+        clearAuth();
         state.user = null;
         state.cartCount = 0;
         renderAccount();
@@ -47,9 +62,9 @@
 
   function getLoggedInUserId() {
     if (state.user && state.user.id) return String(state.user.id);
-    const saved = localStorage.getItem("jewels_user_id");
+    const saved = sessionStorage.getItem("jewels_user_id");
     if (saved) return String(saved);
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
@@ -61,16 +76,14 @@
 
   function getLoggedInUserEmail() {
     if (state.user && state.user.email) return String(state.user.email).toLowerCase();
-    const saved = localStorage.getItem("jewels_user_email");
+    const saved = sessionStorage.getItem("jewels_user_email");
     if (saved) return String(saved).toLowerCase();
     return "";
   }
 
   function handleAccountLocked() {
     const curEmail = getLoggedInUserEmail();
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem("jewels_user_email");
-    localStorage.removeItem("jewels_user_id");
+    clearAuth();
     state.user = null;
     state.cartCount = 0;
     renderAccount();
@@ -383,9 +396,10 @@
       loginFb.textContent = "";
       try {
         const data = await api("/auth/login", { method: "POST", body: { email: f.email, password: f.password } });
-        localStorage.setItem(TOKEN_KEY, data.token);
-        if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
-        if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+        setAuthToken(data.token);
+        if (data.user?.email) sessionStorage.setItem("jewels_user_email", data.user.email);
+        if (data.user?.id) sessionStorage.setItem("jewels_user_id", data.user.id);
+        localStorage.removeItem(TOKEN_KEY);
         state.user = data.user;
         loginForm.reset();
         const p = pendingLogin; pendingLogin = null;
@@ -488,9 +502,10 @@
       regFb.textContent = "";
       try {
         const data = await api("/auth/register", { method: "POST", body: { name: f.name, email: cleanMail, phone: cleanPhone, password: f.password } });
-        localStorage.setItem(TOKEN_KEY, data.token);
-        if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
-        if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+        setAuthToken(data.token);
+        if (data.user?.email) sessionStorage.setItem("jewels_user_email", data.user.email);
+        if (data.user?.id) sessionStorage.setItem("jewels_user_id", data.user.id);
+        localStorage.removeItem(TOKEN_KEY);
         state.user = data.user;
         regForm.reset();
         const p = pendingLogin; pendingLogin = null;
@@ -522,7 +537,7 @@
   }
 
   function logout() {
-    localStorage.removeItem(TOKEN_KEY);
+    clearAuth();
     state.user = null;
     toast("Bạn đã đăng xuất.");
     if (["cart", "checkout", "orders", "user"].includes(document.body.dataset.page)) location.href = "home.html";
@@ -532,12 +547,29 @@
   // ---------- thành phần dùng chung ----------
   function productCard(p) {
     const range = p.maxPrice > p.price ? `Từ ${money(p.price)}` : money(p.price);
-    const badgeHtml = p.inStock === false
-      ? '<span class="tag" style="background:#555">Hết hàng</span>'
-      : (p.id === 1 ? '<span class="tag">✨ Tuyệt tác</span>' : (p.id === 3 ? '<span class="tag">Bán chạy</span>' : ''));
+    let badgeHtml = "";
+    if (p.inStock === false) {
+      badgeHtml = '<span class="tag" style="background:#555">Hết hàng</span>';
+    } else if (p.id === 1 || p.isFeatured) {
+      badgeHtml = '<span class="tag">✨ Tuyệt tác 2026</span>';
+    } else if (p.id === 2 || (p.price && p.price >= 30000000)) {
+      badgeHtml = '<span class="tag">💎 Kim cương cao cấp</span>';
+    } else if (p.id === 3 || p.isBestseller) {
+      badgeHtml = '<span class="tag">🔥 Bán chạy nhất</span>';
+    } else if (p.id === 4 || (p.category && p.category.toLowerCase().includes("vàng"))) {
+      badgeHtml = '<span class="tag">✦ Vàng 18K Ý</span>';
+    }
+    const isOut = p.inStock === false;
     return `<a class="card" href="product.html?id=${p.id}">
       ${badgeHtml}
-      <div class="thumb"><img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}"></div>
+      <div class="thumb">
+        <img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">
+        <div class="sparkle-container" aria-hidden="true">
+          <span class="sparkle sp-1">✦</span>
+          <span class="sparkle sp-2">✦</span>
+          <span class="sparkle sp-3">✦</span>
+        </div>
+      </div>
       <div class="body">
         <span class="cat">${esc(p.category || "")}</span>
         <h3>${esc(p.name)}</h3>
@@ -545,15 +577,145 @@
           <span class="price">${range}</span>
           <span style="font-size:0.8rem;color:var(--gold);font-weight:600;letter-spacing:0.04em">Khám phá →</span>
         </div>
+        <div class="card-add-wrap">
+          <div class="card-qty-row">
+            <div class="card-qty-stepper" title="Nhập hoặc chọn số lượng">
+              <button type="button" class="btn-card-qty btn-card-qty-dec" aria-label="Giảm số lượng" ${isOut ? "disabled" : ""}>−</button>
+              <input type="number" class="card-qty-input" value="1" min="1" max="99" aria-label="Số lượng" ${isOut ? "disabled" : ""}>
+              <button type="button" class="btn-card-qty btn-card-qty-inc" aria-label="Tăng số lượng" ${isOut ? "disabled" : ""}>+</button>
+            </div>
+            <button type="button" class="btn-card-add ${isOut ? "disabled" : ""}" data-pro-id="${p.id}" data-variant-id="${p.defaultVariantId || ""}" ${isOut ? "disabled" : ""} title="${isOut ? "Sản phẩm tạm hết hàng" : "Thêm vào giỏ hàng"}">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .491.592l-1.5 8A.5.5 0 0 1 13 12H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+              <span>${isOut ? "Hết hàng" : "Thêm giỏ"}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </a>`;
   }
+
+  // Xử lý nút tăng giảm số lượng (+ / -) trên từng thẻ sản phẩm
+  document.addEventListener("click", (e) => {
+    const qtyBtn = e.target.closest(".btn-card-qty");
+    if (!qtyBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const stepper = qtyBtn.closest(".card-qty-stepper");
+    const input = stepper?.querySelector(".card-qty-input");
+    if (!input || input.disabled) return;
+
+    let val = parseInt(input.value) || 1;
+    if (qtyBtn.classList.contains("btn-card-qty-inc")) {
+      val = Math.min(99, val + 1);
+    } else if (qtyBtn.classList.contains("btn-card-qty-dec")) {
+      val = Math.max(1, val - 1);
+    }
+    input.value = val;
+  });
+
+  // Chặn mở liên kết thẻ khi người dùng click, focus hoặc gõ số lượng trong ô input
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".card-qty-input")) {
+      e.stopPropagation();
+    }
+  });
+  document.addEventListener("input", (e) => {
+    const input = e.target.closest(".card-qty-input");
+    if (!input) return;
+    e.stopPropagation();
+    let val = parseInt(input.value);
+    if (!isNaN(val)) {
+      if (val < 1) input.value = 1;
+      else if (val > 99) input.value = 99;
+    }
+  });
+  document.addEventListener("change", (e) => {
+    const input = e.target.closest(".card-qty-input");
+    if (!input) return;
+    e.stopPropagation();
+    let val = parseInt(input.value);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > 99) val = 99;
+    input.value = val;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest(".card-qty-input")) {
+      e.stopPropagation();
+    }
+  });
+
+  // Lắng nghe bấm nút "Thêm vào giỏ hàng" trực tiếp trên từng thẻ sản phẩm
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".btn-card-add");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (btn.disabled || btn.classList.contains("disabled")) return;
+
+    try {
+      await requireLogin();
+    } catch {
+      return;
+    }
+
+    const proId = btn.dataset.proId;
+    let variantId = btn.dataset.variantId;
+
+    // Lấy số lượng từ ô input của thẻ
+    const wrap = btn.closest(".card-add-wrap");
+    const qtyInput = wrap?.querySelector(".card-qty-input");
+    const qty = Math.max(1, Math.min(99, parseInt(qtyInput?.value) || 1));
+
+    btn.disabled = true;
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = `<span>⏳ Đang thêm…</span>`;
+
+    try {
+      if (!variantId) {
+        const p = await api("/products/" + encodeURIComponent(proId));
+        const v = p.variants?.find((x) => x.stock > 0) || p.variants?.[0];
+        if (!v || v.stock <= 0) throw new Error("Sản phẩm đã tạm hết hàng.");
+        variantId = v.id;
+      }
+
+      await api("/cart/items", { method: "POST", body: { variantId: Number(variantId), quantity: qty } });
+      await refreshCartCount();
+      btn.classList.add("added");
+      btn.innerHTML = `<span>✓ Đã thêm (${qty})</span>`;
+      toast(`Đã thêm ${qty} sản phẩm vào giỏ hàng thành công!`, "ok");
+
+      setTimeout(() => {
+        btn.classList.remove("added");
+        btn.innerHTML = oldHtml;
+        btn.disabled = false;
+        if (qtyInput) qtyInput.value = 1;
+      }, 1500);
+    } catch (err) {
+      toast(err.message || "Không thể thêm vào giỏ hàng", "error");
+      btn.innerHTML = oldHtml;
+      btn.disabled = false;
+    }
+  });
 
   const variantLabel = (l) => [l.material, l.gemstone, l.size != null ? "Size " + l.size : null].filter(Boolean).join(" · ");
 
   const ready = (async () => {
     buildLayout();
-    const token = localStorage.getItem(TOKEN_KEY);
+
+    // Ghi nhớ trang mua sắm gần nhất (để khi bấm "Tiếp tục mua sắm" trong giỏ hàng sẽ quay lại đúng nơi này)
+    const curPage = document.body.dataset.page || "";
+    if (["home", "shop", "product"].includes(curPage)) {
+      sessionStorage.setItem("jewels_last_shop_url", location.href);
+    }
+
+    // Dọn dẹp token cũ lưu trong localStorage từ các phiên trước
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("jewels_user_email");
+    localStorage.removeItem("jewels_user_id");
+
+    const token = getAuthToken();
     if (token) {
       try {
         const [user, cart] = await Promise.all([
@@ -561,11 +723,12 @@
           api("/cart").catch(() => null),
         ]);
         state.user = user;
-        if (user?.email) localStorage.setItem("jewels_user_email", user.email);
-        if (user?.id) localStorage.setItem("jewels_user_id", user.id);
+        if (user?.email) sessionStorage.setItem("jewels_user_email", user.email);
+        if (user?.id) sessionStorage.setItem("jewels_user_id", user.id);
         if (cart) setCartCount(cart.count);
       } catch {
         state.user = null;
+        clearAuth();
       }
     }
     renderAccount();
@@ -689,7 +852,11 @@
       es.onmessage = (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.type && payload.type !== "CONNECTED") {
+          if (payload.type === "CONNECTED") {
+            if (payload.instanceId) {
+              window._serverInstance = payload.instanceId;
+            }
+          } else if (payload.type) {
             handleIncomingRealtime(payload.type, payload.data, false);
           }
         } catch {}
@@ -702,7 +869,7 @@
 
     // 3. Kiểm tra định kỳ (heartbeat) tài khoản đang đăng nhập phòng trường hợp mất mạng/SSE
     setInterval(async () => {
-      const token = localStorage.getItem(TOKEN_KEY);
+      const token = getAuthToken();
       const email = getLoggedInUserEmail();
       if (token && email) {
         try {

@@ -2,7 +2,7 @@
 // Router API quản trị Jewels - kết nối trực tiếp với Supabase
 const express = require("express");
 
-function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName, bcrypt, jwt, JWT_SECRET, broadcastRealtime = () => {}, unlockRequests }) {
+function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName, bcrypt, jwt, JWT_SECRET, broadcastRealtime = () => { }, unlockRequests, SERVER_INSTANCE_ID }) {
   const router = express.Router();
 
   const STATUS_MAP = {
@@ -25,7 +25,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
           req.adminUser = user;
           return next();
         }
-      } catch {}
+      } catch (err) {
+        if (err.status === 401) throw err;
+      }
     }
     // Hỗ trợ phiên dev hoặc token lưu ở client
     next();
@@ -50,12 +52,28 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const token = jwt.sign({ sub: user.id, roles: user.roles }, JWT_SECRET, { expiresIn: "7d" });
     res.json({
       token,
+      serverInstance: SERVER_INSTANCE_ID,
       user: {
         id: user.id,
         email: user.email,
         name: fullName(user) || "Quản trị viên",
         roles: user.roles,
       }
+    });
+  }));
+
+  router.get("/auth/me", wrap(async (req, res) => {
+    if (!req.adminUser) {
+      throw new HttpError(401, "Vui lòng đăng nhập quản trị.");
+    }
+    res.json({
+      user: {
+        id: req.adminUser.id,
+        email: req.adminUser.email,
+        name: fullName(req.adminUser) || "Quản trị viên",
+        roles: req.adminUser.roles,
+      },
+      serverInstance: SERVER_INSTANCE_ID,
     });
   }));
 
@@ -115,9 +133,22 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         code: `#${o.order_id}`,
         customer: o.cus_name || "Khách vãng lai",
         total: Number(o.total_amount || 0),
+        rawStatus: o.status,
         status: STATUS_MAP[o.status] || o.status,
         date: o.order_date,
-      })),
+      })).sort((a, b) => {
+        const getPrio = (s) => {
+          const str = String(s || "").toLowerCase();
+          if (str.includes("chờ") || str === "pending") return 1;
+          if (str.includes("xác nhận") || str === "processing") return 2;
+          if (str.includes("giao") || str === "shipped") return 3;
+          if (str.includes("thành công") || str === "delivered") return 4;
+          return 5;
+        };
+        const diff = getPrio(a.rawStatus || a.status) - getPrio(b.rawStatus || b.status);
+        if (diff !== 0) return diff;
+        return new Date(b.date) - new Date(a.date);
+      }),
       recentInvoices: (recentInvoices || []).map((i) => ({
         id: i.invoice_id,
         code: `HD-${String(i.invoice_id).padStart(5, "0")}`,
@@ -402,7 +433,10 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
   // ---------- 1. QUẢN LÝ TÀI KHOẢN VÀ VAI TRÒ ----------
   router.get("/accounts", wrap(async (_req, res) => {
-    const users = must(await db.from("users").select("id,email,roles,is_active,first_name,last_name,phone,created_at").order("created_at", { ascending: false }));
+    const users = must(await db.from("users")
+      .select("id,email,roles,is_active,first_name,last_name,phone,created_at")
+      .order("is_active", { ascending: false })
+      .order("created_at", { ascending: false }));
     // Chỉ hiển thị các tài khoản còn đầy đủ thông tin hợp lệ trong dữ liệu
     const validUsers = (users || []).filter((u) => u && u.id && u.email && String(u.email).trim() !== "");
     const pendingReqs = (unlockRequests ? unlockRequests.getRequests() : []).filter((r) => r.status === "pending");
@@ -525,6 +559,13 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       isUserActive: r.userId ? Boolean(userActiveMap[r.userId]) : Boolean(userActiveMap[(r.email || "").toLowerCase()]),
     }));
 
+    enriched.sort((a, b) => {
+      const prioA = a.status === "pending" ? 1 : 2;
+      const prioB = b.status === "pending" ? 1 : 2;
+      if (prioA !== prioB) return prioA - prioB;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
     const pendingCount = enriched.filter((r) => r.status === "pending").length;
     res.json({
       requests: enriched,
@@ -583,9 +624,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       throw new HttpError(403, "Không được phép xóa tài khoản khách hàng! Quản trị viên chỉ có quyền Thêm, Sửa hoặc Khóa/Mở tài khoản khách hàng.");
     }
 
-    try { await db.from("employees").delete().eq("user_id", id); } catch {}
-    try { await db.from("customer_addresses").delete().eq("customer_id", id); } catch {}
-    try { await db.from("customers").delete().eq("user_id", id); } catch {}
+    try { await db.from("employees").delete().eq("user_id", id); } catch { }
+    try { await db.from("customer_addresses").delete().eq("customer_id", id); } catch { }
+    try { await db.from("customers").delete().eq("user_id", id); } catch { }
     try {
       await db.from("users").delete().eq("id", id);
     } catch (e) {
@@ -615,6 +656,13 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         isActive: Boolean(e.users.is_active),
         createdAt: e.created_at || e.users.created_at,
       }));
+
+    staffList.sort((a, b) => {
+      const isActA = Boolean(a.isActive);
+      const isActB = Boolean(b.isActive);
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
 
     res.json(staffList);
   }));
@@ -779,7 +827,15 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       }
     });
 
-    res.json(Array.from(map.values()));
+    const customerList = Array.from(map.values());
+    customerList.sort((a, b) => {
+      const isActA = Boolean(a.isActive);
+      const isActB = Boolean(b.isActive);
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return Number(b.totalSpent || 0) - Number(a.totalSpent || 0);
+    });
+
+    res.json(customerList);
   }));
 
   router.post("/customers", wrap(async (req, res) => {
@@ -940,6 +996,18 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       };
     });
 
+    result.sort((a, b) => {
+      const getPrio = (p) => {
+        const s = String(p.status || "").toLowerCase();
+        if (s.includes("mở bán") || (p.isActive && p.stock > 0)) return 1;
+        if (s.includes("hết hàng") || (p.isActive && p.stock <= 0)) return 2;
+        return 3;
+      };
+      const diff = getPrio(a) - getPrio(b);
+      if (diff !== 0) return diff;
+      return (b.id || 0) - (a.id || 0);
+    });
+
     res.json(result);
   }));
 
@@ -1035,24 +1103,77 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
   // ---------- 5. QUẢN LÝ HÓA ĐƠN ----------
   router.get("/invoices", wrap(async (_req, res) => {
-    const invoices = must(await db.from("invoices")
-      .select("invoice_id,order_id,invoice_date,vat_rate,vat_amount,discount_amount,total_price,buyer_name,buyer_phone,buyer_address,invoice_detail(invoice_detail_id,product_name,quantity,unit_price,subtotal)")
-      .order("invoice_date", { ascending: false }));
+    const [invRes, ordRes] = await Promise.all([
+      db.from("invoices")
+        .select("invoice_id,order_id,invoice_date,vat_rate,vat_amount,discount_amount,total_price,buyer_name,buyer_phone,buyer_address,invoice_detail(invoice_detail_id,product_name,quantity,unit_price,subtotal)")
+        .order("invoice_date", { ascending: false }),
+      db.from("orders")
+        .select("order_id,shipping_fee,discount_amount,total_amount,order_items(order_item_id,product_name,material,gemstone,size,image_url,quantity,unit_price,subtotal),payments(method,status)")
+    ]);
+    const invoices = must(invRes);
+    const orders = ordRes.data || [];
+    const orderMap = new Map();
+    for (const o of orders) orderMap.set(o.order_id, o);
 
-    res.json(invoices.map((i) => ({
-      id: i.invoice_id,
-      code: `HD-${String(i.invoice_id).padStart(5, "0")}`,
-      orderId: i.order_id,
-      customer: i.buyer_name || "Khách lẻ tại quầy",
-      phone: i.buyer_phone || "",
-      address: i.buyer_address || "",
-      amount: Number(i.total_price || 0),
-      vatAmount: Number(i.vat_amount || 0),
-      discountAmount: Number(i.discount_amount || 0),
-      date: i.invoice_date,
-      status: "Đã thanh toán",
-      items: i.invoice_detail || [],
-    })));
+    const METHOD_NAMES = {
+      cod: "Thanh toán khi nhận hàng (COD)",
+      bank_transfer: "Chuyển khoản VietQR",
+      e_wallet: "Ví điện tử MoMo / VNPay",
+      credit_card: "Thẻ quốc tế Visa / MasterCard",
+    };
+
+    res.json(invoices.map((i) => {
+      const order = i.order_id ? orderMap.get(i.order_id) : null;
+      const orderItems = order?.order_items || [];
+      const invoiceItems = (i.invoice_detail && i.invoice_detail.length) ? i.invoice_detail : [];
+
+      // Ghép thông tin ảnh, quy cách (chất liệu, đá, size) cho từng mặt hàng
+      const items = (invoiceItems.length ? invoiceItems : orderItems).map((invItem) => {
+        const matched = orderItems.find((oi) => oi.product_name === invItem.product_name || oi.order_item_id === invItem.order_item_id);
+        return {
+          product_name: invItem.product_name || "Trang sức cao cấp",
+          material: matched?.material || null,
+          gemstone: matched?.gemstone || null,
+          size: matched?.size || null,
+          image_url: matched?.image_url || null,
+          quantity: Number(invItem.quantity || 1),
+          unit_price: Number(invItem.unit_price || 0),
+          subtotal: Number(invItem.subtotal || (Number(invItem.unit_price || 0) * Number(invItem.quantity || 1))),
+        };
+      });
+
+      const itemsSubtotal = items.reduce((s, it) => s + it.subtotal, 0);
+      const shippingFee = order ? Number(order.shipping_fee || 0) : 0;
+      const discountAmount = Number(i.discount_amount || order?.discount_amount || 0);
+      const vatRate = Number(i.vat_rate || 8);
+      const taxable = Math.max(0, itemsSubtotal - discountAmount);
+      // Thuế VAT 8% chuẩn tính trên tiền hàng sau giảm giá:
+      const vatAmount = Math.round(taxable * (vatRate / 100));
+      // Tổng thanh toán chính xác = Tiền hàng - Giảm giá + Thuế VAT + Phí vận chuyển:
+      const totalPrice = taxable + vatAmount + shippingFee;
+      const payment = one(order?.payments) || null;
+
+      return {
+        id: i.invoice_id,
+        code: `HD-${String(i.invoice_id).padStart(5, "0")}`,
+        orderId: i.order_id,
+        orderCode: i.order_id ? `#DH-${String(i.order_id).padStart(6, "0")}` : null,
+        customer: i.buyer_name || order?.cus_name || "Khách lẻ tại quầy",
+        phone: i.buyer_phone || order?.cus_phone || "",
+        address: i.buyer_address || order?.address || "Mua trực tiếp tại showroom",
+        amount: totalPrice,
+        subtotal: itemsSubtotal,
+        shippingFee: shippingFee,
+        discountAmount: discountAmount,
+        vatRate: vatRate,
+        vatAmount: vatAmount,
+        date: i.invoice_date,
+        status: "Đã thanh toán",
+        paymentMethod: METHOD_NAMES[payment?.method] || payment?.method || "Chuyển khoản VietQR",
+        paymentStatus: payment?.status || "completed",
+        items: items,
+      };
+    }));
   }));
 
   router.get("/invoices/:id", wrap(async (req, res) => {
@@ -1100,7 +1221,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     for (const v of vouchers || []) vMap[v.discount_id] = v;
 
     const now = new Date();
-    res.json((discounts || []).map((d) => {
+    const promoList = (discounts || []).map((d) => {
       const v = vMap[d.discount_id];
       const isExpired = d.end_date && new Date(d.end_date) < now;
       return {
@@ -1115,7 +1236,16 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         status: !d.is_active ? "Đã hủy" : isExpired ? "Hết hạn" : "Hoạt động",
         isActive: Boolean(d.is_active) && !isExpired,
       };
-    }));
+    });
+
+    promoList.sort((a, b) => {
+      const isActA = Boolean(a.isActive);
+      const isActB = Boolean(b.isActive);
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return (b.id || 0) - (a.id || 0);
+    });
+
+    res.json(promoList);
   }));
 
   router.post("/promotions", wrap(async (req, res) => {
@@ -1185,19 +1315,47 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       returned: "Đã hoàn hàng",
     };
 
-    res.json(orders.map((o) => ({
-      id: o.order_id,
-      code: `#${o.order_id}`,
-      customer: o.cus_name || "Khách hàng",
-      phone: o.cus_phone || "",
-      address: o.address || "",
-      total: Number(o.total_amount || 0),
-      rawStatus: o.status,
-      status: STATUS_MAP[o.status] || o.status,
-      date: o.order_date,
-      items: o.order_items || [],
-      payment: one(o.payments) || null,
-    })));
+    const orderList = orders.map((o) => {
+      const itemsSub = (o.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+      const disc = Number(o.discount_amount || 0);
+      const taxable = Math.max(0, itemsSub - disc);
+      const vat = Math.round(taxable * 0.08);
+      const shipping = Number(o.shipping_fee || 0);
+      const total = taxable + vat + shipping;
+      return {
+        id: o.order_id,
+        code: `#${o.order_id}`,
+        customer: o.cus_name || "Khách hàng",
+        phone: o.cus_phone || "",
+        address: o.address || "",
+        total: total,
+        subtotal: itemsSub,
+        discountAmount: disc,
+        vatAmount: vat,
+        shippingFee: shipping,
+        rawStatus: o.status,
+        status: STATUS_MAP[o.status] || o.status,
+        date: o.order_date,
+        items: o.order_items || [],
+        payment: one(o.payments) || null,
+      };
+    });
+
+    orderList.sort((a, b) => {
+      const getPrio = (s) => {
+        const str = String(s || "").toLowerCase();
+        if (str.includes("chờ") || str === "pending") return 1;
+        if (str.includes("xác nhận") || str === "processing") return 2;
+        if (str.includes("giao hàng") || str.includes("đang giao") || str === "shipped") return 3;
+        if (str.includes("thành công") || str === "delivered") return 4;
+        return 5;
+      };
+      const diff = getPrio(a.rawStatus || a.status) - getPrio(b.rawStatus || b.status);
+      if (diff !== 0) return diff;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    res.json(orderList);
   }));
 
   router.get("/orders/:id", wrap(async (req, res) => {
@@ -1240,14 +1398,18 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       if (!existingInv) {
         const order = one(must(await db.from("orders").select("*,order_items(*)").eq("order_id", id).limit(1)));
         if (order) {
+          const itemsSub = (order.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+          const disc = Number(order.discount_amount || 0);
+          const taxable = Math.max(0, itemsSub - disc);
+          const vat = Math.round(taxable * 0.08);
           const inv = one(must(await db.from("invoices").insert({
             order_id: order.order_id,
             buyer_name: order.cus_name,
             buyer_phone: order.cus_phone,
             buyer_address: order.address,
             vat_rate: 8,
-            vat_amount: Math.round(Number(order.total_amount) * 0.08),
-            discount_amount: Number(order.discount_amount || 0),
+            vat_amount: vat,
+            discount_amount: disc,
             total_price: Number(order.total_amount),
             invoice_date: new Date().toISOString(),
           }).select("invoice_id")));
@@ -1262,6 +1424,12 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
               subtotal: it.subtotal,
             })));
           }
+
+          broadcastRealtime("INVOICE_CREATED", {
+            invoiceId: inv.invoice_id,
+            orderId: order.order_id,
+            amount: Number(order.total_amount),
+          });
         }
       }
     }
@@ -1363,7 +1531,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
   // ---------- 9. QUẢN LÝ NHÀ CUNG CẤP ----------
   router.get("/suppliers", wrap(async (_req, res) => {
     const suppliers = must(await db.from("suppliers").select("*").order("sup_id", { ascending: false }));
-    res.json(suppliers.map((s) => ({
+    const supList = suppliers.map((s) => ({
       id: s.sup_id,
       name: s.name,
       phone: s.phone || "",
@@ -1372,7 +1540,16 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       status: s.is_active ? "Hoạt động" : "Ngừng hợp tác",
       isActive: Boolean(s.is_active),
       createdAt: s.created_at,
-    })));
+    }));
+
+    supList.sort((a, b) => {
+      const isActA = Boolean(a.isActive);
+      const isActB = Boolean(b.isActive);
+      if (isActA !== isActB) return isActA ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+    res.json(supList);
   }));
 
   router.post("/suppliers", wrap(async (req, res) => {

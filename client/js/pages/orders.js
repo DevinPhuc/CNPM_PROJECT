@@ -41,24 +41,50 @@
       const o = await api("/orders/" + id);
       const idx = STEPS.indexOf(o.status);
       const sub = o.order_items.reduce((s, i) => s + Number(i.subtotal), 0);
+      const disc = Number(o.discount_amount || 0);
+      const taxable = Math.max(0, sub - disc);
+      const vat = Math.round(taxable * 0.08);
+      const shipping = Number(o.shipping_fee || 0);
+      const totalToPay = taxable + vat + shipping;
       body.innerHTML = `
-        <p class="eyebrow">Jewels · Đơn hàng</p>
-        <h2>Đơn #${o.order_id} <span class="status ${o.status}" style="font-size:.7rem;vertical-align:middle">${STATUS[o.status]}</span></h2>
-        <p class="muted">Đặt lúc ${dateVN(o.order_date)}</p>
-        ${idx >= 0 ? `<div class="timeline">${STEPS.map((s, i) => `<div class="${i <= idx ? "done" : ""}"><i></i>${STATUS[s]}</div>`).join("")}</div>` : ""}
-        <div class="form-grid" style="margin:18px 0">
-          <div><strong>Người nhận</strong><br>${esc(o.cus_name)} · ${esc(o.cus_phone)}<br><span class="muted">${esc(o.address)}</span></div>
-          <div><strong>Thanh toán</strong><br>${METHOD[o.payment?.method] || "-"}<br><span class="muted">${PAY[o.payment?.status] || ""}</span></div>
+        <div class="inv-brand" style="margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div>
+              <h3 style="margin:0;font-size:1.6rem;color:var(--gold-rich)">JEWELS ATELIER</h3>
+              <small class="muted">CÔNG TY TNHH TRANG SỨC CAO CẤP JEWELS · MST: 0318999888</small>
+            </div>
+            <div style="text-align:right">
+              <strong>HÓA ĐƠN ĐIỆN TỬ</strong><br>
+              <small class="muted">Số: #HD-${String(o.order_id).padStart(6, "0")} · Ký hiệu: JW/26E</small>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <h2>Đơn hàng #${o.order_id} <span class="status ${o.status}" style="font-size:.7rem;vertical-align:middle">${STATUS[o.status] || o.status}</span></h2>
+          <p class="muted" style="margin:0">Thời gian: ${dateVN(o.order_date)}</p>
+        </div>
+        ${idx >= 0 ? `<div class="timeline no-print">${STEPS.map((s, i) => `<div class="${i <= idx ? "done" : ""}"><i></i>${STATUS[s]}</div>`).join("")}</div>` : ""}
+        <div class="form-grid" style="margin:18px 0;background:#faf8f5;padding:12px 16px;border-radius:10px;border:1px solid #ebd9b5">
+          <div><strong>Người nhận hàng:</strong><br>${esc(o.cus_name)} · ${esc(o.cus_phone)}<br><span class="muted">${esc(o.address)}</span></div>
+          <div><strong>Hình thức thanh toán:</strong><br>${METHOD[o.payment?.method] || o.payment?.method || "-"}<br><span class="muted" style="color:var(--gold-rich);font-weight:600">${PAY[o.payment?.status] || (o.payment?.method === "cod" ? "Thu tiền COD" : "Đã thanh toán")}</span></div>
         </div>
         <div class="od-items">${o.order_items.map((i) => `
           <div class="line-item"><img src="${esc(i.image_url || "https://placehold.co/100")}" alt=""><div><h4>${esc(i.product_name)}</h4><small>${esc(variantLabel(i))} · ${money(i.unit_price)} × ${i.quantity}</small></div><strong class="price">${money(i.subtotal)}</strong></div>`).join("")}</div>
-        <div class="sum-row"><span>Tạm tính</span><strong>${money(sub)}</strong></div>
-        <div class="sum-row"><span>Giảm giá${o.discount ? ` (${esc(o.discount.code)})` : ""}</span><strong>-${money(o.discount_amount)}</strong></div>
-        <div class="sum-row"><span>Phí vận chuyển</span><strong>${money(o.shipping_fee)}</strong></div>
-        <div class="sum-row total"><span>Tổng cộng</span><strong>${money(o.total_amount)}</strong></div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px" class="no-print">
-          ${o.status === "pending" ? `<button class="btn outline" data-cancel="${o.order_id}">Hủy đơn</button>` : ""}
-          <button class="btn" onclick="window.print()">In hóa đơn</button></div>`;
+        <div class="sum-row"><span>Tạm tính tiền hàng</span><strong>${money(sub)}</strong></div>
+        ${disc > 0 ? `<div class="sum-row" style="color:var(--ok)"><span>Giảm giá${o.discount ? ` (${esc(o.discount.code)})` : ""}</span><strong>-${money(disc)}</strong></div>` : ""}
+        <div class="sum-row"><span>Thuế GTGT (VAT 8%)</span><strong style="color:var(--gold-rich)">+${money(vat)}</strong></div>
+        <div class="sum-row"><span>Phí vận chuyển</span><strong>${o.shipping_fee > 0 ? money(o.shipping_fee) : "Miễn phí"}</strong></div>
+        <div class="sum-row total"><span>Tổng cộng thanh toán</span><strong>${money(totalToPay)}</strong></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
+          <div class="inv-stamp" style="font-size:0.75rem;padding:6px 12px">
+            <span>✓ XÁC THỰC KÝ ĐIỆN TỬ</span>
+            <span style="font-size:0.65rem">CÔNG TY TNHH TRANG SỨC JEWELS</span>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end" class="no-print">
+            ${o.status === "pending" ? `<button class="btn outline" data-cancel="${o.order_id}">Hủy đơn</button>` : ""}
+            <button class="btn gold" onclick="window.print()">🖨️ In hóa đơn</button>
+          </div>
+        </div>`;
     } catch (e) { body.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3></div>`; }
   }
 

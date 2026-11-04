@@ -45,7 +45,7 @@
           </div></div>` : ""}
           ${stockHtml(variant)}
           <div class="buy-row">
-            <div class="qty" aria-label="Số lượng"><button type="button" data-q="-1" aria-label="Giảm">−</button><span id="qtyVal">${qty}</span><button type="button" data-q="1" aria-label="Tăng">+</button></div>
+            <div class="qty" aria-label="Số lượng"><button type="button" data-q="-1" aria-label="Giảm">−</button><input type="number" id="qtyVal" class="qty-field" value="${qty}" min="1" max="${variant?.stock || 99}" aria-label="Số lượng"><button type="button" data-q="1" aria-label="Tăng">+</button></div>
             <button class="btn gold" id="addBtn" ${canBuy ? "" : "disabled"}>Thêm vào giỏ hàng</button>
             <button class="btn outline" id="buyBtn" ${canBuy ? "" : "disabled"}>Mua ngay</button>
           </div>
@@ -82,9 +82,35 @@
     if (!t) return;
     if (t.dataset.img) { imgIndex = +t.dataset.img; render(); }
     else if (t.dataset.v) { variant = p.variants.find((v) => v.id === +t.dataset.v); qty = Math.min(qty, variant.stock || 1); imgIndex = imageFor(variant); render(); }
-    else if (t.dataset.q) { qty = Math.max(1, Math.min(variant?.stock || 1, qty + +t.dataset.q)); $("#qtyVal").textContent = qty; }
+    else if (t.dataset.q) {
+      qty = Math.max(1, Math.min(variant?.stock || 99, qty + +t.dataset.q));
+      const inp = $("#qtyVal");
+      if (inp) inp.value = qty;
+    }
     else if (t.id === "addBtn") addToCart(false);
     else if (t.id === "buyBtn") addToCart(true);
+  });
+
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "qtyVal") {
+      let val = parseInt(e.target.value);
+      if (isNaN(val) || val < 1) val = 1;
+      const maxStock = variant?.stock || 99;
+      if (val > maxStock) val = maxStock;
+      qty = val;
+      e.target.value = qty;
+    }
+  });
+
+  root.addEventListener("change", (e) => {
+    if (e.target.id === "qtyVal") {
+      let val = parseInt(e.target.value);
+      if (isNaN(val) || val < 1) val = 1;
+      const maxStock = variant?.stock || 99;
+      if (val > maxStock) val = maxStock;
+      qty = val;
+      e.target.value = qty;
+    }
   });
 
   render();

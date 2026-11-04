@@ -137,9 +137,12 @@
         fb.innerHTML = "";
         try {
           const data = await Jewels.api("/auth/login", { method: "POST", body: { email: f.email, password: f.password } });
-          localStorage.setItem("jewels_token", data.token);
-          if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
-          if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+          sessionStorage.setItem("jewels_token", data.token);
+          if (data.user?.email) sessionStorage.setItem("jewels_user_email", data.user.email);
+          if (data.user?.id) sessionStorage.setItem("jewels_user_id", data.user.id);
+          localStorage.removeItem("jewels_token");
+          localStorage.removeItem("jewels_user_email");
+          localStorage.removeItem("jewels_user_id");
           Jewels.state.user = data.user;
           Jewels.toast("Chào mừng trở lại, " + data.user.name + "!", "ok");
           setTimeout(() => location.href = "home.html", 500);

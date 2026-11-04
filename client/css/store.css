@@ -436,33 +436,130 @@ button { cursor: pointer; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: var(--transition);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.45s ease;
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow);
+  box-shadow: 0 10px 28px -10px rgba(45, 30, 10, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 .card:hover {
-  transform: translateY(-8px);
-  box-shadow: var(--shadow-hover);
-  border-color: rgba(166, 115, 46, 0.4);
+  transform: translateY(-9px);
+  box-shadow: 0 26px 50px -12px rgba(185, 138, 62, 0.38), 0 0 25px rgba(212, 175, 55, 0.22), 0 0 0 1.5px rgba(212, 175, 55, 0.75);
+  border-color: rgba(212, 175, 55, 0.85);
 }
 .card .thumb {
   aspect-ratio: 1;
-  background: var(--gold-wash);
+  background: radial-gradient(circle at 50% 45%, #ffffff 0%, #faf6ee 65%, #f2eae0 100%);
   overflow: hidden;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card .thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 18%,
+    rgba(255, 255, 255, 0.25) 38%,
+    rgba(255, 255, 255, 0.85) 47%,
+    rgba(255, 240, 180, 0.95) 50%,
+    rgba(205, 235, 255, 0.85) 53%,
+    rgba(255, 255, 255, 0.25) 62%,
+    transparent 82%
+  );
+  transform: translateX(-120%) skewX(-20deg);
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+.card:hover .thumb::after {
+  transform: translateX(130%) skewX(-20deg);
+}
+
+/* Hiệu ứng lấp lánh kim cương & ngôi sao 4 cánh (Sparkles) */
+.sparkle-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+.sparkle {
+  position: absolute;
+  user-select: none;
+  line-height: 1;
+  text-shadow: 0 0 8px rgba(255, 245, 190, 0.95), 0 0 16px rgba(255, 215, 0, 0.85), 0 0 24px rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  transform: scale(0) rotate(0deg);
+  transition: opacity 0.4s ease, transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.sp-1 {
+  top: 20%;
+  right: 22%;
+  font-size: 1.5rem;
+  color: #ffffff;
+  animation: naturalTwinkle 4.5s ease-in-out infinite 0.6s;
+}
+.sp-2 {
+  bottom: 26%;
+  left: 20%;
+  font-size: 1.2rem;
+  color: #fff9e6;
+  animation: naturalTwinkle 4.5s ease-in-out infinite 2.2s;
+}
+.sp-3 {
+  top: 45%;
+  left: 60%;
+  font-size: 0.95rem;
+  color: #ffffff;
+  animation: naturalTwinkle 4.5s ease-in-out infinite 3.5s;
+}
+
+/* Khi người dùng lướt chuột qua thẻ: các tia sáng rực sáng lấp lánh liên tục */
+.card:hover .sp-1 {
+  animation: sparkleFlash 1.6s ease-in-out infinite 0.1s;
+}
+.card:hover .sp-2 {
+  animation: sparkleFlash 1.6s ease-in-out infinite 0.6s;
+}
+.card:hover .sp-3 {
+  animation: sparkleFlash 1.6s ease-in-out infinite 1.1s;
+}
+
+@keyframes naturalTwinkle {
+  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+  30% { opacity: 0.85; transform: scale(1.15) rotate(45deg); }
+  50% { opacity: 1; transform: scale(1.35) rotate(90deg); filter: drop-shadow(0 0 8px gold); }
+  70% { opacity: 0.7; transform: scale(0.9) rotate(135deg); }
+  85% { opacity: 0; transform: scale(0) rotate(180deg); }
+}
+
+@keyframes sparkleFlash {
+  0% { opacity: 0; transform: scale(0) rotate(0deg); }
+  30% { opacity: 1; transform: scale(1.45) rotate(70deg); filter: drop-shadow(0 0 10px #ffe599) drop-shadow(0 0 20px #ffd700); }
+  65% { opacity: 0.9; transform: scale(1.1) rotate(140deg); }
+  100% { opacity: 0; transform: scale(0) rotate(210deg); }
 }
 .card .thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1);
+  filter: saturate(1.05) contrast(1.02);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), filter 0.5s ease;
 }
-.card:hover .thumb img { transform: scale(1.08); }
+.card:hover .thumb img {
+  transform: scale(1.09) translateY(-2px);
+  filter: saturate(1.18) contrast(1.08) brightness(1.03);
+}
 .card .body {
   padding: 20px 22px 24px;
   display: grid;
   gap: 6px;
+  background: #ffffff;
+  position: relative;
+  z-index: 3;
 }
 .card .cat {
   font-size: 0.74rem;
@@ -474,9 +571,9 @@ button { cursor: pointer; }
 .card h3 {
   font-size: 1.35rem;
   margin: 0;
-  transition: color 0.2s;
+  transition: color 0.25s ease;
 }
-.card:hover h3 { color: var(--gold); }
+.card:hover h3 { color: var(--gold-rich); }
 .price {
   font-weight: 700;
   color: var(--gold-rich);
@@ -487,16 +584,137 @@ button { cursor: pointer; }
   position: absolute;
   top: 14px;
   left: 14px;
-  background: rgba(20, 18, 16, 0.9);
+  background: linear-gradient(135deg, rgba(20, 18, 16, 0.94), rgba(45, 34, 22, 0.92));
   color: #f7e7c9;
   font-size: 0.72rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  padding: 5px 12px;
+  padding: 5px 13px;
   border-radius: 999px;
   font-weight: 700;
   backdrop-filter: blur(8px);
-  z-index: 2;
+  z-index: 3;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(207, 168, 102, 0.35);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.card:hover .tag {
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(166, 115, 46, 0.35), inset 0 0 0 1px rgba(207, 168, 102, 0.6);
+}
+
+/* Nút thêm vào giỏ hàng & bộ chọn số lượng trên card sản phẩm */
+.card-add-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(212, 185, 142, 0.35);
+}
+.card-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(185, 138, 62, 0.38);
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+  height: 38px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.btn-card-qty {
+  width: 28px;
+  height: 100%;
+  border: none;
+  background: var(--gold-wash);
+  color: var(--gold-rich);
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.btn-card-qty:hover:not(:disabled) {
+  background: rgba(185, 138, 62, 0.25);
+  color: #5a3f14;
+}
+.btn-card-qty:active:not(:disabled) {
+  background: rgba(185, 138, 62, 0.4);
+}
+.card-qty-input {
+  width: 36px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #2b2520;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.card-qty-input::-webkit-outer-spin-button,
+.card-qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.card-qty-input:focus {
+  background: #fffdf9;
+}
+.btn-card-add {
+  flex: 1;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--gold-wash);
+  color: var(--gold-rich);
+  border: 1px solid rgba(185, 138, 62, 0.38);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-card-add svg {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+.btn-card-add:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b8862d, #8f5d1b);
+  color: #ffffff;
+  border-color: #8f5d1b;
+  box-shadow: 0 4px 14px rgba(143, 93, 27, 0.35);
+  transform: translateY(-1px);
+}
+.btn-card-add:hover:not(:disabled) svg {
+  transform: scale(1.15);
+}
+.btn-card-add:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn-card-add:disabled,
+.btn-card-add.disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.btn-card-add.added {
+  background: #047857 !important;
+  color: #ffffff !important;
+  border-color: #047857 !important;
+  box-shadow: 0 4px 12px rgba(4, 120, 87, 0.35) !important;
 }
 
 /* Shop layout */
@@ -702,6 +920,23 @@ button { cursor: pointer; }
 }
 .qty button:hover { background: var(--gold-wash); color: var(--gold); }
 .qty span { min-width: 38px; text-align: center; font-weight: 700; }
+.qty input.qty-field {
+  width: 44px;
+  height: 46px;
+  border: 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+  background: transparent;
+  color: #2b2520;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.qty input.qty-field::-webkit-outer-spin-button,
+.qty input.qty-field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .spec {
   margin-top: 32px;
   border-top: 1px solid var(--line);
@@ -1323,4 +1558,561 @@ dialog[open] { animation: dlg 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .site-footer ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .copy-line { padding-top: 24px; font-size: 0.88rem; text-align: center; opacity: 0.7; }
 @media (max-width: 700px) { .foot-grid { grid-template-columns: 1fr; } }
-@media print { .site-header, .site-footer, #toasts, .no-print { display: none !important; } }
+@media print {
+  .site-header, .site-footer, #toasts, .no-print, .page-head { display: none !important; }
+  body { background: #fff !important; }
+  .container { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  .invoice-card { box-shadow: none !important; border: 1px solid #ccc !important; padding: 24px !important; }
+}
+
+/* ========================================================
+   LUỒNG THANH TOÁN & HÓA ĐƠN ĐIỆN TỬ (INVOICE FLOW)
+   ======================================================== */
+.pay-details-box {
+  margin-top: 14px;
+  padding: 18px 20px;
+  background: #fdfbf7;
+  border: 1px solid #ebd9b5;
+  border-radius: 12px;
+  display: grid;
+  gap: 14px;
+}
+.qr-pay-wrap {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 20px;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .qr-pay-wrap { grid-template-columns: 1fr; text-align: center; }
+  .qr-pay-wrap img, .qr-pay-wrap svg { margin: 0 auto; }
+}
+.qr-pay-wrap img,
+.qr-pay-wrap svg {
+  max-width: 160px;
+  height: auto;
+  border-radius: 10px;
+}
+.bank-info-grid {
+  display: grid;
+  gap: 6px;
+  font-size: 0.92rem;
+}
+.bank-info-grid .info-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(207, 168, 102, 0.4);
+  padding: 4px 0;
+}
+.bank-info-grid .info-row strong {
+  color: var(--ink-deep);
+}
+
+/* Thẻ tín dụng mockup */
+.cc-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.cc-form-grid .full-col {
+  grid-column: 1 / -1;
+}
+
+/* HÓA ĐƠN ĐIỆN TỬ (LUXURY VAT INVOICE) */
+.invoice-wrapper {
+  max-width: 860px;
+  margin: 20px auto 60px;
+}
+.invoice-card {
+  background: #ffffff;
+  border: 1px solid #e5dccb;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px -10px rgba(45, 30, 10, 0.1);
+  padding: 44px 48px;
+  position: relative;
+  overflow: hidden;
+}
+.invoice-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #8c5b1b, #d4af37, #8c5b1b);
+}
+.inv-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #f0e6d6;
+  flex-wrap: wrap;
+}
+.inv-brand h2 {
+  font-family: var(--heading);
+  font-size: 2.2rem;
+  letter-spacing: 0.05em;
+  color: var(--gold-rich);
+  margin: 0 0 4px;
+}
+.inv-brand p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+.inv-meta {
+  text-align: right;
+}
+.inv-title {
+  font-family: var(--heading);
+  font-size: 1.8rem;
+  color: var(--ink-deep);
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.inv-meta p {
+  margin: 2px 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+.inv-meta strong {
+  color: var(--gold-rich);
+  font-size: 1.05rem;
+}
+.inv-customer-box {
+  background: #faf8f5;
+  border: 1px solid #eee5d8;
+  border-radius: 12px;
+  padding: 18px 24px;
+  margin: 24px 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  font-size: 0.94rem;
+}
+@media (max-width: 640px) {
+  .inv-customer-box { grid-template-columns: 1fr; }
+}
+.inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 24px 0 16px;
+  font-size: 0.92rem;
+}
+.inv-table th {
+  background: #f7f3eb;
+  color: var(--ink-deep);
+  font-weight: 700;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 2px solid #ebd9b5;
+}
+.inv-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0ebdf;
+  vertical-align: middle;
+}
+.inv-table tr:hover td {
+  background: #fffdfa;
+}
+.inv-calc {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.inv-calc-box {
+  width: min(380px, 100%);
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+.inv-calc-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.inv-calc-row.grand-total {
+  border-top: 2px solid #ebd9b5;
+  margin-top: 6px;
+  padding-top: 12px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--gold-rich);
+}
+.inv-words {
+  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  margin: 12px 0 24px;
+  padding: 10px 16px;
+  background: #faf7f2;
+  border-left: 3px solid var(--gold-light);
+  border-radius: 4px;
+}
+.inv-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed #ebd9b5;
+  padding-top: 24px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.inv-stamp {
+  border: 2px dashed #b3261e;
+  color: #b3261e;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transform: rotate(-3deg);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: rgba(179, 38, 30, 0.04);
+}
+
+/* ========================================================
+   CỔNG THANH TOÁN THỰC TẾ (REALISTIC PAYMENT GATEWAY)
+   ======================================================== */
+.dlg-gateway {
+  width: min(740px, 96vw) !important;
+  max-height: 94vh;
+  overflow-y: auto;
+  border-radius: 20px !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 30px 80px -15px rgba(15, 23, 42, 0.35) !important;
+  padding: 0 !important;
+  background: #f8fafc !important;
+}
+.gw-header {
+  background: linear-gradient(135deg, #091e3a 0%, #173d63 100%);
+  color: #ffffff;
+  padding: 18px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.gw-header-wallet {
+  background: linear-gradient(135deg, #7c1256 0%, #a50064 100%) !important;
+}
+.gw-header-card {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%) !important;
+}
+.gw-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gw-brand-text h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+}
+.gw-brand-text p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+.gw-pill-timer {
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(6px);
+  color: #fef08a;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+.gw-dot-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: gwPulse 1.8s infinite;
+}
+@keyframes gwPulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.8); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+.gw-close {
+  background: rgba(255, 255, 255, 0.16);
+  border: none;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 10px;
+}
+.gw-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+.gw-body {
+  padding: 24px;
+}
+.gw-layout {
+  display: grid;
+  grid-template-columns: 270px 1fr;
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 680px) {
+  .gw-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.gw-qr-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px 16px 14px;
+  box-shadow: 0 4px 16px rgba(15, 43, 72, 0.08);
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+.gw-qr-instruction {
+  font-size: 0.8rem;
+  color: #475569;
+  margin: 10px 0 0;
+  line-height: 1.45;
+}
+.gw-bank-logos {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+.gw-bank-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  background: #f1f5f9;
+  color: #334155;
+  border-radius: 4px;
+}
+.gw-info-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(15, 43, 72, 0.08);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gw-amount-hero {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.gw-amount-hero .label {
+  font-size: 0.8rem;
+  color: #475569;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.gw-amount-hero .amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0f2b48;
+}
+.gw-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #eef2f6;
+}
+.gw-field-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+.gw-field-val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gw-field-val strong {
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+.gw-btn-copy {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f2b48;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s;
+  user-select: none;
+}
+.gw-btn-copy:hover {
+  background: #0f2b48;
+  color: #ffffff;
+  border-color: #0f2b48;
+}
+.gw-btn-copy.copied {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+}
+.gw-alert-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: #92400e;
+  line-height: 1.45;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.gw-actions {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gw-btn-submit {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #0d5c3a 0%, #15803d 100%);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(21, 128, 61, 0.28);
+  transition: all 0.2s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+.gw-btn-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(21, 128, 61, 0.38);
+}
+.gw-btn-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.gw-btn-cancel {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-align: center;
+  padding: 6px;
+}
+.gw-btn-cancel:hover {
+  color: #0f172a;
+}
+.gw-security-foot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.74rem;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+.gw-security-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Virtual Credit Card Preview */
+.gw-virtual-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 16px;
+  padding: 22px;
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.4);
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.gw-virtual-card::before {
+  content: "";
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(207, 168, 102, 0.25) 0%, transparent 70%);
+}
+.gw-card-chip {
+  width: 38px;
+  height: 28px;
+  background: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #aa771c 100%);
+  border-radius: 6px;
+  margin-bottom: 20px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.gw-card-num {
+  font-family: 'Courier New', monospace;
+  font-size: 1.3rem;
+  letter-spacing: 2px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #f8fafc;
+}
+.gw-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.gw-card-meta strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #ffffff;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}

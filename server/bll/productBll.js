@@ -57,6 +57,8 @@ class ProductBll {
     const items = data.map((p) => {
       const variants = (p.product_variants || []).filter((v) => v.is_active);
       const prices = variants.map((v) => Number(v.price ?? p.base_price));
+      const inStockVariants = variants.filter((v) => v.stock_quantity > 0);
+      const defVariant = inStockVariants[0] || variants[0] || null;
       return {
         id: p.pro_id,
         name: p.name,
@@ -64,7 +66,8 @@ class ProductBll {
         image: this.mainImage(images[p.pro_id]),
         price: prices.length ? Math.min(...prices) : Number(p.base_price),
         maxPrice: prices.length ? Math.max(...prices) : Number(p.base_price),
-        inStock: variants.some((v) => v.stock_quantity > 0),
+        inStock: inStockVariants.length > 0,
+        defaultVariantId: defVariant?.variant_id || null,
       };
     });
 
