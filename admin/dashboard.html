@@ -704,7 +704,7 @@
         </section>
       </div>
 
-      <!-- MODULE 6: QUẢN LÝ KHUYẾN MÃI -->
+      <!-- MODULE 6: QUẢN LÝ KHUYẾN MÃI (3 LOẠI: THEO SẢN PHẨM, THEO VOUCHER, THEO HÓA ĐƠN) -->
       <div class="admin-module" data-module="promotions" hidden>
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
@@ -714,12 +714,30 @@
             </div>
             <div class="admin-module-actions">
               <input id="promotionSearch" class="admin-search" type="search"
-                placeholder="Tìm mã khuyến mãi, tên CT..." />
+                placeholder="Tìm mã khuyến mãi, tên CT, sản phẩm..." />
               <button type="button" class="admin-primary-btn" data-add="promotions">
-                + Tạo mã ưu đãi
+                + Tạo chương trình ưu đãi
               </button>
             </div>
           </div>
+
+          <!-- BỘ LỌC PHÂN LOẠI 3 NHÓM KHUYẾN MÃI -->
+          <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:12px; font-weight:700; color:#666; margin-right:4px;">Phân loại:</span>
+            <button type="button" class="promo-filter-btn active" data-promo-type="all" onclick="filterPromotionType('all')">
+              Tất cả (<span id="countPromoAll">0</span>)
+            </button>
+            <button type="button" class="promo-filter-btn" data-promo-type="product" onclick="filterPromotionType('product')">
+              🏷️ Theo sản phẩm (<span id="countPromoProduct">0</span>)
+            </button>
+            <button type="button" class="promo-filter-btn" data-promo-type="voucher" onclick="filterPromotionType('voucher')">
+              🎟️ Theo voucher (<span id="countPromoVoucher">0</span>)
+            </button>
+            <button type="button" class="promo-filter-btn" data-promo-type="invoice" onclick="filterPromotionType('invoice')">
+              🧾 Theo hóa đơn (<span id="countPromoInvoice">0</span>)
+            </button>
+          </div>
+
           <div class="admin-management-layout split-layout">
             <div class="admin-table-wrap">
               <div class="admin-list" id="promotionsTable"></div>
@@ -742,27 +760,78 @@
               </div>
               <form id="promotionForm" class="admin-form">
                 <input type="hidden" name="id" />
-                <label>Tên chương trình<input name="name" type="text" placeholder="Flash Sale Mùa Cưới"
-                    required /></label>
-                <label>Mã Voucher<input name="code" type="text" placeholder="JEWELS20" style="text-transform: uppercase"
-                    required /></label>
-                <label>Mức giảm (%)<input name="discount" type="number" min="1" max="100" placeholder="20"
-                    required /></label>
-                <label>Ngày bắt đầu<input name="beginDate" type="date" /></label>
-                <label>Ngày kết thúc<input name="endDate" type="date" /></label>
-                <label>Số lượng mã tối đa<input name="usageLimit" type="number" min="1" value="100" /></label>
+
+                <!-- 1. CHỌN HÌNH THỨC KHUYẾN MÃI -->
+                <label style="background:#f8f9fa; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+                  <strong style="color:var(--admin-dark); font-size:13px; display:block; margin-bottom:4px;">Hình thức khuyến mãi (Bắt buộc chọn)</strong>
+                  <select name="type" id="promoTypeSelect" onchange="handlePromoTypeChange(this.value)" required style="font-weight:600; color:var(--admin-green);">
+                    <option value="product">🏷️ Khuyến mãi theo sản phẩm (Giảm % trực tiếp cho sản phẩm)</option>
+                    <option value="voucher" selected>🎟️ Khuyến mãi theo voucher (Mã giảm giá nhập khi đặt hàng)</option>
+                    <option value="invoice">🧾 Khuyến mãi theo hóa đơn (Giảm % khi đơn hàng đạt mức tối thiểu)</option>
+                  </select>
+                </label>
+
+                <label>Tên chương trình khuyến mãi
+                  <input name="name" type="text" placeholder="Ví dụ: Giảm giá mùa cưới / Tri ân khách hàng" required />
+                </label>
+
+                <!-- 2. CÁC TRƯỜNG ĐẶC THÙ THEO TỪNG LOẠI -->
+                <!-- A. Theo sản phẩm -->
+                <div id="promoFieldProduct" style="display:none; background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:12px;">
+                  <label>
+                    <strong style="color:#7e22ce;">💍 Chọn sản phẩm áp dụng giảm giá</strong>
+                    <select name="productId" id="promoProductSelect">
+                      <option value="">-- Đang tải danh sách sản phẩm... --</option>
+                    </select>
+                    <small style="color:#6b21a8; font-size:11px; margin-top:3px;">Sản phẩm này sẽ được chiết khấu % trực tiếp khi khách hàng chọn mua.</small>
+                  </label>
+                </div>
+
+                <!-- B. Theo voucher -->
+                <div id="promoFieldVoucher" style="background:#fefce8; border:1px solid #fef08a; border-radius:8px; padding:12px;">
+                  <label style="margin-bottom:8px;">
+                    <strong style="color:#854d0e;">🎟️ Mã Voucher (Code khách nhập)</strong>
+                    <input name="code" id="promoCodeInput" type="text" placeholder="JEWELS20" style="text-transform: uppercase" />
+                  </label>
+                  <label>
+                    <span style="color:#854d0e;">Số lượng mã tối đa (Lượt dùng)</span>
+                    <input name="usageLimit" type="number" min="1" value="100" />
+                  </label>
+                </div>
+
+                <!-- C. Theo hóa đơn -->
+                <div id="promoFieldInvoice" style="display:none; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:12px;">
+                  <label>
+                    <strong style="color:#065f46;">🧾 Tổng tiền hóa đơn tối thiểu để được giảm (VNĐ)</strong>
+                    <input name="minInvoiceAmount" id="promoMinInvoiceInput" type="number" min="100000" step="100000" placeholder="10000000 (10 triệu VNĐ)" />
+                    <small style="color:#047857; font-size:11px; margin-top:3px;">Tổng tiền giỏ hàng phải đạt từ mức này trở lên mới được tự động chiết khấu %.</small>
+                  </label>
+                </div>
+
+                <!-- 3. MỨC GIẢM VÀ THỜI GIAN ÁP DỤNG -->
+                <label>
+                  <strong>Mức giảm (%)</strong>
+                  <input name="discount" type="number" min="1" max="100" placeholder="Ví dụ: 15 (Giảm 15%)" required />
+                </label>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                  <label>Ngày bắt đầu<input name="beginDate" type="date" required /></label>
+                  <label>Ngày kết thúc<input name="endDate" type="date" required /></label>
+                </div>
+
                 <label>Trạng thái
                   <select name="status">
                     <option value="Hoạt động">Đang hoạt động</option>
                     <option value="Hết hạn">Hết hạn / Tạm dừng</option>
                   </select>
                 </label>
+
                 <div class="admin-form-actions">
                   <button type="button" class="admin-secondary-btn" data-reset="promotions">
                     Hủy
                   </button>
                   <button type="submit" class="admin-primary-btn">
-                    Lưu khuyến mãi
+                    Lưu chương trình khuyến mãi
                   </button>
                 </div>
               </form>

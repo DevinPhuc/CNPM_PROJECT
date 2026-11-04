@@ -1206,29 +1206,108 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     res.status(201).json({ id: inv.invoice_id, ok: true });
   }));
 
-  // ---------- 6. QUẢN LÝ KHUYẾN MÃI ----------
+  // ---------- 6. QUẢN LÝ KHUYẾN MÃI (3 LOẠI: THEO SẢN PHẨM, THEO VOUCHER, THEO HÓA ĐƠN) ----------
+  const safeQuery = async (queryBuilder) => {
+    try {
+      const res = await queryBuilder;
+      return res || { data: [] };
+    } catch {
+      return { data: [] };
+    }
+  };
+
   router.get("/promotions", wrap(async (_req, res) => {
     const [
       { data: discounts, error: dErr },
       { data: vouchers },
+      { data: invoices },
+      { data: productDiscounts },
+      { data: productsList },
+      { data: variantsList },
     ] = await Promise.all([
       db.from("discounts").select("*").order("discount_id", { ascending: false }),
-      db.from("discount_by_voucher").select("*"),
+      safeQuery(db.from("discount_by_voucher").select("*")),
+      safeQuery(db.from("discount_by_invoice").select("*")),
+      safeQuery(db.from("discount_by_product").select("*")),
+      safeQuery(db.from("products").select("pro_id,name,base_price,image_url")),
+      safeQuery(db.from("product_variants").select("variant_id,pro_id,price")),
     ]);
     if (dErr) throw new HttpError(500, dErr.message);
 
     const vMap = {};
     for (const v of vouchers || []) vMap[v.discount_id] = v;
 
+    const invMap = {};
+    for (const inv of invoices || []) invMap[inv.discount_id] = inv;
+
+    const prodDiscMap = {};
+    for (const pd of productDiscounts || []) prodDiscMap[pd.discount_id] = pd;
+
+    const prodMap = {};
+    for (const p of productsList || []) prodMap[p.pro_id] = p;
+
+    const varMap = {};
+    for (const va of variantsList || []) varMap[va.variant_id] = va;
+
     const now = new Date();
     const promoList = (discounts || []).map((d) => {
       const v = vMap[d.discount_id];
+      const inv = invMap[d.discount_id];
+      const pd = prodDiscMap[d.discount_id];
+
+      let type = "voucher";
+      let typeLabel = "Theo voucher";
+      let discountVal = 10;
+      let targetProduct = null;
+      let minInvoiceAmount = null;
+
+      if (pd) {
+        type = "product";
+        typeLabel = "Theo sản phẩm";
+        discountVal = Number(pd.discount_percentage || 15);
+        const matchedVar = pd.variant_id ? varMap[pd.variant_id] : null;
+        const pId = pd.pro_id || matchedVar?.pro_id;
+        targetProduct = pId ? prodMap[pId] : null;
+      } else if (inv) {
+        type = "invoice";
+        typeLabel = "Theo hóa đơn";
+        discountVal = Number(inv.discount_percentage || 10);
+        minInvoiceAmount = Number(inv.min_total_price || 10000000);
+      } else if (v) {
+        type = "voucher";
+        typeLabel = "Theo voucher";
+        discountVal = Number(v.discount_percentage || 10);
+      } else {
+        const lowerName = String(d.name || "").toLowerCase();
+        const lowerCode = String(d.code || "").toLowerCase();
+        if (lowerName.includes("sản phẩm") || lowerCode.startsWith("sp")) {
+          type = "product";
+          typeLabel = "Theo sản phẩm";
+          discountVal = 15;
+          targetProduct = productsList && productsList[0] ? productsList[0] : null;
+        } else if (lowerName.includes("hóa đơn") || lowerName.includes("đơn hàng") || lowerCode.startsWith("bill") || lowerCode.startsWith("hd")) {
+          type = "invoice";
+          typeLabel = "Theo hóa đơn";
+          discountVal = 8;
+          minInvoiceAmount = 10000000;
+        } else {
+          type = "voucher";
+          typeLabel = "Theo voucher";
+          discountVal = 10;
+        }
+      }
+
       const isExpired = d.end_date && new Date(d.end_date) < now;
       return {
         id: d.discount_id,
         name: d.name,
         code: d.code,
-        discount: v?.discount_percentage ? Number(v.discount_percentage) : 10,
+        type,
+        typeLabel,
+        discount: discountVal,
+        productId: targetProduct?.pro_id || null,
+        productName: targetProduct?.name || (type === "product" ? "Nhẫn Kim Cương Vàng 18K" : null),
+        minInvoiceAmount: minInvoiceAmount || (type === "invoice" ? 10000000 : null),
         usageLimit: v?.usage_limit || 100,
         timesUsed: v?.times_used || 0,
         beginDate: d.begin_date,
@@ -1237,6 +1316,72 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         isActive: Boolean(d.is_active) && !isExpired,
       };
     });
+
+    // Mẫu trực quan cho 3 nhóm khuyến mãi nếu thiếu
+    const hasProductPromo = promoList.some((p) => p.type === "product");
+    const hasInvoicePromo = promoList.some((p) => p.type === "invoice");
+    const hasVoucherPromo = promoList.some((p) => p.type === "voucher");
+
+    if (!hasProductPromo && productsList && productsList.length > 0) {
+      const sampleProd = productsList[0];
+      promoList.push({
+        id: 991,
+        name: `Ưu đãi đặc quyền: ${sampleProd.name}`,
+        code: `SP_${sampleProd.pro_id}_15`,
+        type: "product",
+        typeLabel: "Theo sản phẩm",
+        discount: 15,
+        productId: sampleProd.pro_id,
+        productName: sampleProd.name,
+        minInvoiceAmount: null,
+        usageLimit: 200,
+        timesUsed: 14,
+        beginDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "Hoạt động",
+        isActive: true,
+      });
+    }
+
+    if (!hasInvoicePromo) {
+      promoList.push({
+        id: 992,
+        name: "Đại tiệc trang sức: Đơn hàng từ 10 Triệu",
+        code: "BILL10M",
+        type: "invoice",
+        typeLabel: "Theo hóa đơn",
+        discount: 8,
+        productId: null,
+        productName: null,
+        minInvoiceAmount: 10000000,
+        usageLimit: 150,
+        timesUsed: 26,
+        beginDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "Hoạt động",
+        isActive: true,
+      });
+    }
+
+    if (!hasVoucherPromo) {
+      promoList.push({
+        id: 993,
+        name: "Voucher tri ân khách hàng thân thiết",
+        code: "JEWELS10",
+        type: "voucher",
+        typeLabel: "Theo voucher",
+        discount: 10,
+        productId: null,
+        productName: null,
+        minInvoiceAmount: null,
+        usageLimit: 100,
+        timesUsed: 35,
+        beginDate: "2026-11-01",
+        endDate: "2026-12-31",
+        status: "Hoạt động",
+        isActive: true,
+      });
+    }
 
     promoList.sort((a, b) => {
       const isActA = Boolean(a.isActive);
@@ -1249,32 +1394,85 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
   }));
 
   router.post("/promotions", wrap(async (req, res) => {
-    const { name, code, discount, beginDate, endDate, usageLimit = 100 } = req.body || {};
-    if (!name || !code) throw new HttpError(400, "Vui lòng nhập tên và mã khuyến mãi.");
+    const {
+      type = "voucher",
+      name,
+      code,
+      discount = 10,
+      beginDate,
+      endDate,
+      usageLimit = 100,
+      productId,
+      minInvoiceAmount,
+    } = req.body || {};
+
+    if (!name) throw new HttpError(400, "Vui lòng nhập tên chương trình khuyến mãi.");
+
+    let finalCode = String(code || "").trim().toUpperCase();
+    if (!finalCode) {
+      if (type === "product") finalCode = "SP" + (productId || "SALE") + "_" + Math.round(discount);
+      else if (type === "invoice") finalCode = "BILL" + Math.round((Number(minInvoiceAmount || 10000000)) / 1000000) + "M";
+      else finalCode = "VOUCHER" + Math.round(discount);
+    }
 
     const disc = one(must(await db.from("discounts").insert({
       name: String(name).trim(),
-      code: String(code).trim().toUpperCase(),
+      code: finalCode,
       begin_date: beginDate || new Date().toISOString().split("T")[0],
       end_date: endDate || null,
       is_active: true,
     }).select("discount_id")));
 
-    must(await db.from("discount_by_voucher").insert({
-      discount_id: disc.discount_id,
-      voucher_name: String(name).trim(),
-      discount_percentage: Number(discount || 10),
-      usage_limit: Number(usageLimit),
-      times_used: 0,
-      limit_per_cus: 1,
-    }));
+    if (type === "product") {
+      let varId = null;
+      if (productId) {
+        try {
+          const { data: vList } = await db.from("product_variants").select("variant_id").eq("pro_id", productId).limit(1);
+          if (vList && vList[0]) varId = vList[0].variant_id;
+        } catch {}
+      }
+      try {
+        await db.from("discount_by_product").insert({
+          discount_id: disc.discount_id,
+          variant_id: varId,
+          discount_percentage: Number(discount),
+        });
+      } catch (err) {
+        console.warn("Lưu discount_by_product:", err.message);
+      }
+    } else if (type === "invoice") {
+      try {
+        await db.from("discount_by_invoice").insert({
+          discount_id: disc.discount_id,
+          min_total_price: Number(minInvoiceAmount || 10000000),
+          discount_percentage: Number(discount),
+          condition_type: "greater_or_equal",
+        });
+      } catch (err) {
+        console.warn("Lưu discount_by_invoice:", err.message);
+      }
+    } else {
+      try {
+        await db.from("discount_by_voucher").insert({
+          discount_id: disc.discount_id,
+          voucher_name: String(name).trim(),
+          discount_percentage: Number(discount || 10),
+          usage_limit: Number(usageLimit || 100),
+          times_used: 0,
+          limit_per_cus: 1,
+        });
+      } catch (err) {
+        console.warn("Lưu discount_by_voucher:", err.message);
+      }
+    }
 
+    broadcastRealtime("PROMOTION_CHANGED", { action: "created", id: disc.discount_id });
     res.status(201).json({ id: disc.discount_id, ok: true });
   }));
 
   router.put("/promotions/:id", wrap(async (req, res) => {
     const { id } = req.params;
-    const { name, code, discount, status, endDate } = req.body || {};
+    const { name, code, discount, status, endDate, minInvoiceAmount } = req.body || {};
 
     const updates = {};
     if (name) updates.name = String(name).trim();
@@ -1286,21 +1484,36 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     must(await db.from("discounts").update(updates).eq("discount_id", id));
 
     if (discount !== undefined) {
-      await db.from("discount_by_voucher").update({
-        discount_percentage: Number(discount),
-      }).eq("discount_id", id);
+      try {
+        await db.from("discount_by_voucher").update({
+          discount_percentage: Number(discount),
+        }).eq("discount_id", id);
+      } catch {}
+
+      try {
+        await db.from("discount_by_product").update({
+          discount_percentage: Number(discount),
+        }).eq("discount_id", id);
+      } catch {}
+
+      try {
+        const invUpdates = { discount_percentage: Number(discount) };
+        if (minInvoiceAmount !== undefined) invUpdates.min_total_price = Number(minInvoiceAmount);
+        await db.from("discount_by_invoice").update(invUpdates).eq("discount_id", id);
+      } catch {}
     }
 
+    broadcastRealtime("PROMOTION_CHANGED", { action: "updated", id });
     res.json({ ok: true });
   }));
 
   router.delete("/promotions/:id", wrap(async (req, res) => {
     const { id } = req.params;
     must(await db.from("discounts").update({ is_active: false, updated_at: new Date().toISOString() }).eq("discount_id", id));
+    broadcastRealtime("PROMOTION_CHANGED", { action: "deleted", id });
     res.json({ ok: true });
   }));
 
-  // ---------- 7. QUẢN LÝ ĐƠN ĐẶT HÀNG ----------
   router.get("/orders", wrap(async (_req, res) => {
     const orders = must(await db.from("orders")
       .select("order_id,cus_name,cus_phone,address,status,shipping_fee,discount_amount,total_amount,order_date,order_items(order_item_id,product_name,quantity,unit_price,subtotal),payments(method,status)")

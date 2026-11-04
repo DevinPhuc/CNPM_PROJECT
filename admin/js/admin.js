@@ -1172,11 +1172,64 @@
     selectInvoiceRow(id);
   };
 
-  // ---------- 6. QUẢN LÝ KHUYẾN MÃI ----------
+  // ---------- 6. QUẢN LÝ KHUYẾN MÃI (3 LOẠI: THEO SẢN PHẨM, THEO VOUCHER, THEO HÓA ĐƠN) ----------
+  state.currentPromoType = "all";
+
+  window.filterPromotionType = (type) => {
+    state.currentPromoType = type;
+    document.querySelectorAll(".promo-filter-btn").forEach((btn) => {
+      if (btn.getAttribute("data-promo-type") === type) btn.classList.add("active");
+      else btn.classList.remove("active");
+    });
+    const searchVal = document.getElementById("promotionSearch")?.value || "";
+    renderPromotionsTable(searchVal);
+  };
+
+  window.handlePromoTypeChange = (type) => {
+    const fieldProd = document.getElementById("promoFieldProduct");
+    const fieldVouch = document.getElementById("promoFieldVoucher");
+    const fieldInv = document.getElementById("promoFieldInvoice");
+    const codeInput = document.getElementById("promoCodeInput");
+    const minInvInput = document.getElementById("promoMinInvoiceInput");
+    const prodSelect = document.getElementById("promoProductSelect");
+
+    if (fieldProd) fieldProd.style.display = type === "product" ? "block" : "none";
+    if (fieldVouch) fieldVouch.style.display = (type === "voucher" || type === "invoice") ? "block" : "none";
+    if (fieldInv) fieldInv.style.display = type === "invoice" ? "block" : "none";
+
+    if (codeInput) {
+      if (type === "product") codeInput.removeAttribute("required");
+      else if (type === "voucher") codeInput.setAttribute("required", "required");
+      else codeInput.removeAttribute("required");
+    }
+
+    if (prodSelect) {
+      if (type === "product") prodSelect.setAttribute("required", "required");
+      else prodSelect.removeAttribute("required");
+    }
+
+    if (minInvInput) {
+      if (type === "invoice") minInvInput.setAttribute("required", "required");
+      else minInvInput.removeAttribute("required");
+    }
+  };
+
   async function loadPromotions(keyword = "") {
     try {
-      const data = await api("/promotions");
+      const [data, products] = await Promise.all([
+        api("/promotions"),
+        api("/products").catch(() => []),
+      ]);
       state.promotions = data;
+      state.products = products;
+
+      // Đổ danh sách sản phẩm vào select của modal
+      const prodSelect = document.getElementById("promoProductSelect");
+      if (prodSelect && products && products.length > 0) {
+        prodSelect.innerHTML = '<option value="">-- Chọn sản phẩm giảm giá --</option>' +
+          products.map((p) => `<option value="${p.id}">${p.name} (${formatMoney(p.price)})</option>`).join("");
+      }
+
       renderPromotionsTable(keyword);
     } catch (err) {
       toast("Lỗi tải khuyến mãi: " + err.message, "error");
@@ -1186,59 +1239,100 @@
   function renderPromotionsTable(keyword = "") {
     const table = document.getElementById("promotionsTable");
     if (!table) return;
-    const filter = String(keyword || "").toLowerCase();
-    const rows = state.promotions.filter((p) =>
-      p.name.toLowerCase().includes(filter) ||
-      p.code.toLowerCase().includes(filter)
-    );
 
-    // Sắp xếp trạng thái hiện hữu (Hoạt động / Đang hoạt động) xếp từ trên xuống dưới
+    // Cập nhật số đếm theo từng loại
+    const allCount = state.promotions.length;
+    const prodCount = state.promotions.filter((p) => p.type === "product").length;
+    const vouchCount = state.promotions.filter((p) => p.type === "voucher").length;
+    const invCount = state.promotions.filter((p) => p.type === "invoice").length;
+
+    const elAll = document.getElementById("countPromoAll");
+    const elProd = document.getElementById("countPromoProduct");
+    const elVouch = document.getElementById("countPromoVoucher");
+    const elInv = document.getElementById("countPromoInvoice");
+    if (elAll) elAll.textContent = allCount;
+    if (elProd) elProd.textContent = prodCount;
+    if (elVouch) elVouch.textContent = vouchCount;
+    if (elInv) elInv.textContent = invCount;
+
+    const filter = String(keyword || "").toLowerCase();
+    const typeFilter = state.currentPromoType || "all";
+
+    const rows = state.promotions.filter((p) => {
+      const matchText = p.name.toLowerCase().includes(filter) ||
+        (p.code && p.code.toLowerCase().includes(filter)) ||
+        (p.productName && p.productName.toLowerCase().includes(filter));
+      const matchType = typeFilter === "all" || p.type === typeFilter;
+      return matchText && matchType;
+    });
+
+    // Sắp xếp trạng thái hiện hữu (Hoạt động) xếp trước
     rows.sort((a, b) => {
-      const isActA = Boolean(a.isActive || a.status === "Hoạt động" || a.status === "Đang hoạt động");
-      const isActB = Boolean(b.isActive || b.status === "Hoạt động" || b.status === "Đang hoạt động");
+      const isActA = Boolean(a.isActive || a.status === "Hoạt động");
+      const isActB = Boolean(b.isActive || b.status === "Hoạt động");
       if (isActA !== isActB) return isActA ? -1 : 1;
       return (b.id || 0) - (a.id || 0);
     });
 
     if (rows.length === 0) {
-      table.innerHTML = '<div class="admin-empty">Không tìm thấy mã khuyến mãi nào</div>';
+      table.innerHTML = '<div class="admin-empty">Không tìm thấy chương trình khuyến mãi nào phù hợp</div>';
       const panel = document.getElementById("promotionDetailPanel");
       if (panel) {
         panel.innerHTML = `
           <div class="admin-detail-placeholder">
             <span style="font-size:36px; display:block; margin-bottom:12px;">🏷️</span>
             <h4>Không có chương trình ưu đãi</h4>
-            <p>Không tìm thấy khuyến mãi nào phù hợp với bộ lọc.</p>
+            <p>Không tìm thấy khuyến mãi nào phù hợp với bộ lọc hiện tại.</p>
           </div>
         `;
       }
       return;
     }
 
-    // Tự động chọn chương trình đầu tiên nếu chưa chọn hoặc id không nằm trong danh sách
     if (!state.selectedPromotionId || !rows.some((r) => r.id === state.selectedPromotionId)) {
       state.selectedPromotionId = rows[0].id;
     }
 
-    const grid = "minmax(130px, 1.3fr) minmax(95px, 1fr) minmax(80px, 0.8fr) minmax(130px, 1.2fr) minmax(80px, 0.8fr) minmax(95px, 0.9fr) minmax(85px, 0.9fr)";
-    table.innerHTML = buildRowHeader(["Tên CT", "Mã Voucher", "Mức giảm", "Hạn áp dụng", "Lượt dùng", "Trạng thái", "Thao tác"], grid) +
-      rows.map((item) => `
-        <div class="admin-row clickable-row ${state.selectedPromotionId === item.id ? 'selected-row' : ''}"
-             id="promo-row-${item.id}"
-             onclick="selectPromotionRow(${item.id})"
-             style="grid-template-columns: ${grid};">
-          <strong>${item.name}</strong>
-          <span><code style="background:#eee; padding:2px 6px; font-weight:700; color:var(--admin-gold);">${item.code}</code></span>
-          <strong style="color:var(--admin-green);">${item.discount}%</strong>
-          <small>${formatDate(item.beginDate)} - ${formatDate(item.endDate)}</small>
-          <span>${item.timesUsed} / ${item.usageLimit}</span>
-          <span>${renderStatusBadge(item.status)}</span>
-          <div class="table-actions" onclick="event.stopPropagation()">
-            <button type="button" class="mini-btn" onclick="editPromotion(${item.id})">Sửa</button>
-            <button type="button" class="mini-btn danger" onclick="deletePromotion(${item.id})">Hủy</button>
+    const grid = "minmax(140px, 1.4fr) minmax(110px, 1.1fr) minmax(130px, 1.3fr) minmax(85px, 0.8fr) minmax(130px, 1.2fr) minmax(90px, 0.9fr) minmax(80px, 0.8fr)";
+    table.innerHTML = buildRowHeader(["Chương trình", "Phân loại KM", "Áp dụng cho", "Mức giảm", "Thời gian", "Trạng thái", "Thao tác"], grid) +
+      rows.map((item) => {
+        let typeBadge = "";
+        let applyTarget = "";
+
+        if (item.type === "product") {
+          typeBadge = '<span class="table-tag" style="background:#f3e8ff; color:#7e22ce; font-weight:700; border:1px solid #d8b4fe;">🏷️ Theo sản phẩm</span>';
+          applyTarget = `<strong style="color:#6b21a8; font-size:12px;">💍 ${item.productName || 'Sản phẩm chỉ định'}</strong>`;
+        } else if (item.type === "invoice") {
+          typeBadge = '<span class="table-tag" style="background:#ecfdf5; color:#047857; font-weight:700; border:1px solid #a7f3d0;">🧾 Theo hóa đơn</span>';
+          applyTarget = `<span>Đơn từ <strong>${formatMoney(item.minInvoiceAmount || 10000000)}</strong></span>`;
+        } else {
+          typeBadge = '<span class="table-tag" style="background:#fef3c7; color:#b45309; font-weight:700; border:1px solid #fde68a;">🎟️ Theo voucher</span>';
+          applyTarget = `<span>Mã: <code style="background:#fdf6ec; border:1px solid #e7d6b8; padding:2px 6px; font-weight:700; color:var(--admin-gold);">${item.code}</code></span>`;
+        }
+
+        return `
+          <div class="admin-row clickable-row ${state.selectedPromotionId === item.id ? 'selected-row' : ''}"
+               id="promo-row-${item.id}"
+               onclick="selectPromotionRow(${item.id})"
+               style="grid-template-columns: ${grid}; align-items:center;">
+            <div>
+              <strong style="display:block; font-size:13px; color:var(--admin-dark);">${item.name}</strong>
+              <small style="color:#777;">Mã: #KM-${item.id}</small>
+            </div>
+            <div>${typeBadge}</div>
+            <div>${applyTarget}</div>
+            <div><strong style="color:var(--admin-green); font-size:14px; font-weight:800;">Giảm ${item.discount}%</strong></div>
+            <div><small style="color:#555;">${formatDate(item.beginDate)}<br>đến ${formatDate(item.endDate)}</small></div>
+            <div>${renderStatusBadge(item.status)}</div>
+            <div class="table-actions" onclick="event.stopPropagation()">
+              <button type="button" class="mini-btn" onclick="editPromotion(${item.id})">Sửa</button>
+              <button type="button" class="mini-btn ${item.isActive ? 'danger' : 'success'}" style="${!item.isActive ? 'background:#059669; color:#fff; border:none;' : ''}" onclick="togglePromotion(${item.id})">
+                ${item.isActive ? 'Dừng' : 'Bật'}
+              </button>
+            </div>
           </div>
-        </div>
-      `).join("");
+        `;
+      }).join("");
 
     renderPromotionDetailPanel(state.selectedPromotionId);
   }
@@ -1267,52 +1361,87 @@
       return;
     }
 
-    const percentUsed = Math.min(100, Math.round(((promo.timesUsed || 0) / (promo.usageLimit || 1)) * 100));
-    const remaining = Math.max(0, (promo.usageLimit || 0) - (promo.timesUsed || 0));
+    let typeTitle = "🎟️ Khuyến mãi theo Voucher";
+    let typeColor = "#b45309";
+    let ruleHtml = "";
+
+    if (promo.type === "product") {
+      typeTitle = "🏷️ Khuyến mãi theo Sản phẩm";
+      typeColor = "#7e22ce";
+      ruleHtml = `
+        <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <strong style="color:#6b21a8; display:block; font-size:12px; margin-bottom:4px; text-transform:uppercase;">Quy tắc giảm theo sản phẩm:</strong>
+          <p style="margin:0; font-size:13px; color:#4c1d95;">
+            Áp dụng giảm trực tiếp <strong>${promo.discount}%</strong> vào giá bán của sản phẩm:
+            <br>💎 <strong>${promo.productName || 'Sản phẩm chỉ định'}</strong>
+          </p>
+        </div>
+      `;
+    } else if (promo.type === "invoice") {
+      typeTitle = "🧾 Khuyến mãi theo Hóa đơn";
+      typeColor = "#047857";
+      ruleHtml = `
+        <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <strong style="color:#065f46; display:block; font-size:12px; margin-bottom:4px; text-transform:uppercase;">Quy tắc giảm theo hóa đơn:</strong>
+          <p style="margin:0; font-size:13px; color:#064e3b;">
+            Tổng tiền hóa đơn phải đạt tối thiểu từ: <strong>${formatMoney(promo.minInvoiceAmount || 10000000)}</strong>
+            <br>Mức giảm: Chiết khấu <strong>${promo.discount}%</strong> trên tổng hóa đơn.
+          </p>
+        </div>
+      `;
+    } else {
+      typeTitle = "🎟️ Khuyến mãi theo Voucher";
+      typeColor = "#b45309";
+      ruleHtml = `
+        <div style="background:#fefce8; border:1px solid #fef08a; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <strong style="color:#854d0e; display:block; font-size:12px; margin-bottom:4px; text-transform:uppercase;">Quy tắc giảm theo Voucher:</strong>
+          <p style="margin:0; font-size:13px; color:#713f12;">
+            Khách hàng nhập mã voucher <strong>${promo.code}</strong> khi thanh toán để được giảm <strong>${promo.discount}%</strong>.
+            <br>Giới hạn: <strong>${promo.timesUsed} / ${promo.usageLimit} lượt dùng</strong>.
+          </p>
+        </div>
+      `;
+    }
 
     panel.innerHTML = `
       <div class="side-detail-content">
-        <div class="side-detail-header">
+        <div class="side-detail-header" style="border-bottom:1px solid #eee; padding-bottom:12px;">
           <div>
-            <span class="detail-badge">Chương trình ưu đãi</span>
+            <span class="detail-badge" style="background:${typeColor}15; color:${typeColor}; font-weight:700;">${typeTitle}</span>
             <h3 style="margin: 6px 0 2px 0; font-size: 18px; font-weight: 700; color: var(--admin-dark);">${promo.name}</h3>
-            <code style="background:#fdf6ec; border:1px solid #e7d6b8; padding:3px 8px; border-radius:4px; font-weight:800; font-size:14px; color:var(--admin-gold); display:inline-block; margin-top:4px;">${promo.code}</code>
+            ${promo.code ? `<code style="background:#fdf6ec; border:1px solid #e7d6b8; padding:3px 8px; border-radius:4px; font-weight:800; font-size:13px; color:var(--admin-gold); display:inline-block; margin-top:4px;">MÃ: ${promo.code}</code>` : ''}
           </div>
           <div>${renderStatusBadge(promo.status)}</div>
         </div>
 
-        <div style="margin: 16px 0; background: #faf8f5; border-radius: 8px; padding: 14px; border: 1px solid #f0ede8;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <span style="font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase;">Mức giảm ưu đãi</span>
-            <span style="font-size: 24px; font-weight: 800; color: var(--admin-green);">${promo.discount}%</span>
+        <div style="margin: 14px 0 10px 0;">
+          <div style="background: #faf8f5; border-radius: 8px; padding: 14px; border: 1px solid #f0ede8; margin-bottom:12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase;">Mức giảm ưu đãi</span>
+              <span style="font-size: 26px; font-weight: 800; color: var(--admin-green);">-${promo.discount}%</span>
+            </div>
           </div>
-          <div style="font-size: 12px; color: #777;">
-            Áp dụng cho đơn hàng đáp ứng điều kiện khuyến mãi của thương hiệu.
-          </div>
+          ${ruleHtml}
         </div>
 
         <div style="margin-bottom: 16px;">
-          <h4 class="side-detail-title">Thời hạn & Tiến độ sử dụng</h4>
+          <h4 class="side-detail-title">Thời hạn áp dụng chương trình</h4>
           <div class="detail-info-grid">
-            <div><span class="lbl">Bắt đầu:</span> <strong>${formatDate(promo.beginDate)}</strong></div>
-            <div><span class="lbl">Kết thúc:</span> <strong>${formatDate(promo.endDate)}</strong></div>
+            <div><span class="lbl">Ngày bắt đầu:</span> <strong>${formatDate(promo.beginDate)}</strong></div>
+            <div><span class="lbl">Ngày kết thúc:</span> <strong>${formatDate(promo.endDate)}</strong></div>
             <div>
-              <span class="lbl">Lượt dùng:</span>
-              <strong>${promo.timesUsed} / ${promo.usageLimit} lượt</strong>
-              <span style="color:#777; font-size:12px; margin-left:4px;">(Còn ${remaining} lượt)</span>
+              <span class="lbl">Trạng thái:</span>
+              <strong>${promo.isActive ? '✅ Đang có hiệu lực' : '❌ Tạm dừng / Hết hạn'}</strong>
             </div>
-          </div>
-          <div style="margin-top: 10px; background: #e5e7eb; border-radius: 999px; height: 8px; overflow: hidden;">
-            <div style="width: ${percentUsed}%; background: var(--admin-green); height: 100%; transition: width 0.3s ease;"></div>
           </div>
         </div>
 
         <div style="margin-top: 18px; display: flex; gap: 8px; border-top: 1px solid #f0ede8; padding-top: 16px;">
           <button type="button" class="admin-primary-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center;" onclick="editPromotion(${promo.id})">
-            ✏️ Chỉnh sửa
+            ✏️ Chỉnh sửa chương trình
           </button>
-          <button type="button" class="admin-secondary-btn" style="padding: 8px 12px; font-size: 12px; color: var(--admin-red); border-color: #fca5a5;" onclick="deletePromotion(${promo.id})">
-            Dừng CT
+          <button type="button" class="admin-secondary-btn" style="padding: 8px 12px; font-size: 12px; color: var(--admin-red); border-color: #fca5a5;" onclick="togglePromotion(${promo.id})">
+            ${promo.isActive ? 'Tạm dừng CT' : 'Kích hoạt lại'}
           </button>
         </div>
       </div>
@@ -1325,14 +1454,49 @@
     const form = document.getElementById("promotionForm");
     form.querySelector('[name="id"]').value = item.id;
     form.querySelector('[name="name"]').value = item.name;
-    form.querySelector('[name="code"]').value = item.code;
+
+    const typeSel = form.querySelector('[name="type"]');
+    if (typeSel) {
+      typeSel.value = item.type || "voucher";
+      handlePromoTypeChange(typeSel.value);
+    }
+
+    if (item.productId) {
+      const pSel = form.querySelector('[name="productId"]');
+      if (pSel) pSel.value = item.productId;
+    }
+
+    if (item.minInvoiceAmount) {
+      const minInp = form.querySelector('[name="minInvoiceAmount"]');
+      if (minInp) minInp.value = item.minInvoiceAmount;
+    }
+
+    const codeInp = form.querySelector('[name="code"]');
+    if (codeInp) codeInp.value = item.code || "";
+
     form.querySelector('[name="discount"]').value = item.discount;
     form.querySelector('[name="beginDate"]').value = item.beginDate ? item.beginDate.split("T")[0] : "";
     form.querySelector('[name="endDate"]').value = item.endDate ? item.endDate.split("T")[0] : "";
-    form.querySelector('[name="usageLimit"]').value = item.usageLimit || 100;
+    
+    const usageInp = form.querySelector('[name="usageLimit"]');
+    if (usageInp) usageInp.value = item.usageLimit || 100;
+
     form.querySelector('[name="status"]').value = item.status;
-    document.getElementById("promotionFormTitle").textContent = "Cập nhật khuyến mãi";
+    document.getElementById("promotionFormTitle").textContent = "Cập nhật khuyến mãi: " + item.name;
     openFormModal("promotionsModal");
+  };
+
+  window.togglePromotion = async (id) => {
+    const item = state.promotions.find((p) => p.id === id);
+    if (!item) return;
+    const nextStatus = item.isActive ? "Hết hạn" : "Hoạt động";
+    try {
+      await api(`/promotions/${id}`, { method: "PUT", body: { status: nextStatus } });
+      toast(`Đã ${item.isActive ? 'tạm dừng' : 'kích hoạt'} chương trình khuyến mãi!`);
+      loadPromotions();
+    } catch (err) {
+      toast("Lỗi: " + err.message, "error");
+    }
   };
 
   window.deletePromotion = async (id) => {
@@ -1345,6 +1509,44 @@
       toast("Lỗi: " + err.message, "error");
     }
   };
+
+  // 6. Promotion Form Submit Handler
+  const promotionForm = document.getElementById("promotionForm");
+  if (promotionForm) {
+    promotionForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(promotionForm);
+      const id = fd.get("id");
+      const body = {
+        type: fd.get("type") || "voucher",
+        name: fd.get("name"),
+        code: fd.get("code") || "",
+        discount: Number(fd.get("discount")),
+        beginDate: fd.get("beginDate") || null,
+        endDate: fd.get("endDate") || null,
+        usageLimit: Number(fd.get("usageLimit") || 100),
+        productId: fd.get("productId") ? Number(fd.get("productId")) : null,
+        minInvoiceAmount: fd.get("minInvoiceAmount") ? Number(fd.get("minInvoiceAmount")) : null,
+        status: fd.get("status"),
+      };
+      try {
+        if (id) {
+          await api(`/promotions/${id}`, { method: "PUT", body });
+          toast("Đã cập nhật chương trình khuyến mãi!");
+        } else {
+          await api("/promotions", { method: "POST", body });
+          toast("Đã tạo chương trình ưu đãi mới!");
+        }
+        promotionForm.reset();
+        promotionForm.querySelector('[name="id"]').value = "";
+        document.getElementById("promotionFormTitle").textContent = "Chương trình khuyến mãi";
+        closeFormModal("promotionsModal");
+        loadPromotions();
+      } catch (err) {
+        toast("Lỗi: " + err.message, "error");
+      }
+    });
+  }
 
   // ---------- 7. QUẢN LÝ ĐƠN ĐẶT HÀNG ----------
   async function loadOrders(keyword = "") {
@@ -2225,41 +2427,6 @@
     });
   }
 
-  // 6. Promotion Form
-  const promotionForm = document.getElementById("promotionForm");
-  if (promotionForm) {
-    promotionForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const fd = new FormData(promotionForm);
-      const id = fd.get("id");
-      const body = {
-        name: fd.get("name"),
-        code: fd.get("code"),
-        discount: Number(fd.get("discount")),
-        beginDate: fd.get("beginDate") || null,
-        endDate: fd.get("endDate") || null,
-        usageLimit: Number(fd.get("usageLimit") || 100),
-        status: fd.get("status"),
-      };
-      try {
-        if (id) {
-          await api(`/promotions/${id}`, { method: "PUT", body });
-          toast("Đã cập nhật chương trình khuyến mãi!");
-        } else {
-          await api("/promotions", { method: "POST", body });
-          toast("Đã tạo chương trình ưu đãi mới!");
-        }
-        promotionForm.reset();
-        promotionForm.querySelector('[name="id"]').value = "";
-        document.getElementById("promotionFormTitle").textContent = "Chương trình khuyến mãi";
-        closeFormModal("promotionsModal");
-        loadPromotions();
-      } catch (err) {
-        toast("Lỗi: " + err.message, "error");
-      }
-    });
-  }
-
   // 7. Order Form (Update Status)
   const orderForm = document.getElementById("orderForm");
   if (orderForm) {
@@ -2426,6 +2593,11 @@
           };
           title.textContent = typeNames[type] || "Thêm mới";
         }
+      }
+      if (type === "promotions") {
+        const typeSel = form?.querySelector('[name="type"]');
+        if (typeSel) typeSel.value = "voucher";
+        if (window.handlePromoTypeChange) window.handlePromoTypeChange("voucher");
       }
       openFormModal(`${type}Modal`);
     });

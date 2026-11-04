@@ -914,7 +914,12 @@
     const recipient = detail?.cus_name || fallback.recipientName;
     const phone = detail?.cus_phone || fallback.phone;
     const address = detail?.address || fallback.address;
-    const finalTotal = detail?.total_amount != null ? Number(detail.total_amount) : fallback.total;
+    const shippingFee = detail?.shipping_fee != null ? Number(detail.shipping_fee) : (cart?.shipping || 0);
+    const discountAmt = detail?.discount_amount != null ? Number(detail.discount_amount) : (voucher?.amount || 0);
+    const subtotalAmt = items.reduce((sum, it) => sum + (Number(it.subtotal) || (Number(it.price || it.unit_price) * it.quantity)), 0);
+    const taxableAmt = Math.max(0, subtotalAmt - discountAmt);
+    const vatAmt = detail?.vat_amount != null ? Number(detail.vat_amount) : Math.round(taxableAmt * 0.08);
+    const finalTotal = detail?.total_amount != null ? Number(detail.total_amount) : (taxableAmt + vatAmt + shippingFee);
     const dateFormatted = new Date().toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 
     root.innerHTML = `
