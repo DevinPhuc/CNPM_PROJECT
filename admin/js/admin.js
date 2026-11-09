@@ -147,7 +147,35 @@
       const year = dt.getFullYear();
       const hours = String(dt.getHours()).padStart(2, "0");
       const mins = String(dt.getMinutes()).padStart(2, "0");
-      return `${day}/${month}/${year} ${hours}:${mins}`;
+      const secs = String(dt.getSeconds()).padStart(2, "0");
+      return `${hours}:${mins}:${secs} ${day}/${month}/${year}`;
+    } catch {
+      return String(d);
+    }
+  };
+
+  // Helper hiển thị thời gian có giờ:phút:giây và nhận diện đơn/hóa đơn trong ngày hôm nay
+  const formatTableDateTime = (d) => {
+    if (!d) return "--";
+    try {
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return String(d);
+      const now = new Date();
+      const isToday = dt.getDate() === now.getDate() && dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear();
+      const day = String(dt.getDate()).padStart(2, "0");
+      const month = String(dt.getMonth() + 1).padStart(2, "0");
+      const year = dt.getFullYear();
+      const hours = String(dt.getHours()).padStart(2, "0");
+      const mins = String(dt.getMinutes()).padStart(2, "0");
+      const secs = String(dt.getSeconds()).padStart(2, "0");
+
+      const timeStr = `${hours}:${mins}:${secs}`;
+      const dateStr = `${day}/${month}/${year}`;
+
+      if (isToday) {
+        return `<span style="display:inline-flex; align-items:center; gap:4px; font-weight:800; color:#047857; font-size:12px;"><span style="background:#ecfdf5; color:#065f46; font-size:10px; font-weight:800; padding:1px 5px; border-radius:3px; border:1px solid #a7f3d0;">Hôm nay</span>${timeStr}</span><br><small style="color:#64748b; font-size:11px;">${dateStr}</small>`;
+      }
+      return `<span style="color:#1e293b; font-weight:700; font-size:12px;">${timeStr}</span><br><small style="color:#64748b; font-size:11px;">${dateStr}</small>`;
     } catch {
       return String(d);
     }
@@ -247,7 +275,7 @@
                 <span>${o.customer}</span>
                 <span style="color:var(--admin-green); font-weight:600;">${formatMoney(o.total)}</span>
                 <span>${renderStatusBadge(o.status)}</span>
-                <small>${formatDate(o.date)}</small>
+                <div style="line-height:1.3;">${formatTableDateTime(o.date)}</div>
               </div>
             `).join("");
         }
@@ -957,7 +985,7 @@
       state.selectedInvoiceId = rows[0].id;
     }
 
-    const grid = "minmax(90px, 1fr) minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(95px, 0.9fr) minmax(90px, 0.9fr) minmax(110px, 1.1fr)";
+    const grid = "minmax(90px, 1fr) minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(120px, 1.2fr) minmax(90px, 0.9fr) minmax(110px, 1.1fr)";
     table.innerHTML = buildRowHeader(["Mã HĐ", "Khách hàng", "Số điện thoại", "Ngày xuất", "Thuế VAT", "Tổng tiền"], grid) +
       rows.map((item) => `
         <div class="admin-row clickable-row ${state.selectedInvoiceId === item.id ? 'selected-row' : ''}"
@@ -967,7 +995,7 @@
           <strong>${item.code}</strong>
           <span>${item.customer}</span>
           <span>${item.phone || "--"}</span>
-          <small>${formatDate(item.date)}</small>
+          <div style="line-height:1.3;">${formatTableDateTime(item.date)}</div>
           <small style="color:#666;">${formatMoney(item.vatAmount)}</small>
           <strong style="color:var(--admin-green);">${formatMoney(item.amount)}</strong>
         </div>
@@ -1000,74 +1028,123 @@
       return;
     }
 
+    const items = inv.items || [];
+    const totalQuantity = items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+
     panel.innerHTML = `
       <div class="side-detail-content">
-        <div class="side-detail-header">
-          <div>
-            <span class="detail-badge">Hóa đơn bán hàng</span>
-            <h3 style="margin: 6px 0 2px 0; font-size: 19px; font-weight: 700; color: var(--admin-green-dark);">${inv.code}</h3>
-            <small style="color: #777;">Ngày tạo: ${formatDate(inv.date)}</small>
+        ${inv.isVoided || String(inv.status).includes("thu hồi") || String(inv.status).includes("Hoàn tiền") ? `
+          <div style="background:#fff1f2; border:1.5px solid #fecdd3; border-left:4px solid #e11d48; border-radius:8px; padding:10px 14px; margin-bottom:12px; color:#9f1239; font-size:12px; line-height:1.5;">
+            <strong>⚠️ HÓA ĐƠN ĐÃ THU HỒI / HỦY BỎ</strong><br>
+            Đơn hàng này đã được khách hàng trả lại sản phẩm. Hóa đơn không còn giá trị lưu hành và đã hoàn tiền cho khách.
           </div>
-          <span class="table-tag" style="background:#e8f5e9; color:#1b5e20; font-size:11px; font-weight:600; padding:4px 8px;">Đã thanh toán</span>
+        ` : ''}
+        <div class="side-detail-header" style="align-items: flex-start; margin-bottom: 14px;">
+          <div>
+            <span class="detail-badge" style="background:${inv.isVoided ? '#fee2e2' : '#fef3c7'}; color:${inv.isVoided ? '#991b1b' : '#92400e'}; font-weight:700;">
+              ${inv.isVoided ? 'HÓA ĐƠN ĐÃ THU HỒI' : 'HÓA ĐƠN BÁN HÀNG'}
+            </span>
+            <h3 style="margin: 6px 0 2px 0; font-size: 22px; font-weight: 800; color:${inv.isVoided ? '#991b1b' : '#14532d'}; letter-spacing:0.5px;">${inv.code}</h3>
+            <small style="color: #64748b; font-size: 12px; display:block; margin-top:2px;">Ngày tạo: <strong>${formatDateTime(inv.date)}</strong></small>
+          </div>
+          ${inv.isVoided || String(inv.status).includes("thu hồi") ? `
+            <span class="table-tag" style="background:#f3e8ff; color:#7c3aed; font-size:12px; font-weight:800; padding:5px 10px; border-radius:6px; border:1px solid #ddd6fe;">
+              ↩️ Đã hoàn tiền
+            </span>
+          ` : `
+            <span class="table-tag" style="background:#ecfdf5; color:#047857; font-size:12px; font-weight:700; padding:5px 10px; border-radius:6px; border:1px solid #a7f3d0;">
+              ✓ Đã thanh toán
+            </span>
+          `}
         </div>
 
-        <div style="margin: 16px 0;">
-          <h4 class="side-detail-title">Thông tin khách hàng</h4>
-          <div class="detail-info-grid">
-            <div><span class="lbl">Khách hàng:</span> <strong>${inv.customer}</strong></div>
-            <div><span class="lbl">Điện thoại:</span> <span>${inv.phone || "Không có SĐT"}</span></div>
-            <div><span class="lbl">Địa chỉ:</span> <span>${inv.address || "Mua trực tiếp tại showroom"}</span></div>
+        <div style="margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.5px;">Thông tin khách hàng</h4>
+          <div style="display: grid; gap: 5px; font-size: 13px;">
+            <div style="display:flex; justify-content:space-between;"><span style="color:#64748b;">Khách hàng:</span> <strong style="color:#0f172a;">${inv.customer}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#64748b;">Điện thoại:</span> <strong style="color:#1e293b;">${inv.phone || "Không có SĐT"}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#64748b; flex-shrink:0;">Địa chỉ:</span> <span style="color:#334155; text-align:right; word-break:break-word;">${inv.address || "Mua trực tiếp tại showroom"}</span></div>
           </div>
         </div>
 
         <div style="margin-bottom: 16px;">
-          <h4 class="side-detail-title">Chi tiết mặt hàng (${(inv.items || []).length} món)</h4>
-          <div class="invoice-items-list">
-            ${(inv.items && inv.items.length) ? inv.items.map((it) => `
-              <div class="invoice-item-row">
-                <div class="item-name">
-                  <strong>${it.product_name || "Trang sức cao cấp"}</strong>
-                  <small>Số lượng: ${it.quantity} ${it.unit_price ? `&times; ${formatMoney(it.unit_price)}` : ''}</small>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h4 style="margin:0; font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; letter-spacing:0.5px;">
+              Chi tiết mặt hàng (${items.length} món)
+            </h4>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700; font-size:11.5px; padding:3px 9px; border-radius:12px;">
+              Tổng: ${totalQuantity} sản phẩm
+            </span>
+          </div>
+
+          <div style="display:grid; gap:8px;">
+            ${(items.length > 0) ? items.map((it) => {
+              const subtotalNum = it.subtotal || (it.quantity * (it.unit_price || 0));
+              return `
+                <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:10px;">
+                    <strong style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Trang sức cao cấp"}</strong>
+                    <div style="text-align:right; flex-shrink:0;">
+                      <span style="font-size:11px; color:#64748b; margin-right:4px;">Thành tiền:</span>
+                      <strong style="font-size:15px; font-weight:800; color:#b45309; letter-spacing:0.2px;">${formatMoney(subtotalNum)}</strong>
+                    </div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="display:inline-flex; align-items:center; background:#ecfdf5; color:#065f46; border:1px solid #10b981; font-weight:800; font-size:11.5px; padding:2px 8px; border-radius:4px;">
+                        SL: ${it.quantity}
+                      </span>
+                      ${it.unit_price ? `
+                        <span style="color:#64748b;">
+                          Đơn giá: <strong style="color:#1e293b; font-weight:700;">${formatMoney(it.unit_price)}</strong>
+                        </span>
+                      ` : ''}
+                    </div>
+                    <span style="font-size:11px; color:#94a3b8; font-style:italic;">Chính hãng Jewels</span>
+                  </div>
                 </div>
-                <div class="item-price">
-                  <strong>${formatMoney(it.subtotal || (it.quantity * (it.unit_price || 0)))}</strong>
-                </div>
-              </div>
-            `).join('') : `
-              <div style="color: #777; font-size: 12px; font-style: italic; padding: 6px 0;">
+              `;
+            }).join('') : `
+              <div style="color: #64748b; font-size: 12px; font-style: italic; padding: 12px; text-align: center; background:#f8fafc; border-radius:8px;">
                 Hóa đơn dịch vụ / Mua sắm lẻ tại quầy
               </div>
             `}
           </div>
         </div>
 
-        <div class="invoice-summary">
-          <div class="summary-line">
+        <div style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
+          <div style="display:flex; justify-content:space-between; color:#475569;">
             <span>Tạm tính tiền hàng:</span>
-            <span>${formatMoney(inv.subtotal)}</span>
+            <strong style="color:#0f172a; font-size:13.5px;">${formatMoney(inv.subtotal)}</strong>
           </div>
           ${inv.discountAmount > 0 ? `
-            <div class="summary-line" style="color: #2e7d32;">
+            <div style="display:flex; justify-content:space-between; color:#15803d;">
               <span>Chiết khấu Voucher:</span>
-              <span>-${formatMoney(inv.discountAmount)}</span>
+              <strong style="font-size:13.5px; color:#15803d;">-${formatMoney(inv.discountAmount)}</strong>
             </div>
           ` : ''}
-          <div class="summary-line">
-            <span>Thuế VAT (${inv.vatRate || 8}%):</span>
-            <span style="color: #b45309; font-weight: 600;">+${formatMoney(inv.vatAmount || 0)}</span>
-          </div>
-          <div class="summary-line">
+          
+          <div style="display:flex; justify-content:space-between; color:#475569;">
             <span>Phí vận chuyển:</span>
-            <span>${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}</span>
+            <strong style="color:${inv.shippingFee > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">
+              ${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}
+            </strong>
           </div>
-          <div class="summary-line total-line">
-            <span>Tổng thanh toán:</span>
-            <span style="color: var(--admin-green); font-size: 18px; font-weight: 800;">${formatMoney(inv.amount)}</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border:1.5px solid #10b981; border-radius:8px; padding:11px 14px; margin-top:6px; box-shadow:0 1px 3px rgba(16,185,129,0.1);">
+            <span style="font-size:13px; font-weight:800; color:#065f46; text-transform:uppercase; letter-spacing:0.5px;">
+              Tổng cộng thanh toán:
+            </span>
+            <strong style="font-size:19px; font-weight:900; color:#047857;">
+              ${formatMoney(inv.amount)}
+            </strong>
+          </div>
+          <div style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
+            (Đã bao gồm thuế VAT)
           </div>
         </div>
 
         <div style="margin-top: 18px; display: flex; gap: 8px;">
-          <button type="button" class="admin-primary-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center;" onclick="printInvoiceDetail(${inv.id})">
+          <button type="button" class="admin-primary-btn" style="flex: 1; padding: 10px 14px; font-size: 13px; font-weight:700; justify-content: center; gap: 6px; box-shadow:0 2px 4px rgba(34,76,48,0.2);" onclick="printInvoiceDetail(${inv.id})">
             🖨️ In hóa đơn điện tử
           </button>
         </div>
@@ -1154,9 +1231,12 @@
         <div class="total-box">
           <div><span>Tạm tính tiền hàng:</span> <span>${formatMoney(inv.subtotal)}</span></div>
           ${inv.discountAmount > 0 ? `<div><span>Chiết khấu Voucher:</span> <span>-${formatMoney(inv.discountAmount)}</span></div>` : ''}
-          <div><span>Thuế VAT (${inv.vatRate || 8}%):</span> <span>+${formatMoney(inv.vatAmount || 0)}</span></div>
+          
           <div><span>Phí vận chuyển:</span> <span>${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}</span></div>
           <div class="total-final"><span>Tổng cộng thanh toán:</span> <span>${formatMoney(inv.amount)}</span></div>
+          <div style="text-align:right; font-size:11px; color:#64748b; font-style:italic; margin-top:3px;">
+            (Đã bao gồm thuế VAT)
+          </div>
         </div>
         <div style="clear: both; padding-top: 40px; text-align: center; color: #777; font-size: 12px;">
           <p>Cảm ơn quý khách đã tin tưởng và ủng hộ Saigon Jewelry!</p>
@@ -1589,14 +1669,14 @@
       return;
     }
 
-    const grid = "minmax(85px, 0.9fr) minmax(130px, 1.3fr) minmax(100px, 1fr) minmax(95px, 1fr) minmax(110px, 1.1fr) minmax(120px, 1.1fr) minmax(120px, 1.3fr)";
+    const grid = "minmax(85px, 0.9fr) minmax(130px, 1.3fr) minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(110px, 1.1fr) minmax(120px, 1.1fr) minmax(120px, 1.3fr)";
     table.innerHTML = buildRowHeader(["Mã đơn", "Khách hàng", "Số điện thoại", "Ngày đặt", "Tổng tiền", "Trạng thái", "Thao tác"], grid) +
       rows.map((item) => `
         <div class="admin-row" style="grid-template-columns: ${grid};">
           <strong>${item.code}</strong>
           <span>${item.customer}</span>
           <span>${item.phone || "--"}</span>
-          <small>${formatDate(item.date)}</small>
+          <div style="line-height:1.3;">${formatTableDateTime(item.date)}</div>
           <strong style="color:var(--admin-green);">${formatMoney(item.total)}</strong>
           <span>${renderStatusBadge(item.status)}</span>
           <div class="table-actions">
@@ -1607,15 +1687,134 @@
       `).join("");
   }
 
+  // Finite State Machine (FSM) Configuration
+  const ORDER_FSM = {
+    steps: [
+      { key: "pending", label: "Chờ duyệt", icon: "1" },
+      { key: "processing", label: "Đã xác nhận", icon: "2" },
+      { key: "shipped", label: "Đang giao", icon: "3" },
+      { key: "delivered", label: "Đã giao", icon: "4" }
+    ],
+    transitions: {
+      "pending": [
+        { value: "Đã xác nhận", label: "✅ Đã xác nhận (Xác thực thông tin & chuyển kho)", help: "⚡ Tác động: Chuyển đơn sang bộ phận kho để chuẩn bị, đóng gói và niêm phong trang sức." },
+        { value: "Đã hủy", label: "❌ Đã hủy (Hủy đơn & hoàn tồn kho)", help: "⚡ Tác động: Đơn hàng sẽ bị hủy. Số lượng sản phẩm sẽ tự động được hoàn trả vào kho hàng." }
+      ],
+      "processing": [
+        { value: "Đang giao hàng", label: "🚚 Đang giao hàng (Xuất kho & bàn giao shipper)", help: "⚡ Tác động: Xuất kho thành công, hàng đã được bàn giao cho đơn vị vận chuyển." },
+        { value: "Đã hủy", label: "❌ Đã hủy (Hủy đơn & hoàn tồn kho)", help: "⚡ Tác động: Đơn hàng sẽ bị hủy. Số lượng sản phẩm sẽ tự động được hoàn trả vào kho hàng." }
+      ],
+      "shipped": [
+        { value: "Đã giao thành công", label: "🎉 Đã giao thành công (Tự lập hóa đơn & chốt doanh thu)", help: "⚡ Tác động: Khách đã nhận hàng và thanh toán đủ. Hệ thống sẽ TỰ ĐỘNG LẬP HÓA ĐƠN bán lẻ và ghi nhận Doanh thu." },
+        { value: "Đã hoàn hàng", label: "↩️ Đã hoàn hàng (Khách từ chối nhận / bom hàng)", help: "⚡ Tác động: Giao hàng không thành công. Hàng hóa sẽ tự động được kiểm đếm và hoàn lại vào kho." }
+      ],
+      "shipping": [
+        { value: "Đã giao thành công", label: "🎉 Đã giao thành công (Tự lập hóa đơn & chốt doanh thu)", help: "⚡ Tác động: Khách đã nhận hàng và thanh toán đủ. Hệ thống sẽ TỰ ĐỘNG LẬP HÓA ĐƠN bán lẻ và ghi nhận Doanh thu." },
+        { value: "Đã hoàn hàng", label: "↩️ Đã hoàn hàng (Khách từ chối nhận / bom hàng)", help: "⚡ Tác động: Giao hàng không thành công. Hàng hóa sẽ tự động được kiểm đếm và hoàn lại vào kho." }
+      ],
+      "delivered": [
+        { value: "Đã hoàn hàng", label: "↩️ Đã hoàn hàng (Đổi trả sản phẩm sau khi nhận)", help: "⚡ Tác động: Tiếp nhận đổi trả / khiếu nại. Hàng hóa sẽ được hoàn trả lại vào kho." }
+      ],
+      "cancelled": [],
+      "returned": []
+    }
+  };
+
+  function normalizeOrderStatusKey(statusStr) {
+    const s = String(statusStr || "").toLowerCase();
+    if (s.includes("chờ") || s === "pending") return "pending";
+    if (s.includes("xác nhận") || s === "processing") return "processing";
+    if (s.includes("đang giao") || s.includes("giao hàng") || s === "shipped") return "shipped";
+    if (s.includes("thành công") || s.includes("đã giao") || s === "delivered") return "delivered";
+    if (s.includes("hủy") || s === "cancelled") return "cancelled";
+    if (s.includes("hoàn") || s === "returned") return "returned";
+    return "pending";
+  }
+
   window.editOrderStatus = (id) => {
     const item = state.orders.find((o) => o.id === id);
     if (!item) return;
+
     const form = document.getElementById("orderForm");
+    if (!form) return;
+
     form.querySelector('[name="id"]').value = item.id;
-    form.querySelector('[name="code"]').value = item.code;
-    form.querySelector('[name="customer"]').value = item.customer;
-    form.querySelector('[name="total"]').value = formatMoney(item.total);
-    form.querySelector('[name="status"]').value = item.status;
+    document.getElementById("orderModalCode").textContent = item.code || `#${item.id}`;
+    document.getElementById("orderModalCustomer").textContent = item.customer || "Khách hàng";
+    document.getElementById("orderModalTotal").textContent = formatMoney(item.total);
+    document.getElementById("orderModalCurrentBadge").innerHTML = renderStatusBadge(item.status);
+
+    const currentKey = normalizeOrderStatusKey(item.status);
+    const allowed = ORDER_FSM.transitions[currentKey] || [];
+
+    // Render Progress Tracker
+    const trackerEl = document.getElementById("orderStatusTracker");
+    if (trackerEl) {
+      if (currentKey === "cancelled") {
+        trackerEl.innerHTML = `
+          <div style="width:100%; text-align:center; padding:6px; color:#b91c1c; font-weight:800; font-size:12.5px; background:#fef2f2; border-radius:6px;">
+            ❌ ĐƠN HÀNG ĐÃ BỊ HỦY (ĐÃ HOÀN TỒN KHO)
+          </div>
+        `;
+      } else if (currentKey === "returned") {
+        trackerEl.innerHTML = `
+          <div style="width:100%; text-align:center; padding:6px; color:#6b21a8; font-weight:800; font-size:12.5px; background:#f3e8ff; border-radius:6px;">
+            ↩️ ĐƠN HÀNG ĐÃ HOÀN TRẢ (ĐÃ NHẬP LẠI KHO)
+          </div>
+        `;
+      } else {
+        const stepOrder = ["pending", "processing", "shipped", "delivered"];
+        const currentIndex = stepOrder.indexOf(currentKey);
+        trackerEl.innerHTML = ORDER_FSM.steps.map((st, idx) => {
+          const isDone = idx < currentIndex;
+          const isCurrent = idx === currentIndex;
+          const bg = isCurrent ? '#047857' : (isDone ? '#10b981' : '#e2e8f0');
+          const color = (isCurrent || isDone) ? '#ffffff' : '#64748b';
+          const fontWeight = isCurrent ? '800' : '600';
+          const iconText = isDone ? '✓' : st.icon;
+          return `
+            <div style="display:flex; align-items:center; gap:6px; font-size:11.5px; flex:1; justify-content:center;">
+              <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:${bg}; color:${color}; font-size:10px; font-weight:800;">${iconText}</span>
+              <span style="color:${isCurrent ? '#047857' : (isDone ? '#0f172a' : '#94a3b8')}; font-weight:${fontWeight};">${st.label}</span>
+              ${idx < ORDER_FSM.steps.length - 1 ? '<span style="color:#cbd5e1; font-size:10px; margin-left:2px;">›</span>' : ''}
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    // Render Action Area
+    const actionArea = document.getElementById("orderStatusActionArea");
+    const closedNotice = document.getElementById("orderClosedNotice");
+    const selectEl = document.getElementById("orderStatusSelect");
+    const helpEl = document.getElementById("orderStatusHelpText");
+    const submitBtn = document.getElementById("orderSubmitBtn");
+
+    if (allowed.length === 0) {
+      if (actionArea) actionArea.style.display = "none";
+      if (closedNotice) closedNotice.style.display = "block";
+      if (submitBtn) submitBtn.style.display = "none";
+    } else {
+      if (actionArea) actionArea.style.display = "block";
+      if (closedNotice) closedNotice.style.display = "none";
+      if (submitBtn) submitBtn.style.display = "inline-flex";
+
+      selectEl.innerHTML = allowed.map((opt, i) => `
+        <option value="${opt.value}" ${i === 0 ? 'selected' : ''}>${opt.label}</option>
+      `).join("");
+
+      const updateHelp = () => {
+        const selectedVal = selectEl.value;
+        const matched = allowed.find(o => o.value === selectedVal);
+        if (matched && helpEl) {
+          helpEl.textContent = matched.help;
+        }
+      };
+
+      selectEl.onchange = updateHelp;
+      updateHelp();
+    }
+
     openFormModal("ordersModal");
   };
 
@@ -1630,38 +1829,73 @@
     const total = taxable + vat + ship;
 
     showModal(`Chi tiết đơn hàng ${order.code}`, `
-      <div style="font-size:13px; display:grid; gap:8px;">
-        <p><strong>Người nhận:</strong> ${order.customer} - ${order.phone || "Không có SĐT"}</p>
-        <p><strong>Địa chỉ nhận:</strong> ${order.address || "Tại cửa hàng"}</p>
-        <p><strong>Ngày đặt:</strong> ${formatDate(order.date)}</p>
-        <p><strong>Trạng thái:</strong> ${renderStatusBadge(order.status)}</p>
-        <div style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
-          <h4 style="font-size:14px; font-weight:600; margin-bottom:8px;">Danh sách sản phẩm (${(order.items || []).length}):</h4>
-          ${(order.items || []).map((it) => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px dashed #f0f0f0;">
-              <div>
-                <strong>${it.product_name || "Sản phẩm"}</strong>
-                <span style="font-size:11px; color:#666; display:block;">Số lượng: ${it.quantity} x ${formatMoney(it.unit_price)}</span>
-              </div>
-              <strong style="color:var(--admin-green);">${formatMoney(it.subtotal)}</strong>
-            </div>
-          `).join("")}
+      <div style="font-size:13px; display:grid; gap:10px;">
+        <div style="padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+          <p style="margin:2px 0;"><strong>Người nhận:</strong> ${order.customer} - ${order.phone || "Không có SĐT"}</p>
+          <p style="margin:2px 0;"><strong>Địa chỉ nhận:</strong> ${order.address || "Tại cửa hàng"}</p>
+          <p style="margin:2px 0;"><strong>Ngày đặt:</strong> ${formatDateTime(order.date)}</p>
+          <p style="margin:2px 0; display:flex; align-items:center; gap:6px;"><strong>Trạng thái:</strong> ${renderStatusBadge(order.status)}</p>
         </div>
-        <div style="margin-top:12px; border-top:1px solid #eee; padding-top:8px; display:grid; gap:4px; font-size:13px;">
-          <div style="display:flex; justify-content:space-between;"><span>Tạm tính tiền hàng:</span> <span>${formatMoney(itemsSub)}</span></div>
-          ${disc > 0 ? `<div style="display:flex; justify-content:space-between; color:#2e7d32;"><span>Giảm giá:</span> <span>-${formatMoney(disc)}</span></div>` : ''}
-          <div style="display:flex; justify-content:space-between;"><span>Thuế VAT (8%):</span> <span style="color:#b45309; font-weight:600;">+${formatMoney(vat)}</span></div>
-          <div style="display:flex; justify-content:space-between;"><span>Phí vận chuyển:</span> <span>${ship > 0 ? formatMoney(ship) : "Miễn phí"}</span></div>
-          <div style="display:flex; justify-content:space-between; font-size:16px; font-weight:700; border-top:1px solid #333; margin-top:6px; padding-top:6px;">
-            <span>Tổng thanh toán:</span>
-            <span style="color:var(--admin-green);">${formatMoney(total)}</span>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <h4 style="font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; margin:0;">
+              Danh sách sản phẩm (${(order.items || []).length} món)
+            </h4>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700; font-size:11.5px; padding:3px 9px; border-radius:12px;">
+              Tổng: ${(order.items || []).reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)} sản phẩm
+            </span>
+          </div>
+
+          <div style="display:grid; gap:8px;">
+            ${(order.items || []).map((it) => {
+              const subtotalNum = it.subtotal || (it.quantity * (it.unit_price || 0));
+              return `
+                <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:10px;">
+                    <strong style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Sản phẩm"}</strong>
+                    <div style="text-align:right; flex-shrink:0;">
+                      <span style="font-size:11px; color:#64748b; margin-right:4px;">Thành tiền:</span>
+                      <strong style="font-size:15px; font-weight:800; color:#b45309; letter-spacing:0.2px;">${formatMoney(subtotalNum)}</strong>
+                    </div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="display:inline-flex; align-items:center; background:#ecfdf5; color:#065f46; border:1px solid #10b981; font-weight:800; font-size:11.5px; padding:2px 8px; border-radius:4px;">
+                        SL: ${it.quantity}
+                      </span>
+                      ${it.unit_price ? `
+                        <span style="color:#64748b;">
+                          Đơn giá: <strong style="color:#1e293b; font-weight:700;">${formatMoney(it.unit_price)}</strong>
+                        </span>
+                      ` : ''}
+                    </div>
+                    <span style="font-size:11px; color:#94a3b8; font-style:italic;">Chính hãng Jewels</span>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+
+        <div style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
+          <div style="display:flex; justify-content:space-between; color:#475569;"><span>Tạm tính tiền hàng:</span> <strong style="color:#0f172a; font-size:13.5px;">${formatMoney(itemsSub)}</strong></div>
+          ${disc > 0 ? `<div style="display:flex; justify-content:space-between; color:#15803d;"><span>Giảm giá:</span> <strong style="font-size:13.5px; color:#15803d;">-${formatMoney(disc)}</strong></div>` : ''}
+          
+          <div style="display:flex; justify-content:space-between; color:#475569;"><span>Phí vận chuyển:</span> <strong style="color:${ship > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">${ship > 0 ? formatMoney(ship) : "Miễn phí"}</strong></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border:1.5px solid #10b981; border-radius:8px; padding:11px 14px; margin-top:6px; box-shadow:0 1px 3px rgba(16,185,129,0.1);">
+            <span style="font-size:13px; font-weight:800; color:#065f46; text-transform:uppercase; letter-spacing:0.5px;">Tổng cộng thanh toán:</span>
+            <strong style="font-size:19px; font-weight:900; color:#047857;">${formatMoney(total)}</strong>
+          </div>
+          <div style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
+            (Đã bao gồm thuế VAT)
           </div>
         </div>
       </div>
     `);
   };
 
-  // ---------- 8. QUẢN LÝ NHẬP HÀNG ----------
+    // ---------- 8. QUẢN LÝ NHẬP HÀNG ----------
   async function loadStock(keyword = "") {
     try {
       const [receipts, suppliers, products] = await Promise.all([
@@ -1799,8 +2033,36 @@
     }
   };
 
-  // ---------- 10. THỐNG KÊ & BÁO CÁO ----------
+  // ---------- 10. THỐNG KÊ & BÁO CÁO KINH DOANH ----------
   let currentAnalyticsPeriod = "month";
+
+  function initAnalyticsInputs() {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = String(now.getMonth() + 1).padStart(2, "0");
+    const curDay = String(now.getDate()).padStart(2, "0");
+    const monthVal = `${curYear}-${curMonth}`;
+
+    const mInput = document.getElementById("analyticsMonthInput");
+    if (mInput && (!mInput.value || mInput.value === "2026-10")) {
+      mInput.value = monthVal;
+    }
+
+    const sInput = document.getElementById("analyticsStartDate");
+    if (sInput && (!sInput.value || sInput.value === "2026-09-01")) {
+      sInput.value = `${curYear}-${curMonth}-01`;
+    }
+
+    const eInput = document.getElementById("analyticsEndDate");
+    if (eInput && (!eInput.value || eInput.value === "2026-10-31")) {
+      eInput.value = `${curYear}-${curMonth}-${curDay}`;
+    }
+
+    const ySelect = document.getElementById("analyticsYearSelect");
+    if (ySelect && !ySelect.value) {
+      ySelect.value = String(curYear);
+    }
+  }
 
   function renderDonutChart(statusCounts = {}) {
     const svg = document.getElementById("analyticsDonutSvg");
@@ -1809,12 +2071,12 @@
     const orderCountEl = document.getElementById("donutOrderCount");
 
     const STATUS_CONFIG = [
-      { key: "delivered", label: "Đã giao thành công", color: "#10b981", dotClass: "dot-emerald" },
-      { key: "processing", label: "Đã xác nhận", color: "#f59e0b", dotClass: "dot-amber" },
-      { key: "shipped", label: "Đang giao hàng", color: "#3b82f6", dotClass: "dot-blue" },
-      { key: "pending", label: "Đang chờ duyệt", color: "#b18a4b", dotClass: "dot-gold" },
-      { key: "cancelled", label: "Đã hủy", color: "#ef4444", dotClass: "dot-red" },
-      { key: "returned", label: "Đã hoàn hàng", color: "#8b5cf6", dotClass: "dot-purple" },
+      { key: "delivered", label: "Đã giao thành công", color: "#10b981", bg: "rgba(16, 185, 129, 0.12)" },
+      { key: "processing", label: "Đã xác nhận", color: "#f59e0b", bg: "rgba(245, 158, 11, 0.12)" },
+      { key: "shipped", label: "Đang giao hàng", color: "#3b82f6", bg: "rgba(59, 130, 246, 0.12)" },
+      { key: "pending", label: "Đang chờ duyệt", color: "#ca8a04", bg: "rgba(202, 138, 4, 0.12)" },
+      { key: "cancelled", label: "Đã hủy", color: "#ef4444", bg: "rgba(239, 68, 68, 0.12)" },
+      { key: "returned", label: "Đã hoàn hàng", color: "#8b5cf6", bg: "rgba(139, 92, 246, 0.12)" },
     ];
 
     const total = Object.values(statusCounts).reduce((a, b) => a + Number(b || 0), 0);
@@ -1828,12 +2090,11 @@
         <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#e5ebe4" stroke-width="4.8"></circle>
       `;
       if (ringBox) {
-        ringBox.innerHTML = '<div style="color:var(--admin-muted); font-size:12px;">Chưa có dữ liệu đơn hàng trong kỳ này</div>';
+        ringBox.innerHTML = '<div style="color:var(--admin-muted); font-size:12px; padding:12px;">Chưa có đơn hàng trong khoảng thời gian này</div>';
       }
       return;
     }
 
-    // Với bán kính r = 15.91549430918954 thì chu vi đường tròn C = 2 * PI * r = 100
     let accumulatedPercent = 0;
     const slices = [];
     const legendItems = [];
@@ -1842,7 +2103,7 @@
       const count = Number(statusCounts[cfg.key] || 0);
       if (count === 0) return;
       const pct = (count / total) * 100;
-      const roundedPct = Math.round(pct);
+      const roundedPct = Math.round(pct * 10) / 10;
       const dashArray = `${pct} ${100 - pct}`;
       const dashOffset = -accumulatedPercent;
 
@@ -1858,9 +2119,20 @@
       `);
 
       legendItems.push(`
-        <div class="ring-item" data-status="${cfg.key}">
-          <span class="dot ${cfg.dotClass}"></span>
-          <span><strong>${cfg.label}:</strong> ${roundedPct}% (${count} đơn)</span>
+        <div class="donut-legend-card" data-status="${cfg.key}">
+          <div class="donut-legend-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="donut-legend-dot" style="background:${cfg.color};"></span>
+              <span class="donut-legend-title">${cfg.label}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <strong class="donut-legend-count">${count} đơn</strong>
+              <span class="donut-legend-badge" style="color:${cfg.color}; background:${cfg.bg};">${roundedPct}%</span>
+            </div>
+          </div>
+          <div class="donut-legend-track">
+            <div class="donut-legend-bar" style="width:${roundedPct}%; background:${cfg.color};"></div>
+          </div>
         </div>
       `);
 
@@ -1883,9 +2155,9 @@
     if (!table) return;
 
     if (titleEl) {
-      if (period === "day") titleEl.textContent = "Bảng số liệu chi tiết doanh thu theo từng ngày";
-      else if (period === "year") titleEl.textContent = "Bảng số liệu chi tiết doanh thu theo 12 tháng";
-      else titleEl.textContent = "Bảng số liệu chi tiết doanh thu theo từng ngày trong tháng";
+      if (period === "day") titleEl.textContent = "Bảng số liệu chi tiết doanh thu & chi phí theo từng ngày";
+      else if (period === "year") titleEl.textContent = "Bảng số liệu chi tiết doanh thu & chi phí theo 12 tháng";
+      else titleEl.textContent = "Bảng số liệu chi tiết doanh thu & chi phí theo từng ngày trong tháng";
     }
 
     if (!breakdown || breakdown.length === 0) {
@@ -1893,9 +2165,10 @@
       return;
     }
 
-    // Hiển thị các dòng có số liệu hoạt động hoặc tối đa các ngày trong kỳ
     const activeRows = breakdown.filter(r => r.orderCount > 0 || r.revenue > 0 || r.cost > 0);
     const displayRows = activeRows.length > 0 ? activeRows : breakdown.slice(0, 10);
+
+    const maxRowRev = Math.max(...breakdown.map(r => r.revenue || 0), 0);
 
     const totOrders = breakdown.reduce((acc, r) => acc + (r.orderCount || 0), 0);
     const totDelivered = breakdown.reduce((acc, r) => acc + (r.deliveredCount || 0), 0);
@@ -1904,20 +2177,23 @@
     const totProfit = Math.max(0, totRev - totCost);
     const totRate = totOrders > 0 ? Math.round((totDelivered / totOrders) * 100) : 0;
 
-    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ hoàn thành", "Doanh thu bán", "Chi phí nhập hàng", "Lợi nhuận gộp"]) +
-      displayRows.map((r) => `
-        <div class="admin-row" style="grid-template-columns: 1.2fr 0.8fr 1fr 1.1fr 1.3fr 1.3fr 1.3fr;">
-          <strong>${r.periodLabel || r.shortLabel}</strong>
-          <span>${r.orderCount} đơn</span>
-          <span style="color:var(--admin-green); font-weight:600;">${r.deliveredCount} đơn</span>
-          <span><span class="${r.successRate >= 50 ? 'status-online' : 'status-away'}">${r.successRate}%</span></span>
-          <strong style="color:var(--admin-green);">${formatMoney(r.revenue)}</strong>
-          <span style="color:#666;">${formatMoney(r.cost)}</span>
-          <strong style="color:${r.profit > 0 ? '#10b981' : '#666'};">${formatMoney(r.profit)}</strong>
-        </div>
-      `).join("") +
+    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ giao", "Doanh thu bán", "Chi phí nhập", "Lợi nhuận gộp"]) +
+      displayRows.map((r) => {
+        const isPeakRow = maxRowRev > 0 && r.revenue === maxRowRev;
+        return `
+          <div class="admin-row ${isPeakRow ? 'breakdown-row-peak' : ''}" style="grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1.3fr 1.3fr 1.3fr;">
+            <strong>${r.periodLabel || r.shortLabel} ${isPeakRow ? '<span class="peak-tag-mini">⭐ Đỉnh điểm</span>' : ''}</strong>
+            <span>${r.orderCount} đơn</span>
+            <span style="color:var(--admin-green); font-weight:600;">${r.deliveredCount} đơn</span>
+            <span><span class="${r.successRate >= 50 ? 'status-online' : 'status-away'}">${r.successRate}%</span></span>
+            <strong style="color:var(--admin-green);">${formatMoney(r.revenue)}</strong>
+            <span style="color:#666;">${formatMoney(r.cost)}</span>
+            <strong style="color:${r.profit > 0 ? '#10b981' : '#666'}; ">${formatMoney(r.profit)}</strong>
+          </div>
+        `;
+      }).join("") +
       `
-        <div class="admin-row breakdown-row-total" style="grid-template-columns: 1.2fr 0.8fr 1fr 1.1fr 1.3fr 1.3fr 1.3fr;">
+        <div class="admin-row breakdown-row-total" style="grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1.3fr 1.3fr 1.3fr; background:rgba(34, 76, 48, 0.05); border-top:2px solid var(--admin-green);">
           <strong style="color:var(--admin-green-dark); font-size:13px;">TỔNG CỘNG</strong>
           <strong>${totOrders} đơn</strong>
           <strong style="color:var(--admin-green);">${totDelivered} đơn</strong>
@@ -1937,7 +2213,7 @@
     return n.toLocaleString("vi-VN") + " ₫";
   }
 
-  function renderRevenueBarChart(chartSource = {}, period = "month", totalRevenue = 0) {
+  function renderRevenueBarChart(breakdownData, period = "month", totalRevenue = 0) {
     const barsBox = document.getElementById("analyticsBars");
     const barTitle = document.getElementById("analyticsBarChartTitle");
     const barSub = document.getElementById("analyticsBarSubtitle");
@@ -1949,9 +2225,9 @@
     if (!barsBox) return;
 
     if (barTitle) {
-      if (period === "day") barTitle.textContent = "Doanh thu theo ngày trong khoảng lọc";
-      else if (period === "year") barTitle.textContent = "Doanh thu 12 tháng trong năm";
-      else barTitle.textContent = "Doanh thu các ngày trong tháng";
+      if (period === "day") barTitle.textContent = "Biểu đồ doanh thu theo từng ngày";
+      else if (period === "year") barTitle.textContent = "Biểu đồ doanh thu 12 tháng trong năm";
+      else barTitle.textContent = "Biểu đồ doanh thu các ngày trong tháng";
     }
 
     if (captionEl) {
@@ -1962,16 +2238,28 @@
 
     if (barSub) barSub.textContent = `Tổng: ${formatMoney(totalRevenue)}`;
 
-    const entries = Object.entries(chartSource);
-    const values = entries.map(([, v]) => Number(v) || 0);
-    const max = Math.max(...values, 0);
+    let items = [];
+    if (Array.isArray(breakdownData)) {
+      items = breakdownData;
+    } else if (breakdownData && typeof breakdownData === "object") {
+      items = Object.entries(breakdownData).map(([k, v]) => ({
+        shortLabel: k,
+        periodLabel: k,
+        revenue: Number(v) || 0,
+        orderCount: 0,
+        deliveredCount: 0,
+      }));
+    }
 
-    // 1. Tính toán mốc Y-axis (Trục tung bên trái)
+    const revenues = items.map(it => Number(it.revenue || 0));
+    const maxRev = Math.max(...revenues, 0);
+
+    // 1. Tính toán mốc Y-axis (Trục tung)
     if (yAxisEl) {
-      if (max <= 0) {
+      if (maxRev <= 0) {
         yAxisEl.innerHTML = `<span>10 tr</span><span>5 tr</span><span>0 ₫</span>`;
       } else {
-        const topCeil = Math.ceil(max * 1.15);
+        const topCeil = Math.ceil(maxRev * 1.15);
         const midVal = Math.round(topCeil / 2);
         yAxisEl.innerHTML = `
           <span>${formatCompactMoney(topCeil)}</span>
@@ -1981,63 +2269,64 @@
       }
     }
 
-    // 2. Tìm ngày đỉnh điểm cao nhất
-    let peakEntry = null;
-    if (max > 0) {
-      peakEntry = entries.find(([, v]) => Number(v) === max);
+    // 2. Tìm điểm đỉnh cao nhất
+    let peakItem = null;
+    if (maxRev > 0) {
+      peakItem = items.find(it => Number(it.revenue || 0) === maxRev);
     }
     if (peakBadgeEl) {
-      if (peakEntry) {
-        peakBadgeEl.textContent = `🏆 Cao nhất: ${peakEntry[0]} (${formatCompactMoney(peakEntry[1])})`;
+      if (peakItem) {
+        peakBadgeEl.innerHTML = `🏆 Đỉnh điểm: <strong>${peakItem.periodLabel || peakItem.shortLabel}</strong> (${formatMoney(peakItem.revenue)})`;
         peakBadgeEl.style.display = "inline-block";
       } else {
         peakBadgeEl.style.display = "none";
       }
     }
 
-    if (entries.length === 0) {
-      barsBox.innerHTML = '<div style="color:var(--admin-muted); font-size:12px; margin:auto;">Không có dữ liệu</div>';
+    if (items.length === 0) {
+      barsBox.innerHTML = '<div style="color:var(--admin-muted); font-size:12px; margin:auto;">Chưa có dữ liệu giao dịch trong kỳ</div>';
       if (xAxisEl) xAxisEl.innerHTML = "";
       return;
     }
 
-    const scaleMax = max > 0 ? max * 1.15 : 100;
-    const totalBars = entries.length;
+    const scaleMax = maxRev > 0 ? maxRev * 1.15 : 100;
+    const totalBars = items.length;
 
-    // 3. Render các cột (bars) kèm nhãn số tiền nổi bật trên cột và tooltip khi hover
-    barsBox.innerHTML = entries.map(([label, val]) => {
-      const num = Number(val) || 0;
-      const isPeak = peakEntry && peakEntry[0] === label && num > 0;
+    // 3. Render các cột kèm Tooltip tương tác chi tiết
+    barsBox.innerHTML = items.map((it) => {
+      const num = Number(it.revenue || 0);
+      const isPeak = peakItem && peakItem === it && num > 0;
       const hasRevenue = num > 0;
-      const pct = hasRevenue ? Math.max(12, Math.round((num / scaleMax) * 100)) : 0;
+      const pct = hasRevenue ? Math.max(10, Math.round((num / scaleMax) * 100)) : 0;
 
       return `
         <div class="bar-col ${hasRevenue ? 'has-revenue' : 'is-zero'} ${isPeak ? 'is-peak' : ''}">
           <div class="chart-tooltip">
-            <strong>${label}</strong><br>
-            <span>Doanh thu: ${formatMoney(num)}</span>
+            <div class="chart-tooltip-title">${it.periodLabel || it.shortLabel}</div>
+            <div class="chart-tooltip-row"><span>Doanh thu:</span> <strong>${formatMoney(num)}</strong></div>
+            <div class="chart-tooltip-row"><span>Số đơn hàng:</span> <span>${it.orderCount || 0} đơn</span></div>
+            ${it.deliveredCount ? `<div class="chart-tooltip-row"><span>Hoàn thành:</span> <span style="color:#10b981;">${it.deliveredCount} đơn</span></div>` : ''}
           </div>
           <div class="bar-fill" style="height: ${pct}%;">
-            ${hasRevenue ? `<span class="bar-value-tag">${formatCompactMoney(num)}</span>` : ""}
+            ${isPeak ? `<span class="bar-value-tag">🏆 ${formatCompactMoney(num)}</span>` : (hasRevenue && totalBars <= 14 ? `<span class="bar-value-tag">${formatCompactMoney(num)}</span>` : "")}
           </div>
         </div>
       `;
     }).join("");
 
-    // 4. Render nhãn trục hoành X-axis bên dưới các cột
+    // 4. Render nhãn trục hoành X-axis rõ ràng
     if (xAxisEl) {
-      xAxisEl.innerHTML = entries.map(([label, val], idx) => {
-        const num = Number(val) || 0;
+      xAxisEl.innerHTML = items.map((it, idx) => {
+        const num = Number(it.revenue || 0);
         const hasRevenue = num > 0;
-
         let shortX = "";
+
         if (period === "year") {
-          shortX = label.replace("Tháng 0", "T").replace("Tháng ", "T");
+          shortX = it.shortLabel || `T${idx + 1}`;
         } else if (period === "day") {
-          shortX = label.split("/").slice(0, 2).join("/");
+          shortX = it.shortLabel || "";
         } else {
-          // Trong tháng: Ngày 01, Ngày 02 -> hiển thị số ngày
-          const dayNum = parseInt(label.replace(/\D/g, ""), 10) || (idx + 1);
+          const dayNum = it.dayNumber || parseInt(String(it.shortLabel).replace(/\D/g, ""), 10) || (idx + 1);
           if (hasRevenue || dayNum === 1 || dayNum === 5 || dayNum === 10 || dayNum === 15 || dayNum === 20 || dayNum === 25 || dayNum === 30 || idx === totalBars - 1) {
             shortX = String(dayNum);
           } else {
@@ -2046,7 +2335,7 @@
         }
 
         return `
-          <div class="x-axis-item ${hasRevenue ? 'has-revenue' : ''}" title="${label}">
+          <div class="x-axis-item ${hasRevenue ? 'has-revenue' : ''}" title="${it.periodLabel || it.shortLabel}">
             ${shortX}
           </div>
         `;
@@ -2054,21 +2343,45 @@
     }
   }
 
+  function renderTopProducts(topProducts = [], topProductsType = "in_period") {
+    const topProdBox = document.getElementById("analyticsTopProducts");
+    if (!topProdBox) return;
+
+    if (!topProducts || topProducts.length === 0) {
+      topProdBox.innerHTML = '<div class="admin-empty">Chưa có sản phẩm bán ra trong khoảng thời gian này</div>';
+      return;
+    }
+
+    const MEDAL_ICONS = ["🥇", "🥈", "🥉", "4", "5"];
+
+    topProdBox.innerHTML = buildRowHeader(["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra", "Doanh thu tạo ra"]) +
+      topProducts.map((p, idx) => `
+        <div class="admin-row" style="grid-template-columns: 80px 2.2fr 1.2fr 1.3fr;">
+          <strong style="font-size:15px;">${MEDAL_ICONS[idx] || (idx + 1)}</strong>
+          <strong>${p.name}</strong>
+          <span><span class="product-sold-badge">${p.quantity} chiếc</span></span>
+          <strong style="color:var(--admin-green);">${formatMoney(p.revenue)}</strong>
+        </div>
+      `).join("");
+  }
+
   async function loadAnalytics(filterParams = {}) {
     try {
+      initAnalyticsInputs();
+
       const period = filterParams.period || currentAnalyticsPeriod || "month";
       currentAnalyticsPeriod = period;
 
       let q = `?period=${encodeURIComponent(period)}`;
       if (period === "day") {
-        const s = filterParams.startDate || document.getElementById("analyticsStartDate")?.value || "2026-09-01";
-        const e = filterParams.endDate || document.getElementById("analyticsEndDate")?.value || "2026-10-31";
+        const s = filterParams.startDate || document.getElementById("analyticsStartDate")?.value || "2026-11-01";
+        const e = filterParams.endDate || document.getElementById("analyticsEndDate")?.value || "2026-11-06";
         q += `&startDate=${encodeURIComponent(s)}&endDate=${encodeURIComponent(e)}`;
       } else if (period === "year") {
         const y = filterParams.year || document.getElementById("analyticsYearSelect")?.value || "2026";
         q += `&year=${encodeURIComponent(y)}`;
       } else {
-        const m = filterParams.month || document.getElementById("analyticsMonthInput")?.value || "2026-10";
+        const m = filterParams.month || document.getElementById("analyticsMonthInput")?.value || "2026-11";
         q += `&month=${encodeURIComponent(m)}`;
       }
 
@@ -2083,24 +2396,27 @@
       const elCost = document.getElementById("analyticsTotalCost");
       const elProfit = document.getElementById("analyticsEstimatedProfit");
       const elComp = document.getElementById("analyticsCompletedOrders");
+      const elProfitMargin = document.getElementById("analyticsProfitMargin");
+      const elOrderRate = document.getElementById("analyticsOrderRate");
 
       if (elRev) elRev.textContent = formatMoney(sum.totalRevenue);
       if (elCost) elCost.textContent = formatMoney(sum.totalCost);
       if (elProfit) elProfit.textContent = formatMoney(sum.estimatedProfit);
       if (elComp) elComp.textContent = (sum.completedOrders || 0).toLocaleString("vi-VN");
 
-      if (noticeEl) {
-        if (period === "day") {
-          noticeEl.textContent = `Khoảng ngày: ${document.getElementById("analyticsStartDate")?.value || '2026-09-01'} đến ${document.getElementById("analyticsEndDate")?.value || '2026-10-31'}`;
-        } else if (period === "year") {
-          noticeEl.textContent = `Năm: ${document.getElementById("analyticsYearSelect")?.value || 2026}`;
-        } else {
-          noticeEl.textContent = `Tháng: ${document.getElementById("analyticsMonthInput")?.value || '2026-10'}`;
-        }
+      if (elProfitMargin) {
+        elProfitMargin.textContent = `Tỉ suất lợi nhuận: ${sum.profitMargin || 0}%`;
+      }
+      if (elOrderRate) {
+        elOrderRate.textContent = `Tổng đơn: ${sum.totalOrders || 0} (Đạt ${sum.successRate || 0}%)`;
       }
 
-      // Render biểu đồ cột doanh thu trực quan kèm trục tung, trục hoành và nhãn số tiền
-      renderRevenueBarChart(data.revenueByPeriod || data.revenueByMonth || {}, period, sum.totalRevenue);
+      if (noticeEl) {
+        noticeEl.textContent = data.filterDescription ? `Kỳ lọc: ${data.filterDescription}` : "";
+      }
+
+      // Render biểu đồ cột doanh thu
+      renderRevenueBarChart(data.breakdown || data.revenueByPeriod || {}, period, sum.totalRevenue);
 
       // Render biểu đồ tròn tỷ lệ trạng thái đơn hàng
       renderDonutChart(data.statusCounts);
@@ -2109,23 +2425,161 @@
       renderBreakdownTable(data.breakdown, period);
 
       // Render top sản phẩm bán chạy
-      const topProdBox = document.getElementById("analyticsTopProducts");
-      if (topProdBox && data.topProducts) {
-        topProdBox.innerHTML = buildRowHeader(["Top", "Sản phẩm", "Số lượng bán", "Doanh thu tạo ra"]) +
-          data.topProducts.map((p, idx) => `
-            <div class="admin-row" style="grid-template-columns: 60px 2fr 1fr 1fr;">
-              <strong>#${idx + 1}</strong>
-              <span>${p.name}</span>
-              <span><strong>${p.quantity}</strong> chiếc</span>
-              <strong style="color:var(--admin-green);">${formatMoney(p.revenue)}</strong>
-            </div>
-          `).join("");
-      }
+      renderTopProducts(data.topProducts, data.topProductsType);
     } catch (err) {
       console.error("Lỗi tải thống kê:", err);
       toast("Lỗi tải thống kê: " + err.message, "error");
     }
   }
+
+
+  function exportAnalyticsToExcel() {
+    if (!state.analytics) {
+      toast("Chưa có dữ liệu thống kê để xuất file. Vui lòng thử lại!", "error");
+      return;
+    }
+
+    if (typeof XLSX === "undefined") {
+      toast("Thư viện Excel đang tải, vui lòng thử lại sau giây lát!", "error");
+      return;
+    }
+
+    const { summary = {}, breakdown = [], statusCounts = {}, topProducts = [], filterDescription = "", period = "month" } = state.analytics;
+    const wb = XLSX.utils.book_new();
+
+    // 1. SHEET 1: TỔNG QUAN & KPIS
+    const kpiRows = [
+      ["BÁO CÁO KINH DOANH & TỔNG QUAN CHỈ SỐ (JEWELS LUXURY)"],
+      ["Khoảng thời gian báo cáo:", filterDescription || `Kỳ lọc: ${period}`],
+      ["Thời điểm xuất file:", new Date().toLocaleString("vi-VN")],
+      [],
+      ["CHỈ SỐ TÀI CHÍNH & HOẠT ĐỘNG", "GIÁ TRỊ", "ĐƠN VỊ TÍNH", "GHI CHÚ"],
+      ["1. Tổng doanh thu bán hàng", Number(summary.totalRevenue || 0), "VNĐ", "Tính từ các hóa đơn hợp lệ trong kỳ"],
+      ["2. Chi phí nhập kho", Number(summary.totalCost || 0), "VNĐ", "Tổng giá trị phiếu nhập kho"],
+      ["3. Lợi nhuận gộp ước tính", Number(summary.estimatedProfit || 0), "VNĐ", "Doanh thu trừ Chi phí nhập"],
+      ["4. Tỉ suất lợi nhuận gộp", `${summary.profitMargin || 0}%`, "%", "Tỷ lệ lợi nhuận / Doanh thu"],
+      ["5. Đơn hàng giao thành công", Number(summary.completedOrders || 0), "Đơn", "Đơn có trạng thái delivered"],
+      ["6. Đơn hàng bị hủy", Number(summary.cancelledOrders || 0), "Đơn", "Đơn có trạng thái cancelled"],
+      ["7. Tổng số đơn hàng phát sinh", Number(summary.totalOrders || 0), "Đơn", "Tổng đơn phát sinh trong kỳ"],
+      ["8. Tỷ lệ hoàn thành đơn hàng", `${summary.successRate || 0}%`, "%", "Đơn giao thành công / Tổng đơn"],
+    ];
+    const wsKpi = XLSX.utils.aoa_to_sheet(kpiRows);
+    wsKpi["!cols"] = [{ wch: 35 }, { wch: 22 }, { wch: 15 }, { wch: 35 }];
+    XLSX.utils.book_append_sheet(wb, wsKpi, "TongQuan_KPI");
+
+    // 2. SHEET 2: DOANH THU & CHI PHÍ CHI TIẾT THEO THỜI GIAN
+    const detailHeaders = [
+      "Thời gian",
+      "Số đơn phát sinh",
+      "Đơn giao thành công",
+      "Tỷ lệ hoàn thành (%)",
+      "Doanh thu bán hàng (VNĐ)",
+      "Chi phí nhập kho (VNĐ)",
+      "Lợi nhuận gộp (VNĐ)",
+    ];
+    const detailRows = [
+      ["BẢNG SỐ LIỆU CHI TIẾT DOANH THU & CHI PHÍ THEO THỜI GIAN"],
+      [`Khoảng thời gian: ${filterDescription || period}`],
+      [],
+      detailHeaders,
+    ];
+
+    let totOrders = 0;
+    let totDelivered = 0;
+    let totRev = 0;
+    let totCost = 0;
+    let totProfit = 0;
+
+    (breakdown || []).forEach((r) => {
+      totOrders += Number(r.orderCount || 0);
+      totDelivered += Number(r.deliveredCount || 0);
+      totRev += Number(r.revenue || 0);
+      totCost += Number(r.cost || 0);
+      totProfit += Number(r.profit || 0);
+
+      detailRows.push([
+        r.periodLabel || r.shortLabel,
+        Number(r.orderCount || 0),
+        Number(r.deliveredCount || 0),
+        Number(r.successRate || 0),
+        Number(r.revenue || 0),
+        Number(r.cost || 0),
+        Number(r.profit || 0),
+      ]);
+    });
+
+    const overallRate = totOrders > 0 ? Math.round((totDelivered / totOrders) * 100) : 0;
+    detailRows.push([]);
+    detailRows.push([
+      "TỔNG CỘNG",
+      totOrders,
+      totDelivered,
+      overallRate,
+      totRev,
+      totCost,
+      totProfit,
+    ]);
+
+    const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
+    wsDetail["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 22 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsDetail, "DoanhThu_ChiTiet");
+
+    // 3. SHEET 3: TOP SẢN PHẨM BÁN CHẠY
+    const prodRows = [
+      ["TOP SẢN PHẨM TRANG SỨC BÁN CHẠY NHẤT"],
+      [`Khoảng thời gian: ${filterDescription || period}`],
+      [],
+      ["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra (chiếc)", "Doanh thu tạo ra (VNĐ)"],
+    ];
+    (topProducts || []).forEach((p, idx) => {
+      prodRows.push([
+        `#${idx + 1}`,
+        p.name,
+        Number(p.quantity || 0),
+        Number(p.revenue || 0),
+      ]);
+    });
+    const wsProd = XLSX.utils.aoa_to_sheet(prodRows);
+    wsProd["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 25 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, wsProd, "Top_SanPham");
+
+    // 4. SHEET 4: CƠ CẤU TRẠNG THÁI ĐƠN HÀNG
+    const STATUS_LABELS = {
+      delivered: "Đã giao thành công",
+      processing: "Đã xác nhận",
+      shipped: "Đang giao hàng",
+      pending: "Đang chờ duyệt",
+      cancelled: "Đã hủy",
+      returned: "Đã hoàn hàng",
+    };
+    const totalStatusOrders = Object.values(statusCounts).reduce((a, b) => a + Number(b || 0), 0);
+    const statusRows = [
+      ["CƠ CẤU TRẠNG THÁI ĐƠN HÀNG"],
+      [`Tổng số đơn hàng: ${totalStatusOrders}`],
+      [],
+      ["Mã trạng thái", "Tên trạng thái", "Số lượng đơn", "Tỷ lệ phân bổ (%)"],
+    ];
+    Object.entries(statusCounts).forEach(([k, v]) => {
+      const c = Number(v || 0);
+      const pct = totalStatusOrders > 0 ? Math.round((c / totalStatusOrders) * 1000) / 10 : 0;
+      statusRows.push([k, STATUS_LABELS[k] || k, c, `${pct}%`]);
+    });
+    const wsStatus = XLSX.utils.aoa_to_sheet(statusRows);
+    wsStatus["!cols"] = [{ wch: 16 }, { wch: 25 }, { wch: 16 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsStatus, "TrangThai_DonHang");
+
+    // Đặt tên file xuất
+    const now = new Date();
+    const dateStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+    const cleanPeriod = (filterDescription || period).replace(/[^a-zA-Z0-9_À-ỹ]/g, "_").replace(/_+/g, "_");
+    const fileName = `Bao_Cao_Kinh_Doanh_Jewels_${cleanPeriod}_${dateStamp}.xlsx`;
+
+    // Tải file trực tiếp
+    XLSX.writeFile(wb, fileName);
+    toast("Đã xuất file Excel (.xlsx) thành công!", "success");
+  }
+
+  window.exportAnalyticsToExcel = exportAnalyticsToExcel;
 
   // ---------- MODAL POPUP TIỆN ÍCH ----------
   window.openFormModal = (modalId) => {
@@ -2434,27 +2888,47 @@
       e.preventDefault();
       const fd = new FormData(orderForm);
       const id = fd.get("id");
-      if (!id) return;
+      const targetStatus = fd.get("status");
+      if (!id || !targetStatus) return;
+
+      const submitBtn = document.getElementById("orderSubmitBtn");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Đang xử lý...";
+      }
+
       try {
-        await api(`/orders/${id}/status`, {
+        const res = await api(`/orders/${id}/status`, {
           method: "PUT",
-          body: { status: fd.get("status") },
+          body: { status: targetStatus },
         });
-        toast("Đã cập nhật trạng thái đơn hàng!");
+
+        toast(res.message || `Đã cập nhật trạng thái đơn sang "${targetStatus}"!`, "success");
+
         broadcast("ORDER_STATUS_CHANGED", {
           orderId: Number(id),
-          status: fd.get("status"),
+          status: res.status || targetStatus,
         });
-        orderForm.reset();
+
         closeFormModal("ordersModal");
-        loadOrders();
+        await Promise.all([
+          loadOrders(),
+          typeof loadInvoices === "function" ? loadInvoices() : Promise.resolve(),
+          typeof loadOverview === "function" ? loadOverview() : Promise.resolve(),
+          typeof loadAnalytics === "function" ? loadAnalytics() : Promise.resolve()
+        ]);
       } catch (err) {
-        toast("Lỗi: " + err.message, "error");
+        toast("Lỗi cập nhật: " + err.message, "error");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Xác nhận chuyển";
+        }
       }
     });
   }
 
-  // 8. Stock Form (Tạo phiếu nhập)
+    // 8. Stock Form (Tạo phiếu nhập)
   const stockForm = document.getElementById("stockForm");
   if (stockForm) {
     stockForm.addEventListener("submit", async (e) => {

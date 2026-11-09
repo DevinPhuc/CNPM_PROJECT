@@ -14,7 +14,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="css/admin.css?v=20261104_2" />
+  <link rel="stylesheet" href="css/admin.css?v=20261109_fix" />
   <script>
     (function () {
       try {
@@ -858,36 +858,67 @@
             </div>
           </div>
 
-          <!-- MODAL CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG -->
+          <!-- MODAL CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG (FSM LOGIC) -->
           <div class="admin-modal-backdrop" id="ordersModal" hidden>
-            <div class="admin-modal">
-              <div class="admin-modal-header">
-                <h3>Cập nhật trạng thái đơn</h3>
-                <button type="button" class="admin-modal-close" data-close-modal="ordersModal">&times;</button>
+            <div class="admin-modal" style="max-width: 540px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);">
+              <div class="admin-modal-header" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 16px 22px;">
+                <div>
+                  <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; letter-spacing: -0.2px;">Cập nhật trạng thái đơn</h3>
+                  <small style="color: #64748b; font-size: 12px; display: block; margin-top: 2px;">Quy trình xử lý đơn hàng logic & kiểm soát kho tự động</small>
+                </div>
+                <button type="button" class="admin-modal-close" data-close-modal="ordersModal" style="font-size: 24px; color: #64748b;">&times;</button>
               </div>
-              <form id="orderForm" class="admin-form">
+
+              <form id="orderForm" class="admin-form" style="padding: 18px 22px; display: flex; flex-direction: column; gap: 14px;">
                 <input type="hidden" name="id" />
-                <label>Mã đơn hàng<input name="code" type="text" readonly style="background: #eef1ec" /></label>
-                <label>Khách hàng<input name="customer" type="text" readonly style="background: #eef1ec" /></label>
-                <label>Tổng tiền<input name="total" type="text" readonly style="background: #eef1ec" /></label>
-                <label>Trạng thái xử lý
-                  <select name="status">
-                    <option value="Đang chờ duyệt">Đang chờ duyệt</option>
-                    <option value="Đã xác nhận">Đã xác nhận</option>
-                    <option value="Đang giao hàng">Đang giao hàng</option>
-                    <option value="Đã giao thành công">
-                      Đã giao thành công (Tự lập hóa đơn)
-                    </option>
-                    <option value="Đã hủy">Đã hủy (Hoàn tồn kho)</option>
-                    <option value="Đã hoàn hàng">Đã hoàn hàng</option>
-                  </select>
-                </label>
-                <div class="admin-form-actions">
-                  <button type="button" class="admin-secondary-btn" data-reset="orders">
+
+                <!-- Thẻ tóm tắt thông tin đơn hàng -->
+                <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 9px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div>
+                      <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px;">Mã đơn</span>
+                      <div id="orderModalCode" style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 1px;">#--</div>
+                    </div>
+                    <div style="text-align: right;">
+                      <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #64748b; letter-spacing: 0.5px; display:block; margin-bottom: 3px;">Trạng thái hiện tại</span>
+                      <span id="orderModalCurrentBadge"></span>
+                    </div>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12.5px; padding-top: 8px; border-top: 1px dashed #e2e8f0;">
+                    <div><span style="color: #64748b;">Khách hàng:</span> <strong id="orderModalCustomer" style="color: #1e293b; display: block; margin-top: 1px;">--</strong></div>
+                    <div style="text-align: right;"><span style="color: #64748b;">Tổng tiền:</span> <strong id="orderModalTotal" style="color: #b45309; font-size: 14px; font-weight: 800; display: block; margin-top: 1px;">--</strong></div>
+                  </div>
+                </div>
+
+                <!-- Thanh tiến trình đơn hàng (Step Tracker) -->
+                <div>
+                  <div style="font-size: 11.5px; font-weight: 800; text-transform: uppercase; color: #475569; margin-bottom: 8px; letter-spacing: 0.5px;">Tiến trình xử lý:</div>
+                  <div id="orderStatusTracker" style="display: flex; align-items: center; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; gap: 4px;">
+                  </div>
+                </div>
+
+                <!-- Vùng chọn trạng thái kế tiếp -->
+                <div id="orderStatusActionArea">
+                  <label style="font-weight: 700; font-size: 13px; color: #1e293b; display: block; margin-bottom: 6px;">
+                    Chuyển sang trạng thái tiếp theo:
+                    <select name="status" id="orderStatusSelect" style="width: 100%; margin-top: 6px; padding: 10px 12px; font-size: 13.5px; border-radius: 7px; border: 1.5px solid #cbd5e1; font-weight: 600; color: #0f172a; background: #fff; cursor: pointer;">
+                    </select>
+                  </label>
+                  <div id="orderStatusHelpText" style="margin-top: 8px; font-size: 12px; line-height: 1.5; color: #1e293b; background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 6px;">
+                  </div>
+                </div>
+
+                <!-- Cảnh báo khi đơn đã kết thúc -->
+                <div id="orderClosedNotice" style="display:none; background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 8px; padding: 12px 14px; color: #991b1b; font-size: 12.5px; line-height: 1.5;">
+                  🔒 <strong>Đơn hàng đã đóng:</strong> Trạng thái này là chặng cuối của quy trình (đã kết thúc), không thể chuyển tiếp thêm để đảm bảo tính toàn vẹn của dữ liệu và kho hàng.
+                </div>
+
+                <div class="admin-form-actions" style="margin-top: 8px; padding-top: 14px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px;">
+                  <button type="button" class="admin-secondary-btn" data-reset="orders" style="padding: 9px 18px; font-weight: 600;">
                     Đóng
                   </button>
-                  <button type="submit" class="admin-primary-btn">
-                    Cập nhật đơn hàng
+                  <button type="submit" id="orderSubmitBtn" class="admin-primary-btn" style="padding: 9px 20px; font-weight: 800; min-width: 160px; justify-content: center;">
+                    Xác nhận chuyển
                   </button>
                 </div>
               </form>
@@ -1028,8 +1059,23 @@
               <p class="account-eyebrow">10. DỮ LIỆU KINH DOANH</p>
               <h2>Báo cáo và thống kê</h2>
             </div>
-            <div class="admin-module-actions">
-              <button type="button" class="admin-primary-btn" onclick="window.print()">
+            <div class="admin-module-actions" style="display: flex; gap: 8px; align-items: center;">
+              <button type="button" class="admin-primary-btn" id="exportAnalyticsExcelBtn" onclick="exportAnalyticsToExcel()" style="background: #107c41; border-color: #107c41; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(16, 124, 65, 0.25);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="8" y1="13" x2="16" y2="13"></line>
+                  <line x1="8" y1="17" x2="16" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                Xuất file Excel (.xlsx)
+              </button>
+              <button type="button" class="admin-secondary-btn" onclick="window.print()" style="display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d5ded4; color: #224c30; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
                 In báo cáo
               </button>
             </div>
@@ -1053,15 +1099,15 @@
               <!-- Mode Tháng -->
               <div class="filter-group" id="filterGroupMonth">
                 <label for="analyticsMonthInput">Chọn tháng:</label>
-                <input type="month" id="analyticsMonthInput" class="admin-search" value="2026-10" />
+                <input type="month" id="analyticsMonthInput" class="admin-search" value="2026-11" />
               </div>
 
               <!-- Mode Ngày -->
               <div class="filter-group" id="filterGroupDay" style="display: none">
                 <label for="analyticsStartDate">Từ ngày:</label>
-                <input type="date" id="analyticsStartDate" class="admin-search" value="2026-09-01" />
+                <input type="date" id="analyticsStartDate" class="admin-search" value="2026-11-01" />
                 <label for="analyticsEndDate">Đến ngày:</label>
-                <input type="date" id="analyticsEndDate" class="admin-search" value="2026-10-31" />
+                <input type="date" id="analyticsEndDate" class="admin-search" value="2026-11-06" />
               </div>
 
               <!-- Mode Năm -->
@@ -1185,7 +1231,18 @@
                   " id="breakdownTableTitle">
                 Bảng số liệu chi tiết doanh thu & chi phí
               </h3>
-              <span style="font-size: 12px; color: var(--admin-muted)">Kèm tỷ lệ hoàn tất & lợi nhuận</span>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size: 12px; color: var(--admin-muted)">Kèm tỷ lệ hoàn tất & lợi nhuận</span>
+                <button type="button" class="admin-primary-btn" onclick="exportAnalyticsToExcel()" style="background: #107c41; border-color: #107c41; font-size: 12px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 5px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="8" y1="13" x2="16" y2="13"></line>
+                    <line x1="8" y1="17" x2="16" y2="17"></line>
+                  </svg>
+                  Xuất Excel (.xlsx)
+                </button>
+              </div>
             </div>
             <div class="admin-table-wrap">
               <div class="admin-list" id="analyticsBreakdownTable"></div>
@@ -1224,7 +1281,8 @@
   <div id="adminToasts"></div>
 
   <script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
-  <script src="js/admin.js?v=20261104_3"></script>
+  <script src="../shared/js/vendor/xlsx.full.min.js"></script>
+  <script src="js/admin.js?v=20261109_time_rev"></script>
 </body>
 
 </html>

@@ -94,6 +94,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       { data: recentReceipts },
       { data: allVariants },
       { data: invoicesSum },
+      { data: allOrdersList },
     ] = await Promise.all([
       db.from("users").select("*", { count: "exact", head: true }),
       db.from("employees").select("*", { count: "exact", head: true }),
@@ -108,11 +109,19 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       db.from("invoices").select("invoice_id,buyer_name,total_price,invoice_date").order("invoice_date", { ascending: false }).limit(5),
       db.from("goods_receipt").select("gr_id,total_amount,receipt_date,suppliers(name)").order("receipt_date", { ascending: false }).limit(5),
       db.from("product_variants").select("stock_quantity"),
-      db.from("invoices").select("total_price"),
+      db.from("invoices").select("total_price,order_id"),
+      db.from("orders").select("order_id,status"),
     ]);
 
     const totalStock = (allVariants || []).reduce((acc, v) => acc + (Number(v.stock_quantity) || 0), 0);
-    const totalRevenue = (invoicesSum || []).reduce((acc, inv) => acc + (Number(inv.total_price) || 0), 0);
+    const orderStatusMap = new Map((allOrdersList || []).map((o) => [o.order_id, o.status]));
+    // Tổng doanh thu thực tế: loại trừ các hóa đơn thuộc đơn hàng đã bị HỦY hoặc ĐÃ HOÀN HÀNG
+    const validInvoicesForRevenue = (invoicesSum || []).filter((inv) => {
+      if (!inv.order_id) return true;
+      const st = orderStatusMap.get(inv.order_id);
+      return st !== "cancelled" && st !== "returned";
+    });
+    const totalRevenue = validInvoicesForRevenue.reduce((acc, inv) => acc + (Number(inv.total_price) || 0), 0);
 
     res.json({
       kpis: {
@@ -174,59 +183,89 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       { data: orders },
       { data: receipts },
       { data: orderItems },
+      { data: invoiceDetails },
     ] = await Promise.all([
-      db.from("invoices").select("invoice_id,total_price,invoice_date"),
-      db.from("orders").select("order_id,status,total_amount,order_date"),
-      db.from("goods_receipt").select("gr_id,total_amount,receipt_date"),
-      db.from("order_items").select("product_name,quantity,subtotal"),
+      safeQuery(db.from("invoices").select("invoice_id,order_id,total_price,invoice_date")),
+      safeQuery(db.from("orders").select("order_id,status,total_amount,order_date")),
+      safeQuery(db.from("goods_receipt").select("gr_id,total_amount,receipt_date")),
+      safeQuery(db.from("order_items").select("order_item_id,order_id,product_name,quantity,subtotal")),
+      safeQuery(db.from("invoice_detail").select("invoice_detail_id,invoice_id,product_name,quantity,subtotal")),
     ]);
 
-    // Xác định khoảng thời gian lọc
-    let filterStart;
-    let filterEnd;
-    const now = new Date();
-
-    if (period === "day") {
-      if (startDate && endDate) {
-        filterStart = new Date(`${startDate}T00:00:00.000Z`);
-        filterEnd = new Date(`${endDate}T23:59:59.999Z`);
-      } else if (startDate) {
-        filterStart = new Date(`${startDate}T00:00:00.000Z`);
-        filterEnd = new Date(`${startDate}T23:59:59.999Z`);
-      } else {
-        // Mặc định 14 ngày gần nhất
-        filterEnd = new Date();
-        filterStart = new Date();
-        filterStart.setDate(filterStart.getDate() - 13);
-        filterStart.setHours(0, 0, 0, 0);
-      }
-    } else if (period === "year") {
-      const y = Number(year) || (month ? Number(month.split("-")[0]) : 2026);
-      filterStart = new Date(Date.UTC(y, 0, 1, 0, 0, 0));
-      filterEnd = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
-    } else {
-      // period === "month"
-      if (month && month.includes("-")) {
-        const [y, m] = month.split("-").map(Number);
-        filterStart = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0));
-        // Ngày cuối cùng của tháng
-        filterEnd = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
-      } else {
-        // Mặc định tháng hiện tại (hoặc tháng 10/2026 nếu dữ liệu mẫu tập trung tháng 9-10/2026)
-        const sampleYear = 2026;
-        const sampleMonth = 10;
-        filterStart = new Date(Date.UTC(sampleYear, sampleMonth - 1, 1, 0, 0, 0));
-        filterEnd = new Date(Date.UTC(sampleYear, sampleMonth, 0, 23, 59, 59, 999));
-      }
-    }
-
-    const isInRange = (dStr) => {
-      if (!dStr) return false;
-      const t = new Date(dStr).getTime();
-      return t >= filterStart.getTime() && t <= filterEnd.getTime();
+    // Chuyển đổi timestamp ISO sang ngày/tháng theo múi giờ Việt Nam (UTC+7)
+    const toVnDateKey = (dStr) => {
+      if (!dStr) return "";
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return "";
+      const vnTime = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const y = vnTime.getUTCFullYear();
+      const m = String(vnTime.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(vnTime.getUTCDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     };
 
-    const filteredInvoices = (invoices || []).filter((i) => isInRange(i.invoice_date));
+    const toVnMonthKey = (dStr) => {
+      if (!dStr) return "";
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return "";
+      const vnTime = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const y = vnTime.getUTCFullYear();
+      const m = String(vnTime.getUTCMonth() + 1).padStart(2, "0");
+      return `${y}-${m}`;
+    };
+
+    const now = new Date();
+    const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const currYear = vnNow.getUTCFullYear();
+    const currMonthStr = `${currYear}-${String(vnNow.getUTCMonth() + 1).padStart(2, "0")}`;
+
+    let isInRange = () => true;
+    let filterDescription = "";
+
+    if (period === "day") {
+      let sKey = startDate || "2026-11-01";
+      let eKey = endDate || `${currYear}-${String(vnNow.getUTCMonth() + 1).padStart(2, "0")}-${String(vnNow.getUTCDate()).padStart(2, "0")}`;
+      if (sKey > eKey) { const tmp = sKey; sKey = eKey; eKey = tmp; }
+      isInRange = (dStr) => {
+        const k = toVnDateKey(dStr);
+        return Boolean(k && k >= sKey && k <= eKey);
+      };
+      filterDescription = `Từ ngày ${sKey} đến ngày ${eKey}`;
+    } else if (period === "year") {
+      const targetYear = Number(year) || currYear;
+      const yStr = String(targetYear);
+      isInRange = (dStr) => {
+        const k = toVnDateKey(dStr);
+        return Boolean(k && k.startsWith(yStr));
+      };
+      filterDescription = `Năm ${targetYear}`;
+    } else {
+      // period === "month"
+      const targetMonth = (month && month.includes("-")) ? month : currMonthStr;
+      isInRange = (dStr) => {
+        const mk = toVnMonthKey(dStr);
+        return Boolean(mk && mk === targetMonth);
+      };
+      filterDescription = `Tháng ${targetMonth}`;
+    }
+
+    // Map order_id -> order để kiểm tra trạng thái đơn
+    const orderMap = {};
+    (orders || []).forEach((o) => {
+      orderMap[o.order_id] = o;
+    });
+
+    // Hóa đơn hợp lệ (bỏ qua nếu đơn hàng liên kết đã bị hủy)
+    const isValidInvoice = (inv) => {
+      if (!inv) return false;
+      if (inv.order_id && orderMap[inv.order_id]) {
+        return orderMap[inv.order_id].status !== "cancelled" && orderMap[inv.order_id].status !== "returned";
+      }
+      return true;
+    };
+
+    const validInvoices = (invoices || []).filter(isValidInvoice);
+    const filteredInvoices = validInvoices.filter((i) => isInRange(i.invoice_date));
     const filteredOrders = (orders || []).filter((o) => isInRange(o.order_date));
     const filteredReceipts = (receipts || []).filter((r) => isInRange(r.receipt_date));
 
@@ -234,18 +273,19 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const totalRevenue = filteredInvoices.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
     const totalCost = filteredReceipts.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
     const estimatedProfit = Math.max(0, totalRevenue - totalCost);
+    const profitMargin = totalRevenue > 0 ? Math.round((estimatedProfit / totalRevenue) * 100) : 0;
     const completedOrders = filteredOrders.filter((o) => o.status === "delivered").length;
     const cancelledOrders = filteredOrders.filter((o) => o.status === "cancelled").length;
     const totalOrders = filteredOrders.length;
+    const successRate = totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0;
 
     // Tỉ lệ trạng thái đơn hàng (cho biểu đồ tròn)
-    // Nếu trong kỳ có đơn thì tính trên kỳ, nếu kỳ rỗng thì fallback toàn bộ để biểu đồ tròn luôn có số liệu trực quan
     const targetOrders = filteredOrders.length > 0 ? filteredOrders : (orders || []);
     const statusCounts = {
       delivered: 0,
       processing: 0,
-      pending: 0,
       shipped: 0,
+      pending: 0,
       cancelled: 0,
       returned: 0,
     };
@@ -255,30 +295,19 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       else statusCounts[s] = 1;
     });
 
-    // Tạo bảng số liệu chi tiết (Breakdown)
+    // Tạo bảng chi tiết số liệu breakdown và dữ liệu cho biểu đồ cột
     const breakdown = [];
     const revenueByPeriod = {};
 
     if (period === "year") {
-      // 12 tháng trong năm
-      const y = filterStart.getUTCFullYear();
-      for (let m = 0; m < 12; m++) {
-        const mStart = new Date(Date.UTC(y, m, 1, 0, 0, 0)).getTime();
-        const mEnd = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999)).getTime();
-        const label = `Tháng ${String(m + 1).padStart(2, "0")}`;
+      const targetYear = Number(year) || currYear;
+      for (let m = 1; m <= 12; m++) {
+        const mKey = `${targetYear}-${String(m).padStart(2, "0")}`;
+        const label = `Tháng ${String(m).padStart(2, "0")}`;
 
-        const mInvs = (invoices || []).filter((i) => {
-          const t = new Date(i.invoice_date).getTime();
-          return t >= mStart && t <= mEnd;
-        });
-        const mOrders = (orders || []).filter((o) => {
-          const t = new Date(o.order_date).getTime();
-          return t >= mStart && t <= mEnd;
-        });
-        const mRcps = (receipts || []).filter((r) => {
-          const t = new Date(r.receipt_date).getTime();
-          return t >= mStart && t <= mEnd;
-        });
+        const mInvs = validInvoices.filter((i) => toVnMonthKey(i.invoice_date) === mKey);
+        const mOrders = (orders || []).filter((o) => toVnMonthKey(o.order_date) === mKey);
+        const mRcps = (receipts || []).filter((r) => toVnMonthKey(r.receipt_date) === mKey);
 
         const rev = mInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = mRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -286,8 +315,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         revenueByPeriod[label] = rev;
         breakdown.push({
-          periodLabel: `${label}/${y}`,
-          shortLabel: label,
+          periodLabel: `${label}/${targetYear}`,
+          shortLabel: `T${m}`,
+          monthNumber: m,
           orderCount: mOrders.length,
           deliveredCount: delivered,
           revenue: rev,
@@ -297,29 +327,18 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         });
       }
     } else if (period === "month") {
-      // Từng ngày trong tháng được chọn
-      const y = filterStart.getUTCFullYear();
-      const m = filterStart.getUTCMonth();
-      const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const targetMonth = (month && month.includes("-")) ? month : currMonthStr;
+      const [y, m] = targetMonth.split("-").map(Number);
+      const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
 
       for (let d = 1; d <= daysInMonth; d++) {
-        const dStart = new Date(Date.UTC(y, m, d, 0, 0, 0)).getTime();
-        const dEnd = new Date(Date.UTC(y, m, d, 23, 59, 59, 999)).getTime();
-        const dayStr = `${String(d).padStart(2, "0")}/${String(m + 1).padStart(2, "0")}`;
-        const label = `Ngày ${String(d).padStart(2, "0")}`;
+        const dKey = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const dayStr = `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+        const label = `Ngày ${dayStr}`;
 
-        const dInvs = (invoices || []).filter((i) => {
-          const t = new Date(i.invoice_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
-        const dOrders = (orders || []).filter((o) => {
-          const t = new Date(o.order_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
-        const dRcps = (receipts || []).filter((r) => {
-          const t = new Date(r.receipt_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
+        const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
+        const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
+        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -327,8 +346,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         revenueByPeriod[dayStr] = rev;
         breakdown.push({
-          periodLabel: `${dayStr}/${y}`,
+          periodLabel: `${label}/${y}`,
           shortLabel: dayStr,
+          dayNumber: d,
           orderCount: dOrders.length,
           deliveredCount: delivered,
           revenue: rev,
@@ -338,33 +358,27 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         });
       }
     } else {
-      // period === "day": từng ngày từ filterStart đến filterEnd
-      const startMs = filterStart.getTime();
-      const endMs = filterEnd.getTime();
+      // period === "day"
+      let sKey = startDate || "2026-11-01";
+      let eKey = endDate || `${currYear}-${String(vnNow.getUTCMonth() + 1).padStart(2, "0")}-${String(vnNow.getUTCDate()).padStart(2, "0")}`;
+      if (sKey > eKey) { const tmp = sKey; sKey = eKey; eKey = tmp; }
+
+      const startD = new Date(`${sKey}T00:00:00Z`);
+      const endD = new Date(`${eKey}T00:00:00Z`);
       const oneDayMs = 24 * 60 * 60 * 1000;
 
-      for (let ms = startMs; ms <= endMs; ms += oneDayMs) {
-        const curr = new Date(ms);
+      for (let time = startD.getTime(); time <= endD.getTime(); time += oneDayMs) {
+        const curr = new Date(time);
         const y = curr.getUTCFullYear();
-        const m = curr.getUTCMonth();
-        const d = curr.getUTCDate();
+        const m = String(curr.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(curr.getUTCDate()).padStart(2, "0");
+        const dKey = `${y}-${m}-${d}`;
+        const dayStr = `${d}/${m}`;
+        const label = `Ngày ${dayStr}`;
 
-        const dStart = new Date(Date.UTC(y, m, d, 0, 0, 0)).getTime();
-        const dEnd = new Date(Date.UTC(y, m, d, 23, 59, 59, 999)).getTime();
-        const dayStr = `${String(d).padStart(2, "0")}/${String(m + 1).padStart(2, "0")}`;
-
-        const dInvs = (invoices || []).filter((i) => {
-          const t = new Date(i.invoice_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
-        const dOrders = (orders || []).filter((o) => {
-          const t = new Date(o.order_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
-        const dRcps = (receipts || []).filter((r) => {
-          const t = new Date(r.receipt_date).getTime();
-          return t >= dStart && t <= dEnd;
-        });
+        const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
+        const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
+        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -372,8 +386,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         revenueByPeriod[dayStr] = rev;
         breakdown.push({
-          periodLabel: `${dayStr}/${y}`,
+          periodLabel: `${label}/${y}`,
           shortLabel: dayStr,
+          dayNumber: Number(d),
           orderCount: dOrders.length,
           deliveredCount: delivered,
           revenue: rev,
@@ -384,49 +399,70 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       }
     }
 
-    // Top sản phẩm bán chạy
-    const productStats = {};
-    (orderItems || []).forEach((it) => {
-      const name = it.product_name || "Sản phẩm";
-      if (!productStats[name]) productStats[name] = { name, quantity: 0, revenue: 0 };
-      productStats[name].quantity += Number(it.quantity || 0);
-      productStats[name].revenue += Number(it.subtotal || 0);
-    });
-    const topProducts = Object.values(productStats).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+    // Top sản phẩm bán chạy (lọc từ các đơn không hủy trong kỳ)
+    const activeFilteredOrderIds = new Set(filteredOrders.filter((o) => o.status !== "cancelled" && o.status !== "returned").map((o) => o.order_id));
+    const filteredInvoiceIds = new Set(filteredInvoices.map((i) => i.invoice_id));
 
-    // Mặc định revenueByMonth cho tương thích với biểu đồ cũ nếu cần
-    const monthMap = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date();
-      d.setMonth(d.getMonth() - i);
-      const key = `Tháng ${d.getMonth() + 1}`;
-      monthMap[key] = 0;
-    }
-    (invoices || []).forEach((inv) => {
-      const d = new Date(inv.invoice_date);
-      const key = `Tháng ${d.getMonth() + 1}`;
-      if (monthMap[key] !== undefined) {
-        monthMap[key] += Number(inv.total_price || 0);
+    const productStats = {};
+    const addProductStat = (name, qty, rev) => {
+      const cleanName = String(name || "Trang sức cao cấp").trim();
+      if (!productStats[cleanName]) {
+        productStats[cleanName] = { name: cleanName, quantity: 0, revenue: 0 };
+      }
+      productStats[cleanName].quantity += Number(qty || 0);
+      productStats[cleanName].revenue += Number(rev || 0);
+    };
+
+    (orderItems || []).forEach((it) => {
+      if (activeFilteredOrderIds.has(it.order_id)) {
+        addProductStat(it.product_name, it.quantity, it.subtotal);
       }
     });
 
+    (invoiceDetails || []).forEach((idtl) => {
+      if (filteredInvoiceIds.has(idtl.invoice_id)) {
+        const inv = filteredInvoices.find((i) => i.invoice_id === idtl.invoice_id);
+        if (inv && !inv.order_id) {
+          addProductStat(idtl.product_name, idtl.quantity, idtl.subtotal);
+        }
+      }
+    });
+
+    let topProducts = Object.values(productStats).sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue).slice(0, 5);
+    let topProductsType = "in_period";
+
+    if (topProducts.length === 0) {
+      const allTimeStats = {};
+      const activeOrderIds = new Set((orders || []).filter((o) => o.status !== "cancelled").map((o) => o.order_id));
+      (orderItems || []).forEach((it) => {
+        if (activeOrderIds.has(it.order_id)) {
+          const name = String(it.product_name || "Trang sức cao cấp").trim();
+          if (!allTimeStats[name]) allTimeStats[name] = { name, quantity: 0, revenue: 0 };
+          allTimeStats[name].quantity += Number(it.quantity || 0);
+          allTimeStats[name].revenue += Number(it.subtotal || 0);
+        }
+      });
+      topProducts = Object.values(allTimeStats).sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue).slice(0, 5);
+      topProductsType = "all_time";
+    }
+
     res.json({
       period,
-      filterStart: filterStart.toISOString(),
-      filterEnd: filterEnd.toISOString(),
-      revenueByMonth: monthMap,
+      filterDescription,
       revenueByPeriod,
       breakdown,
       statusCounts,
       topProducts,
+      topProductsType,
       summary: {
         totalRevenue,
         totalCost,
         estimatedProfit,
+        profitMargin,
         completedOrders,
         cancelledOrders,
         totalOrders,
-        successRate: totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0,
+        successRate,
       },
     });
   }));
@@ -1168,9 +1204,11 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         vatRate: vatRate,
         vatAmount: vatAmount,
         date: i.invoice_date,
-        status: "Đã thanh toán",
+        status: order?.status === "returned" ? "Đã thu hồi / Hoàn tiền" : (order?.status === "cancelled" ? "Đã hủy" : "Đã thanh toán"),
         paymentMethod: METHOD_NAMES[payment?.method] || payment?.method || "Chuyển khoản VietQR",
-        paymentStatus: payment?.status || "completed",
+        paymentStatus: order?.status === "returned" ? "refunded" : (order?.status === "cancelled" ? "cancelled" : (payment?.status || "completed")),
+        isVoided: order?.status === "returned" || order?.status === "cancelled",
+        voidReason: order?.status === "returned" ? "Khách hàng trả lại sản phẩm" : (order?.status === "cancelled" ? "Đơn hàng bị hủy" : null),
         items: items,
       };
     }));
@@ -1602,60 +1640,128 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       returned: "returned",
     };
 
-    const dbStatus = STATUS_REVERSE[status] || "processing";
-    must(await db.from("orders").update({ status: dbStatus, updated_at: new Date().toISOString() }).eq("order_id", id));
+    const STATUS_VN = {
+      pending: "Đang chờ duyệt",
+      processing: "Đã xác nhận",
+      shipped: "Đang giao hàng",
+      delivered: "Đã giao thành công",
+      cancelled: "Đã hủy",
+      returned: "Đã hoàn hàng",
+    };
 
-    // Nếu đơn hoàn tất (delivered), tự tạo hóa đơn nếu chưa có
-    if (dbStatus === "delivered") {
+    const targetDbStatus = STATUS_REVERSE[status] || "processing";
+
+    // 1. Lấy thông tin đơn hàng hiện tại
+    const currentOrder = one(must(await db.from("orders")
+      .select("*,order_items(*)")
+      .eq("order_id", id).limit(1)));
+    if (!currentOrder) throw new HttpError(404, "Không tìm thấy đơn hàng.");
+
+    const currentDbStatus = currentOrder.status;
+
+    // 2. Kiểm tra quy tắc chuyển trạng thái (Finite State Machine)
+    const ALLOWED_TRANSITIONS = {
+      pending: ["processing", "cancelled"],
+      processing: ["shipped", "cancelled"],
+      shipped: ["delivered", "returned"],
+      delivered: ["returned"],
+      cancelled: [],
+      returned: [],
+    };
+
+    if (currentDbStatus !== targetDbStatus) {
+      const allowed = ALLOWED_TRANSITIONS[currentDbStatus] || [];
+      if (!allowed.includes(targetDbStatus)) {
+        throw new HttpError(400, `Không thể chuyển trạng thái từ "${STATUS_VN[currentDbStatus] || currentDbStatus}" sang "${STATUS_VN[targetDbStatus] || targetDbStatus}".`);
+      }
+    }
+
+    // 3. Cập nhật trạng thái đơn hàng
+    must(await db.from("orders").update({
+      status: targetDbStatus,
+      updated_at: new Date().toISOString()
+    }).eq("order_id", id));
+
+    // 4. Khi đơn hoàn tất (delivered): Tự tạo hóa đơn nếu chưa có & hoàn tất thanh toán
+    if (targetDbStatus === "delivered") {
       const existingInv = one(must(await db.from("invoices").select("invoice_id").eq("order_id", id).limit(1)));
       if (!existingInv) {
-        const order = one(must(await db.from("orders").select("*,order_items(*)").eq("order_id", id).limit(1)));
-        if (order) {
-          const itemsSub = (order.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
-          const disc = Number(order.discount_amount || 0);
-          const taxable = Math.max(0, itemsSub - disc);
-          const vat = Math.round(taxable * 0.08);
-          const inv = one(must(await db.from("invoices").insert({
-            order_id: order.order_id,
-            buyer_name: order.cus_name,
-            buyer_phone: order.cus_phone,
-            buyer_address: order.address,
-            vat_rate: 8,
-            vat_amount: vat,
-            discount_amount: disc,
-            total_price: Number(order.total_amount),
-            invoice_date: new Date().toISOString(),
-          }).select("invoice_id")));
+        const itemsSub = (currentOrder.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+        const disc = Number(currentOrder.discount_amount || 0);
+        const taxable = Math.max(0, itemsSub - disc);
+        const vat = Math.round(taxable * 0.08);
+        const inv = one(must(await db.from("invoices").insert({
+          order_id: currentOrder.order_id,
+          buyer_name: currentOrder.cus_name,
+          buyer_phone: currentOrder.cus_phone,
+          buyer_address: currentOrder.address,
+          vat_rate: 8,
+          vat_amount: vat,
+          discount_amount: disc,
+          total_price: Number(currentOrder.total_amount),
+          invoice_date: new Date().toISOString(),
+        }).select("invoice_id")));
 
-          if (order.order_items && order.order_items.length > 0) {
-            await db.from("invoice_detail").insert(order.order_items.map((it) => ({
-              invoice_id: inv.invoice_id,
-              variant_id: it.variant_id,
-              product_name: it.product_name,
-              quantity: it.quantity,
-              unit_price: it.unit_price,
-              subtotal: it.subtotal,
-            })));
+        if (currentOrder.order_items && currentOrder.order_items.length > 0) {
+          await db.from("invoice_detail").insert(currentOrder.order_items.map((it) => ({
+            invoice_id: inv.invoice_id,
+            variant_id: it.variant_id,
+            product_name: it.product_name,
+            quantity: it.quantity,
+            unit_price: it.unit_price,
+            subtotal: it.subtotal,
+          })));
+        }
+
+        // Cập nhật thanh toán nếu có
+        await db.from("payments").update({ status: "completed" }).eq("order_id", id);
+
+        broadcastRealtime("INVOICE_CREATED", {
+          invoiceId: inv.invoice_id,
+          orderId: currentOrder.order_id,
+          amount: Number(currentOrder.total_amount),
+        });
+      }
+    }
+
+    // 5. Cập nhật trạng thái thanh toán tương ứng
+    if (targetDbStatus === "returned") {
+      await db.from("payments").update({ status: "refunded" }).eq("order_id", id);
+    } else if (targetDbStatus === "cancelled") {
+      await db.from("payments").update({ status: "cancelled" }).eq("order_id", id);
+    }
+
+    // 6. Khi đơn bị Hủy (cancelled) hoặc Hoàn hàng (returned): Tự động hoàn tồn kho cho từng sản phẩm
+    if ((targetDbStatus === "cancelled" || targetDbStatus === "returned") &&
+        currentDbStatus !== "cancelled" && currentDbStatus !== "returned") {
+      if (currentOrder.order_items && currentOrder.order_items.length > 0) {
+        for (const it of currentOrder.order_items) {
+          if (it.variant_id && it.quantity > 0) {
+            const v = one(must(await db.from("product_variants").select("stock_quantity").eq("variant_id", it.variant_id).limit(1)));
+            if (v) {
+              const newStock = Number(v.stock_quantity || 0) + Number(it.quantity);
+              await db.from("product_variants").update({ stock_quantity: newStock }).eq("variant_id", it.variant_id);
+            }
           }
-
-          broadcastRealtime("INVOICE_CREATED", {
-            invoiceId: inv.invoice_id,
-            orderId: order.order_id,
-            amount: Number(order.total_amount),
-          });
         }
       }
     }
 
     broadcastRealtime("ORDER_STATUS_CHANGED", {
       orderId: Number(id),
-      status: dbStatus,
-      statusLabel: status,
+      status: targetDbStatus,
+      statusLabel: STATUS_VN[targetDbStatus] || targetDbStatus,
     });
-    res.json({ ok: true, status: dbStatus });
+
+    res.json({
+      ok: true,
+      status: targetDbStatus,
+      statusLabel: STATUS_VN[targetDbStatus] || targetDbStatus,
+      message: `Cập nhật đơn hàng sang "${STATUS_VN[targetDbStatus]}" thành công.`
+    });
   }));
 
-  // ---------- 8. QUẢN LÝ NHẬP HÀNG ----------
+    // ---------- 8. QUẢN LÝ NHẬP HÀNG ----------
   router.get("/receipts", wrap(async (_req, res) => {
     const receipts = must(await db.from("goods_receipt")
       .select("gr_id,sup_id,receipt_date,total_amount,note,receipt_type,suppliers(name),gr_details(gr_detail_id,quantity,unit_cost,subtotal,variant_id,product_variants(pro_id,products(name)))")

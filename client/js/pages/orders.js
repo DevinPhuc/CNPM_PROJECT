@@ -46,7 +46,65 @@
       const vat = Math.round(taxable * 0.08);
       const shipping = Number(o.shipping_fee || 0);
       const totalToPay = taxable + vat + shipping;
+      const isReturned = o.status === "returned" || o.payment?.status === "refunded";
+      const isCancelled = o.status === "cancelled";
+
+      // Xử lý hiển thị trạng thái thanh toán logic
+      let payStatusHtml = "";
+      if (isReturned) {
+        payStatusHtml = '<span style="color:#7c3aed;font-weight:700;background:#f3e8ff;padding:2px 8px;border-radius:4px;border:1px solid #ddd6fe;display:inline-block;margin-top:2px;">↩️ Đã hoàn tiền (Refunded)</span>';
+      } else if (isCancelled) {
+        payStatusHtml = '<span style="color:#dc2626;font-weight:700;background:#fee2e2;padding:2px 8px;border-radius:4px;border:1px solid #fca5a5;display:inline-block;margin-top:2px;">Đã hủy thanh toán</span>';
+      } else {
+        const payText = PAY[o.payment?.status] || (o.payment?.method === "cod" ? "Thu tiền COD" : "Đã thanh toán");
+        payStatusHtml = `<span class="muted" style="color:var(--gold-rich);font-weight:600">${payText}</span>`;
+      }
+
+      // Xử lý banner cảnh báo trên đầu hóa đơn
+      let bannerHtml = "";
+      if (isReturned) {
+        bannerHtml = `
+          <div style="background:#fff1f2;border:1.5px solid #fecdd3;border-left:5px solid #e11d48;border-radius:8px;padding:11px 15px;margin-bottom:14px;color:#9f1239;font-size:12.5px;line-height:1.5;">
+            <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">⚠️ HÓA ĐƠN ĐÃ THU HỒI / HỦY BỎ</strong>
+            Đơn hàng này đã được hoàn trả lại sản phẩm. Hóa đơn không còn giá trị lưu hành và số tiền đã được hoàn lại cho khách hàng.
+          </div>
+        `;
+      } else if (isCancelled) {
+        bannerHtml = `
+          <div style="background:#fef2f2;border:1.5px solid #fee2e2;border-left:5px solid #ef4444;border-radius:8px;padding:11px 15px;margin-bottom:14px;color:#991b1b;font-size:12.5px;line-height:1.5;">
+            <strong style="font-size:13px;display:flex;align-items:center;gap:6px;">⚠️ ĐƠN HÀNG ĐÃ BỊ HỦY</strong>
+            Hóa đơn này không còn hiệu lực do đơn hàng đã được hủy bỏ.
+          </div>
+        `;
+      }
+
+      // Xử lý con dấu mộc điện tử
+      let stampHtml = "";
+      if (isReturned) {
+        stampHtml = `
+          <div class="inv-stamp" style="font-size:0.75rem;padding:6px 14px;border:2px dashed #e11d48;color:#e11d48;border-radius:6px;background:#fff1f2;display:inline-block;text-align:center;">
+            <span style="display:block;font-weight:800;font-size:11px;letter-spacing:0.5px;">✗ HÓA ĐƠN ĐÃ THU HỒI / HỦY BỎ</span>
+            <span style="font-size:9.5px;display:block;margin-top:2px;">LÝ DO: HÀNG BỊ TRẢ LẠI (HOÀN TIỀN)</span>
+          </div>
+        `;
+      } else if (isCancelled) {
+        stampHtml = `
+          <div class="inv-stamp" style="font-size:0.75rem;padding:6px 14px;border:2px dashed #991b1b;color:#991b1b;border-radius:6px;background:#fef2f2;display:inline-block;text-align:center;">
+            <span style="display:block;font-weight:800;font-size:11px;letter-spacing:0.5px;">✗ HÓA ĐƠN ĐÃ HỦY BỎ</span>
+            <span style="font-size:9.5px;display:block;margin-top:2px;">ĐƠN HÀNG BỊ HỦY</span>
+          </div>
+        `;
+      } else {
+        stampHtml = `
+          <div class="inv-stamp" style="font-size:0.75rem;padding:6px 12px">
+            <span>✓ XÁC THỰC KÝ ĐIỆN TỬ</span>
+            <span style="font-size:0.65rem">CÔNG TY TNHH TRANG SỨC JEWELS</span>
+          </div>
+        `;
+      }
+
       body.innerHTML = `
+        ${bannerHtml}
         <div class="inv-brand" style="margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
             <div>
@@ -54,7 +112,7 @@
               <small class="muted">CÔNG TY TNHH TRANG SỨC CAO CẤP JEWELS · MST: 0318999888</small>
             </div>
             <div style="text-align:right">
-              <strong>HÓA ĐƠN ĐIỆN TỬ</strong><br>
+              <strong>${isReturned ? 'HÓA ĐƠN ĐÃ THU HỒI' : (isCancelled ? 'HÓA ĐƠN ĐÃ HỦY' : 'HÓA ĐƠN ĐIỆN TỬ')}</strong><br>
               <small class="muted">Số: #HD-${String(o.order_id).padStart(6, "0")} · Ký hiệu: JW/26E</small>
             </div>
           </div>
@@ -66,26 +124,26 @@
         ${idx >= 0 ? `<div class="timeline no-print">${STEPS.map((s, i) => `<div class="${i <= idx ? "done" : ""}"><i></i>${STATUS[s]}</div>`).join("")}</div>` : ""}
         <div class="form-grid" style="margin:18px 0;background:#faf8f5;padding:12px 16px;border-radius:10px;border:1px solid #ebd9b5">
           <div><strong>Người nhận hàng:</strong><br>${esc(o.cus_name)} · ${esc(o.cus_phone)}<br><span class="muted">${esc(o.address)}</span></div>
-          <div><strong>Hình thức thanh toán:</strong><br>${METHOD[o.payment?.method] || o.payment?.method || "-"}<br><span class="muted" style="color:var(--gold-rich);font-weight:600">${PAY[o.payment?.status] || (o.payment?.method === "cod" ? "Thu tiền COD" : "Đã thanh toán")}</span></div>
+          <div><strong>Hình thức thanh toán:</strong><br>${METHOD[o.payment?.method] || o.payment?.method || "-"}<br>${payStatusHtml}</div>
         </div>
         <div class="od-items">${o.order_items.map((i) => `
           <div class="line-item"><img src="${esc(i.image_url || "https://placehold.co/100")}" alt=""><div><h4>${esc(i.product_name)}</h4><small>${esc(variantLabel(i))} · ${money(i.unit_price)} × ${i.quantity}</small></div><strong class="price">${money(i.subtotal)}</strong></div>`).join("")}</div>
         <div class="sum-row"><span>Tạm tính tiền hàng</span><strong>${money(sub)}</strong></div>
         ${disc > 0 ? `<div class="sum-row" style="color:var(--ok)"><span>Giảm giá${o.discount ? ` (${esc(o.discount.code)})` : ""}</span><strong>-${money(disc)}</strong></div>` : ""}
-        <div class="sum-row"><span>Thuế GTGT (VAT 8%)</span><strong style="color:var(--gold-rich)">+${money(vat)}</strong></div>
+        
         <div class="sum-row"><span>Phí vận chuyển</span><strong>${o.shipping_fee > 0 ? money(o.shipping_fee) : "Miễn phí"}</strong></div>
-        <div class="sum-row total"><span>Tổng cộng thanh toán</span><strong>${money(totalToPay)}</strong></div>
+        <div class="sum-row total"><span>${isReturned ? 'Tổng tiền đã hoàn trả' : 'Tổng cộng thanh toán'}</span><strong>${money(totalToPay)}</strong></div>
+        <div style="text-align:right;font-size:11.5px;color:#94a3b8;font-style:italic;margin-top:-6px;margin-bottom:6px;">
+          (Đã bao gồm thuế VAT)
+        </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;border-top:1px dashed var(--line);padding-top:12px">
-          <div class="inv-stamp" style="font-size:0.75rem;padding:6px 12px">
-            <span>✓ XÁC THỰC KÝ ĐIỆN TỬ</span>
-            <span style="font-size:0.65rem">CÔNG TY TNHH TRANG SỨC JEWELS</span>
-          </div>
+          ${stampHtml}
           <div style="display:flex;gap:10px;justify-content:flex-end" class="no-print">
             ${o.status === "pending" ? `<button class="btn outline" data-cancel="${o.order_id}">Hủy đơn</button>` : ""}
             <button class="btn gold" onclick="window.print()">🖨️ In hóa đơn</button>
           </div>
         </div>`;
-    } catch (e) { body.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3></div>`; }
+  } catch (e) { body.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3></div>`; }
   }
 
   async function cancel(id) {

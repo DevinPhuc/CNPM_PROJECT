@@ -314,9 +314,12 @@
           <p class="feedback ${voucher ? "ok" : ""}" id="voucherFb">${voucher ? "✓ " + esc(voucher.label) : ""}</p>
           <div class="sum-row"><span>Tạm tính tiền hàng</span><strong>${money(cart.subtotal)}</strong></div>
           ${discount > 0 ? `<div class="sum-row" style="color:var(--ok)"><span>Giảm giá</span><strong>-${money(discount)}</strong></div>` : ""}
-          <div class="sum-row"><span>Thuế GTGT (VAT 8%)</span><strong style="color:var(--gold-rich)">+${money(vat)}</strong></div>
+          
           <div class="sum-row"><span>Phí vận chuyển</span><strong>${cart.shipping ? money(cart.shipping) : "Miễn phí"}</strong></div>
           <div class="sum-row total"><span>Tổng cộng thanh toán</span><strong>${money(total)}</strong></div>
+          <div style="text-align:right;font-size:11.5px;color:#94a3b8;font-style:italic;margin-top:-6px;margin-bottom:8px;">
+            (Đã bao gồm thuế VAT)
+          </div>
 
           <button class="btn gold block" id="placeOrder" style="margin-top:18px;font-size:1.05rem;padding:14px">
             ${method === "cod" ? "Xác nhận đặt hàng →" : "Thanh toán →"}
@@ -994,11 +997,14 @@
             <div class="inv-calc-box">
               <div class="inv-calc-row"><span>Cộng tiền hàng:</span> <strong>${money(subtotalAmt)}</strong></div>
               ${discountAmt > 0 ? `<div class="inv-calc-row" style="color:var(--ok)"><span>Chiết khấu Voucher:</span> <strong>-${money(discountAmt)}</strong></div>` : ""}
-              <div class="inv-calc-row"><span>Thuế GTGT (VAT 8%):</span> <strong style="color:var(--gold-rich)">+${money(vatAmt)}</strong></div>
+              
               <div class="inv-calc-row"><span>Phí vận chuyển:</span> <strong>${shippingFee > 0 ? money(shippingFee) : "Miễn phí"}</strong></div>
               <div class="inv-calc-row grand-total">
                 <span>TỔNG TIỀN THANH TOÁN KHI NHẬN HÀNG:</span>
                 <strong style="color:var(--gold-rich)">${money(finalTotal)}</strong>
+              </div>
+              <div style="text-align:right;font-size:11.5px;color:#94a3b8;font-style:italic;margin-top:3px;">
+                (Đã bao gồm thuế VAT)
               </div>
             </div>
           </div>
@@ -1111,10 +1117,13 @@
               <div class="inv-calc-row"><span>Cộng tiền hàng:</span> <strong>${money(subtotalAmt)}</strong></div>
               ${discountAmt > 0 ? `<div class="inv-calc-row" style="color:var(--ok)"><span>Chiết khấu Voucher:</span> <strong>-${money(discountAmt)}</strong></div>` : ""}
               <div class="inv-calc-row"><span>Phí vận chuyển:</span> <strong>${shippingFee > 0 ? money(shippingFee) : "Miễn phí"}</strong></div>
-              <div class="inv-calc-row"><span>Thuế GTGT (VAT 8%):</span> <strong style="color:var(--gold-rich)">+${money(vatAmt)}</strong></div>
+              
               <div class="inv-calc-row grand-total">
                 <span>TỔNG CỘNG THANH TOÁN:</span>
                 <strong>${money(finalTotal)}</strong>
+              </div>
+              <div style="text-align:right;font-size:11.5px;color:#94a3b8;font-style:italic;margin-top:3px;">
+                (Đã bao gồm thuế VAT)
               </div>
             </div>
           </div>
