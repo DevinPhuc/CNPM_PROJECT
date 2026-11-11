@@ -14,6 +14,14 @@ class UserBll {
     if (phone && !/^\d{10}$/.test(cleanPhone)) {
       throw new HttpError(400, "Số điện thoại phải bao gồm đúng 10 chữ số.");
     }
+    if (dob) {
+      const maxYear = new Date().getFullYear() - 18;
+      const m = String(dob).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+      const birthYear = m ? parseInt(m[1], 10) : NaN;
+      if (!m || isNaN(birthYear) || birthYear > maxYear || birthYear < 1900) {
+        throw new HttpError(400, `Ngày sinh không hợp lệ: Năm sinh phải từ năm ${maxYear} trở về trước (đủ 18 tuổi trở lên).`);
+      }
+    }
 
     await userDal.update(userId, {
       ...splitName(name),

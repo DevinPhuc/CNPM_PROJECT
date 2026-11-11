@@ -1,6 +1,7 @@
 (async () => {
   const { api, $, money, esc, toast, variantLabel, refreshCartCount, openAuth, onLogin, ready } = Jewels;
   const root = $("#cartRoot");
+  if (!root) return;
 
   async function load() {
     if (!Jewels.state.user) {

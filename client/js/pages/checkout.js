@@ -1,6 +1,7 @@
 (async () => {
   const { api, $, $$, money, esc, toast, variantLabel, refreshCartCount, openAuth, onLogin, ready } = Jewels;
   const root = $("#checkoutRoot");
+  if (!root) return;
 
   const METHODS = [
     ["cod", "Thanh toán khi nhận hàng (COD)", "Trả tiền mặt cho nhân viên giao hàng khi nhận kiện hàng."],

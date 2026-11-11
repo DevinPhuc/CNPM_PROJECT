@@ -74,11 +74,22 @@ const auth = wrap(async (req, _res, next) => {
   next();
 });
 
+function normalizeAdultDob(dobStr) {
+  if (!dobStr) return null;
+  const m = String(dobStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const maxYear = new Date().getFullYear() - 18;
+  let year = parseInt(m[1], 10);
+  if (year > maxYear) year = maxYear;
+  if (year < 1900) year = 1900;
+  return `${String(year).padStart(4, "0")}-${m[2]}-${m[3]}`;
+}
+
 async function publicUser(id) {
   const user = one(must(await db.from("users").select("id,email,first_name,last_name,phone,is_active,roles").eq("id", id).limit(1)));
   if (!user || !user.is_active) throw new HttpError(401, "Tài khoản không tồn tại hoặc đã bị khóa.");
   const customer = one(must(await db.from("customers").select("dob").eq("user_id", id).limit(1)));
-  return { id: user.id, email: user.email, name: fullName(user), phone: user.phone, dob: customer?.dob || null };
+  return { id: user.id, email: user.email, name: fullName(user), phone: user.phone, dob: normalizeAdultDob(customer?.dob) };
 }
 
 // ---------- xác thực ----------
@@ -90,6 +101,7 @@ app.post("/api/auth/register", wrap(async (req, res) => {
   }
   if (String(password || "").length < 8) throw new HttpError(400, "Mật khẩu tối thiểu 8 ký tự.");
   if (String(name || "").trim().length < 2) throw new HttpError(400, "Vui lòng nhập họ tên.");
+  const cleanPhone = String(phone || "").trim().replace(/\D/g, "");
   if (!cleanPhone || !/^\d{10}$/.test(cleanPhone)) throw new HttpError(400, "Số điện thoại đăng ký phải có đúng 10 chữ số.");
   const exists = one(must(await db.from("users").select("id").eq("email", mail).limit(1)));
   if (exists) throw new HttpError(409, "Email này đã được đăng ký. Hãy đăng nhập.");
@@ -185,6 +197,14 @@ app.put("/api/me", auth, wrap(async (req, res) => {
   const cleanPhone = String(phone || "").trim().replace(/\D/g, "");
   if (phone && !/^\d{10}$/.test(cleanPhone)) {
     throw new HttpError(400, "Số điện thoại phải bao gồm đúng 10 chữ số.");
+  }
+  if (dob) {
+    const maxYear = new Date().getFullYear() - 18;
+    const m = String(dob).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const birthYear = m ? parseInt(m[1], 10) : NaN;
+    if (!m || isNaN(birthYear) || birthYear > maxYear || birthYear < 1900) {
+      throw new HttpError(400, `Ngày sinh không hợp lệ: Năm sinh phải từ năm ${maxYear} trở về trước (đủ 18 tuổi trở lên).`);
+    }
   }
   must(await db.from("users").update({ ...splitName(name), phone: cleanPhone || null }).eq("id", req.uid));
   const cust = one(must(await db.from("customers").select("user_id").eq("user_id", req.uid).limit(1)));
@@ -331,16 +351,22 @@ app.get("/api/products", wrap(async (req, res) => {
     if (max) query = query.lte("base_price", Number(max));
   }
   const order = { new: ["created_at", false], "price-asc": ["base_price", true], "price-desc": ["base_price", false], name: ["name", true] }[sort] || ["created_at", false];
-  query = query.order(order[0], { ascending: order[1] }).range((page - 1) * size, page * size - 1);
+  query = query.order(order[0], { ascending: order[1] });
 
-  const { data, error, count } = await query;
+  const { data: allRows, error, count } = await query;
   if (error) throw new HttpError(500, error.message);
+  // Đưa sản phẩm hết hàng xuống cuối danh sách (giữ nguyên thứ tự sắp xếp trong từng nhóm), rồi mới phân trang
+  const rowInStock = (p) => (p.product_variants || []).some((v) => v.is_active && Number(v.stock_quantity) > 0);
+  const rows = allRows || [];
+  const data = [...rows.filter(rowInStock), ...rows.filter((p) => !rowInStock(p))]
+    .slice((page - 1) * size, page * size);
   const images = await imagesFor(data.map((p) => p.pro_id));
   const items = data.map((p) => {
     const variants = (p.product_variants || []).filter((v) => v.is_active);
     const prices = variants.map((v) => Number(v.price ?? p.base_price));
-    const inStockVariants = variants.filter((v) => v.stock_quantity > 0);
+    const inStockVariants = variants.filter((v) => Number(v.stock_quantity) > 0);
     const defVariant = inStockVariants[0] || variants[0] || null;
+    const totalStock = inStockVariants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
     return {
       id: p.pro_id,
       name: p.name,
@@ -348,7 +374,9 @@ app.get("/api/products", wrap(async (req, res) => {
       image: mainImage(images[p.pro_id]),
       price: prices.length ? Math.min(...prices) : Number(p.base_price),
       maxPrice: prices.length ? Math.max(...prices) : Number(p.base_price),
-      inStock: inStockVariants.length > 0,
+      inStock: inStockVariants.length > 0 && totalStock > 0,
+      stock: totalStock,
+      stockQuantity: totalStock,
       defaultVariantId: defVariant?.variant_id || null,
     };
   });
@@ -722,6 +750,17 @@ app.get("/admin", (_req, res) => res.redirect("/admin/login.html"));
 app.get("/admin/", (_req, res) => res.redirect("/admin/login.html"));
 app.use("/admin", express.static(path.join(root, "admin"), staticOpts));
 app.get("/", (_req, res) => res.redirect("/client/home.html"));
+// Chuyển hướng các trang HTML truy cập trực tiếp từ root (ví dụ /shop.html) về /client/
+app.get("/:page.html", (req, res, next) => {
+  const page = req.params.page;
+  const fs = require("fs");
+  const target = path.join(root, "client", `${page}.html`);
+  if (fs.existsSync(target)) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/client/${page}.html${qs}`);
+  }
+  next();
+});
 app.use("/api", (_req, res) => res.status(404).json({ error: "Không tìm thấy API." }));
 
 app.use((err, _req, res, _next) => {

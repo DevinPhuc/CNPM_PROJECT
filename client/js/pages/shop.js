@@ -1,5 +1,6 @@
 (() => {
   const { api, $, $$, productCard, esc } = Jewels;
+  if (!$("#grid")) return;
   const params = new URLSearchParams(location.search);
 
   // Khởi tạo state bộ lọc (hỗ trợ chọn nhiều danh mục và khoảng giá)
@@ -28,6 +29,8 @@
   };
 
   let categories = [];
+  let currentRequestId = 0;
+  let isFirstLoad = true;
 
   function syncUrl() {
     const p = new URLSearchParams();
@@ -40,7 +43,8 @@
     sessionStorage.setItem("jewels_last_shop_url", location.href);
   }
 
-  function renderFilters() {
+  // Khởi tạo giao diện các nút danh mục 1 lần duy nhất (không dựng lại DOM khi lọc)
+  function buildCategoryFilters() {
     const roots = categories.filter((c) => !c.parent_cat_id);
     const item = (c, sub) => {
       return `<button data-cat="${c.cat_id}" style="${sub ? "margin-left:14px;font-size:.92em" : ""}">
@@ -64,8 +68,11 @@
               .join("")
         )
         .join("");
+  }
 
-    // Kiểm tra danh mục: nếu chọn hết tất cả các danh mục hiển thị -> Tự động chuyển về "Tất cả"
+  // Cập nhật trạng thái active & dấu tích trên các nút bộ lọc hiện có (không giật lag)
+  function updateFilterStates() {
+    // 1. Kiểm tra danh mục: nếu chọn hết tất cả các danh mục hiển thị -> Tự động chuyển về "Tất cả"
     const allCatBtns = Array.from($("#catFilter").querySelectorAll("button[data-cat]"))
       .filter((b) => Boolean(b.dataset.cat));
     const allCatIds = allCatBtns.map((b) => b.dataset.cat);
@@ -87,7 +94,7 @@
       }
     });
 
-    // Kiểm tra khoảng giá: nếu chọn hết tất cả các khoảng giá -> Tự động chuyển về "Tất cả"
+    // 2. Kiểm tra khoảng giá: nếu chọn hết tất cả các khoảng giá -> Tự động chuyển về "Tất cả"
     const allPriceBtns = Array.from($("#priceFilter").querySelectorAll("button[data-range]"))
       .filter((b) => Boolean(b.dataset.range));
     const allPriceRanges = allPriceBtns.map((b) => b.dataset.range);
@@ -111,7 +118,7 @@
 
     $("#sortSel").value = st.sort;
 
-    // Tiêu đề trang
+    // 3. Tiêu đề trang
     if (st.q) {
       $("#shopTitle").textContent = `Kết quả cho “${st.q}”`;
     } else if (st.cats.length === 1) {
@@ -127,8 +134,17 @@
     }
   }
 
+  // Tải danh sách sản phẩm theo bộ lọc (không giật màn hình, không hiện skeleton khi lọc)
   async function load() {
-    $("#grid").innerHTML = '<div class="skeleton"></div>'.repeat(6);
+    const grid = $("#grid");
+    if (isFirstLoad) {
+      grid.innerHTML = '<div class="skeleton"></div>'.repeat(6);
+    } else {
+      // Khi lọc: giữ nguyên sản phẩm và làm mờ nhẹ, không tải lại trang hay chớp khung xám
+      grid.classList.add("is-filtering");
+    }
+
+    const reqId = ++currentRequestId;
     const qs = new URLSearchParams({ sort: st.sort, page: st.page, size: 12 });
     if (st.cats.length) qs.set("cats", st.cats.join(","));
     if (st.prices.length) qs.set("prices", st.prices.join(","));
@@ -136,20 +152,27 @@
 
     try {
       const data = await api("/products?" + qs);
+      if (reqId !== currentRequestId) return; // Bỏ qua nếu có yêu cầu lọc mới hơn
+
       $("#resultCount").textContent = `${data.total} sản phẩm`;
-      $("#grid").innerHTML = data.items.length
+      grid.innerHTML = data.items.length
         ? data.items.map(productCard).join("")
-        : '<div class="empty" style="grid-column:1/-1"><h3>Không tìm thấy sản phẩm</h3><p>Thử đổi từ khóa hoặc chọn Tất cả.</p></div>';
+        : '<div class="empty" style="grid-column:1/-1"><h3>Không tìm thấy sản phẩm phù hợp</h3><p>Thử đổi từ khóa hoặc chọn Tất cả.</p></div>';
+      
       $("#pager").innerHTML = data.pages > 1
         ? Array.from({ length: data.pages }, (_, i) => `<button class="${i + 1 === data.page ? "active" : ""}" data-page="${i + 1}">${i + 1}</button>`).join("")
         : "";
     } catch (e) {
-      $("#grid").innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Không tải được sản phẩm</h3><p>${esc(e.message)}</p></div>`;
+      if (reqId !== currentRequestId) return;
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Không tải được sản phẩm</h3><p>${esc(e.message)}</p></div>`;
+    } finally {
+      if (reqId === currentRequestId) {
+        grid.classList.remove("is-filtering");
+        isFirstLoad = false;
+        syncUrl();
+      }
     }
-    syncUrl();
   }
-
-  const refresh = () => { renderFilters(); load(); };
 
   // Xử lý chọn nhiều danh mục
   $("#catFilter").addEventListener("click", (e) => {
@@ -176,7 +199,8 @@
       }
     }
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
   // Xử lý chọn nhiều khoảng giá
@@ -204,7 +228,8 @@
       }
     }
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
   $("#sortSel").addEventListener("change", (e) => {
@@ -222,23 +247,26 @@
     }
   });
 
-  // Nút "Tất cả" (trước đây là "Xóa bộ lọc"): Xóa sạch tất cả bộ lọc
+  // Nút "Tất cả": Xóa sạch tất cả bộ lọc
   $("#clearFilters").addEventListener("click", () => {
     st.cats = [];
     st.prices = [];
     st.q = "";
     st.sort = "new";
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
+  // Khởi chạy ban đầu
   (async () => {
     try {
       categories = await api("/categories");
     } catch {
       categories = [];
     }
-    renderFilters();
+    buildCategoryFilters();
+    updateFilterStates();
     await load();
   })();
 

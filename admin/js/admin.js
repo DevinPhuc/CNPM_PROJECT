@@ -785,11 +785,22 @@
     const item = state.customers.find((c) => c.id === id);
     if (!item) return;
     const form = document.getElementById("customerForm");
+    const dobInput = form.querySelector('[name="dob"]');
+    const maxYear = new Date().getFullYear() - 18;
+    if (dobInput) {
+      dobInput.min = "1900-01-01";
+      dobInput.max = `${maxYear}-12-31`;
+    }
     form.querySelector('[name="id"]').value = item.id;
     form.querySelector('[name="name"]').value = item.name;
     form.querySelector('[name="email"]').value = item.email;
     form.querySelector('[name="phone"]').value = item.phone || "";
-    form.querySelector('[name="dob"]').value = item.dob || "";
+    if (dobInput) {
+      let dobVal = item.dob || "";
+      const m = String(dobVal).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m && parseInt(m[1], 10) > maxYear) dobVal = `${maxYear}-${m[2]}-${m[3]}`;
+      dobInput.value = dobVal;
+    }
     form.querySelector('[name="address"]').value = item.address || "";
     form.querySelector('[name="status"]').value = item.status;
     document.getElementById("customerFormTitle").textContent = "Cập nhật khách hàng";
@@ -2788,15 +2799,30 @@
   // 3. Customer Form
   const customerForm = document.getElementById("customerForm");
   if (customerForm) {
+    const custDobInput = customerForm.querySelector('[name="dob"]');
+    if (custDobInput) {
+      const maxYear = new Date().getFullYear() - 18;
+      custDobInput.min = "1900-01-01";
+      custDobInput.max = `${maxYear}-12-31`;
+    }
     customerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(customerForm);
       const id = fd.get("id");
+      const rawDob = (fd.get("dob") || "").trim();
+      if (rawDob) {
+        const maxYear = new Date().getFullYear() - 18;
+        const m = rawDob.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m || parseInt(m[1], 10) > maxYear || parseInt(m[1], 10) < 1900) {
+          toast(`Ngày sinh không hợp lệ: Năm sinh phải từ năm ${maxYear} trở về trước (trên 18 tuổi).`, "error");
+          return;
+        }
+      }
       const body = {
         name: fd.get("name"),
         email: fd.get("email"),
         phone: fd.get("phone"),
-        dob: fd.get("dob") || null,
+        dob: rawDob || null,
         address: fd.get("address"),
         status: fd.get("status"),
       };
