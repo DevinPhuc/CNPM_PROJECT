@@ -5,7 +5,8 @@
   const state = { user: null, cartCount: 0 };
   const listeners = [];
 
-  const getAuthToken = () => sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  const getAuthToken = () =>
+    sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
   const setAuthToken = (token) => {
     if (token) {
       sessionStorage.setItem(TOKEN_KEY, token);
@@ -25,10 +26,25 @@
   };
 
   const money = (n) => Number(n || 0).toLocaleString("vi-VN") + "đ";
-  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const esc = (s) =>
+    String(s ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
-  const dateVN = (d) => new Date(d).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+  const dateVN = (d) =>
+    new Date(d).toLocaleString("vi-VN", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
 
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "Content-Type": "application/json" };
@@ -36,13 +52,22 @@
     if (token) headers.Authorization = "Bearer " + token;
     let res;
     try {
-      res = await fetch("/api" + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      res = await fetch("/api" + path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
     } catch {
-      throw new Error("Không kết nối được máy chủ. Hãy chạy server (npm start) và mở trang qua http://localhost:3000.");
+      throw new Error(
+        "Không kết nối được máy chủ. Hãy chạy server (npm start) và mở trang qua http://localhost:3000.",
+      );
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if ((res.status === 401 || (res.status === 403 && data.isLocked)) && token) {
+      if (
+        (res.status === 401 || (res.status === 403 && data.isLocked)) &&
+        token
+      ) {
         if (data.isLocked) {
           handleAccountLocked();
           return;
@@ -52,10 +77,13 @@
         state.cartCount = 0;
         renderAccount();
       }
-      const msg = data.message || data.error || "Có lỗi xảy ra, vui lòng thử lại.";
+      const msg =
+        data.message || data.error || "Có lỗi xảy ra, vui lòng thử lại.";
       const err = new Error(msg);
       err.status = res.status;
-      err.isLocked = Boolean(data.isLocked || (msg && msg.toLowerCase().includes("khóa")));
+      err.isLocked = Boolean(
+        data.isLocked || (msg && msg.toLowerCase().includes("khóa")),
+      );
       err.data = data;
       throw err;
     }
@@ -77,7 +105,8 @@
   }
 
   function getLoggedInUserEmail() {
-    if (state.user && state.user.email) return String(state.user.email).toLowerCase();
+    if (state.user && state.user.email)
+      return String(state.user.email).toLowerCase();
     const saved = sessionStorage.getItem("jewels_user_email");
     if (saved) return String(saved).toLowerCase();
     return "";
@@ -90,10 +119,13 @@
     state.cartCount = 0;
     renderAccount();
     if (curEmail) {
-      try { broadcast("ACCOUNT_CHANGED", { email: curEmail, isActive: false }); } catch {}
+      try {
+        broadcast("ACCOUNT_CHANGED", { email: curEmail, isActive: false });
+      } catch {}
     }
     // Chuyển hướng ngay lập tức (không alert chặn), tự động văng luôn mà không cần reload trang
-    const targetUrl = "/client/login.html?locked=1&email=" + encodeURIComponent(curEmail || "");
+    const targetUrl =
+      "/client/login.html?locked=1&email=" + encodeURIComponent(curEmail || "");
     if (location.pathname.endsWith("login.html")) {
       if (typeof window._showLockedAlert === "function") {
         window._showLockedAlert(curEmail);
@@ -105,7 +137,11 @@
 
   function toast(message, type = "") {
     let box = $("#toasts");
-    if (!box) { box = document.createElement("div"); box.id = "toasts"; document.body.appendChild(box); }
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "toasts";
+      document.body.appendChild(box);
+    }
     const el = document.createElement("div");
     el.className = "toast " + type;
     el.textContent = message;
@@ -256,7 +292,9 @@
 
         // Đồng bộ các dialog bên ngoài main (như #addrDialog trong user.html, #orderDialog trong orders.html)
         $$("body > dialog:not(#authDialog)").forEach((d) => d.remove());
-        const newDialogs = doc.querySelectorAll("body > dialog:not(#authDialog)");
+        const newDialogs = doc.querySelectorAll(
+          "body > dialog:not(#authDialog)",
+        );
         const siteFooter = $("#site-footer");
         newDialogs.forEach((d) => {
           if (siteFooter) {
@@ -272,7 +310,11 @@
         // Cập nhật URL trình duyệt TRƯỚC KHI thực thi script mới
         // để các script (như shop.js) đọc đúng query parameters từ location.search
         if (push) {
-          history.pushState({ page: document.body.dataset.page, url: destUrl.href }, "", destUrl.href);
+          history.pushState(
+            { page: document.body.dataset.page, url: destUrl.href },
+            "",
+            destUrl.href,
+          );
           sessionStorage.setItem("jewels_last_shop_url", location.href);
         }
 
@@ -325,16 +367,43 @@
     const a = e.target.closest("a");
     if (!a) return;
     const href = a.getAttribute("href");
-    if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:") || href.startsWith("tel:") || a.target === "_blank") {
+    if (
+      !href ||
+      href.startsWith("#") ||
+      href.startsWith("javascript:") ||
+      href.startsWith("http://") ||
+      href.startsWith("https://") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:") ||
+      a.target === "_blank"
+    ) {
       return;
     }
     const curPage = document.body.dataset.page || "";
     const baseName = href.split("?")[0].split("#")[0];
-    if (curPage === "login" || curPage === "register" || curPage === "admin-login" || baseName === "login.html" || baseName === "register.html" || a.hasAttribute("data-no-spa")) {
+    if (
+      curPage === "login" ||
+      curPage === "register" ||
+      curPage === "admin-login" ||
+      baseName === "login.html" ||
+      baseName === "register.html" ||
+      a.hasAttribute("data-no-spa")
+    ) {
       return;
     }
-    const internalPages = ["home.html", "shop.html", "orders.html", "user.html", "cart.html", "checkout.html", "product.html"];
-    if (internalPages.includes(baseName) || (baseName.endsWith(".html") && !baseName.includes("/admin/"))) {
+    const internalPages = [
+      "home.html",
+      "shop.html",
+      "orders.html",
+      "user.html",
+      "cart.html",
+      "checkout.html",
+      "product.html",
+    ];
+    if (
+      internalPages.includes(baseName) ||
+      (baseName.endsWith(".html") && !baseName.includes("/admin/"))
+    ) {
       e.preventDefault();
       navigate(href);
     }
@@ -350,7 +419,8 @@
     if (page === "login" || page === "register" || page === "admin-login") {
       return;
     }
-    const link = (href, label, key) => `<a href="${href}" class="${page === key ? "active" : ""}" data-nav="${key}">${label}</a>`;
+    const link = (href, label, key) =>
+      `<a href="${href}" class="${page === key ? "active" : ""}" data-nav="${key}">${label}</a>`;
     const header = $("#site-header");
     if (header) {
       header.className = "site-header";
@@ -375,7 +445,9 @@
             <button class="icon-btn nav-toggle" id="navToggle" aria-label="Menu">${ICONS.menu}</button>
           </div>
         </div>`;
-      $("#navToggle").addEventListener("click", () => $("#navLinks").classList.toggle("open"));
+      $("#navToggle").addEventListener("click", () =>
+        $("#navLinks").classList.toggle("open"),
+      );
       $("#navSearch").addEventListener("submit", (e) => {
         e.preventDefault();
         const q = new FormData(e.target).get("q").trim();
@@ -384,16 +456,22 @@
 
       const navLinks = $("#navLinks");
       if (navLinks) {
-        navLinks.addEventListener("mouseenter", (e) => {
-          const a = e.target.closest("a");
-          if (a) updateNavIndicator(a);
-        }, true);
+        navLinks.addEventListener(
+          "mouseenter",
+          (e) => {
+            const a = e.target.closest("a");
+            if (a) updateNavIndicator(a);
+          },
+          true,
+        );
         navLinks.addEventListener("mouseleave", () => {
           updateNavIndicator();
         });
       }
       setTimeout(updateNavIndicator, 60);
-      window.addEventListener("resize", () => updateNavIndicator(), { passive: true });
+      window.addEventListener("resize", () => updateNavIndicator(), {
+        passive: true,
+      });
     }
     const footer = $("#site-footer");
     if (footer) {
@@ -599,12 +677,19 @@
   function setCartCount(n) {
     state.cartCount = n;
     const badge = $("#cartBadge");
-    if (badge) { badge.textContent = n || ""; badge.dataset.n = n; }
+    if (badge) {
+      badge.textContent = n || "";
+      badge.dataset.n = n;
+    }
   }
 
   async function refreshCartCount() {
     if (!state.user) return setCartCount(0);
-    try { setCartCount((await api("/cart")).count); } catch { /* bỏ qua */ }
+    try {
+      setCartCount((await api("/cart")).count);
+    } catch {
+      /* bỏ qua */
+    }
   }
 
   // ---------- đăng nhập & đăng ký riêng biệt ----------
@@ -623,11 +708,15 @@
       if (m === "register") {
         loginView.hidden = true;
         regView.hidden = false;
-        regForm.querySelector("input[name=name]")?.focus({ preventScroll: true });
+        regForm
+          .querySelector("input[name=name]")
+          ?.focus({ preventScroll: true });
       } else {
         loginView.hidden = false;
         regView.hidden = true;
-        loginForm.querySelector("input[name=email]")?.focus({ preventScroll: true });
+        loginForm
+          .querySelector("input[name=email]")
+          ?.focus({ preventScroll: true });
       }
       loginFb.textContent = "";
       regFb.textContent = "";
@@ -635,10 +724,19 @@
     dlg._setMode = setMode;
 
     // Chuyển đổi giữa Đăng nhập và Đăng ký qua nút bấm trong callout card
-    $$("[data-go]", dlg).forEach((b) => b.addEventListener("click", () => setMode(b.dataset.go)));
+    $$("[data-go]", dlg).forEach((b) =>
+      b.addEventListener("click", () => setMode(b.dataset.go)),
+    );
     $("[data-close]", dlg).addEventListener("click", () => dlg.close());
-    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
-    dlg.addEventListener("close", () => { if (pendingLogin) { pendingLogin.reject(new Error("cancelled")); pendingLogin = null; } });
+    dlg.addEventListener("click", (e) => {
+      if (e.target === dlg) dlg.close();
+    });
+    dlg.addEventListener("close", () => {
+      if (pendingLogin) {
+        pendingLogin.reject(new Error("cancelled"));
+        pendingLogin = null;
+      }
+    });
 
     // Nút ẩn/hiện mật khẩu (eye toggle)
     $$(".pw-toggle-btn", dlg).forEach((btn) => {
@@ -649,14 +747,19 @@
         inp.type = isPw ? "text" : "password";
         const img = btn.querySelector("img");
         if (img) {
-          img.src = isPw ? "../shared/images/Icons/eye-closed.png" : "../shared/images/Icons/eye.png";
+          img.src = isPw
+            ? "../shared/images/Icons/eye-closed.png"
+            : "../shared/images/Icons/eye.png";
           img.alt = isPw ? "Ẩn mật khẩu" : "Hiện mật khẩu";
         }
       });
     });
 
     $("#forgotPwLink", dlg)?.addEventListener("click", () => {
-      toast("Vui lòng liên hệ CSKH qua hotline 1900 8899 hoặc gửi email hỗ trợ để đặt lại mật khẩu.", "ok");
+      toast(
+        "Vui lòng liên hệ CSKH qua hotline 1900 8899 hoặc gửi email hỗ trợ để đặt lại mật khẩu.",
+        "ok",
+      );
     });
 
     // Xử lý SUBMIT ĐĂNG NHẬP
@@ -666,7 +769,10 @@
       loginSubmit.disabled = true;
       loginFb.textContent = "";
       try {
-        const data = await api("/auth/login", { method: "POST", body: { email: f.email, password: f.password } });
+        const data = await api("/auth/login", {
+          method: "POST",
+          body: { email: f.email, password: f.password },
+        });
         setAuthToken(data.token);
         if (data.user?.email) {
           sessionStorage.setItem("jewels_user_email", data.user.email);
@@ -678,7 +784,8 @@
         }
         state.user = data.user;
         loginForm.reset();
-        const p = pendingLogin; pendingLogin = null;
+        const p = pendingLogin;
+        pendingLogin = null;
         dlg.close();
         renderAccount();
         await refreshCartCount();
@@ -696,14 +803,18 @@
               <p style="margin:0 0 6px; font-size:12px; color:#881337; line-height:1.4;">
                 Tài khoản <strong>${f.email}</strong> đang bị khóa bởi quản trị viên.
               </p>
-              ${isPending ? `
+              ${
+                isPending
+                  ? `
                 <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:6px 8px; color:#92400e; font-size:11px; margin-bottom:6px;">
                   ⏳ <strong>Yêu cầu mở khóa của bạn đang chờ phê duyệt.</strong>
                 </div>
-              ` : ''}
-              <textarea id="modalUnlockReason" placeholder="${isPending ? 'Cập nhật thêm lời nhắn...' : 'Nhập lý do hoặc lời nhắn gửi ban quản trị (tùy chọn)...'}" style="width:100%; border:1px solid #fecdd3; border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit; resize:vertical; min-height:42px; margin-bottom:8px; box-sizing:border-box;">${err.unlockReason || ''}</textarea>
+              `
+                  : ""
+              }
+              <textarea id="modalUnlockReason" placeholder="${isPending ? "Cập nhật thêm lời nhắn..." : "Nhập lý do hoặc lời nhắn gửi ban quản trị (tùy chọn)..."}" style="width:100%; border:1px solid #fecdd3; border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit; resize:vertical; min-height:42px; margin-bottom:8px; box-sizing:border-box;">${err.unlockReason || ""}</textarea>
               <button type="button" class="btn block gold" id="modalBtnRequestUnlock" style="padding:7px 10px; font-size:12px; border:none; border-radius:6px; cursor:pointer; width:100%; font-weight:600;">
-                ${isPending ? '📩 Cập nhật yêu cầu mở tài khoản' : '📩 Xin mở lại tài khoản'}
+                ${isPending ? "📩 Cập nhật yêu cầu mở tài khoản" : "📩 Xin mở lại tài khoản"}
               </button>
               <div id="modalUnlockNotice" style="margin-top:6px; font-size:11px; font-weight:600;"></div>
             </div>
@@ -717,10 +828,14 @@
             try {
               const res = await api("/auth/request-unlock", {
                 method: "POST",
-                body: { email: f.email, reason: reasonEl ? reasonEl.value : "" }
+                body: {
+                  email: f.email,
+                  reason: reasonEl ? reasonEl.value : "",
+                },
               });
               notice.style.color = "#047857";
-              notice.textContent = "✅ " + (res.message || "Đã gửi yêu cầu xin mở lại tài khoản!");
+              notice.textContent =
+                "✅ " + (res.message || "Đã gửi yêu cầu xin mở lại tài khoản!");
               reqBtn.disabled = false;
               reqBtn.textContent = "📩 Cập nhật lại yêu cầu";
             } catch (uErr) {
@@ -735,13 +850,16 @@
           if (window._modalUnlockPoll) clearInterval(window._modalUnlockPoll);
           window._modalUnlockPoll = setInterval(async () => {
             try {
-              const st = await api("/auth/unlock-status?email=" + encodeURIComponent(f.email));
+              const st = await api(
+                "/auth/unlock-status?email=" + encodeURIComponent(f.email),
+              );
               if (st && st.isActive) {
                 clearInterval(window._modalUnlockPoll);
                 window._modalUnlockPoll = null;
                 if (notice) {
                   notice.style.color = "#047857";
-                  notice.innerHTML = "🎉 <strong>Tài khoản đã được mở khóa!</strong> Bạn có thể bấm Đăng nhập ngay.";
+                  notice.innerHTML =
+                    "🎉 <strong>Tài khoản đã được mở khóa!</strong> Bạn có thể bấm Đăng nhập ngay.";
                 }
                 if (reqBtn) reqBtn.style.display = "none";
                 loginSubmit.disabled = false;
@@ -766,18 +884,33 @@
     regForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(regForm));
-      if (!f.name || f.name.trim().length < 2) return (regFb.textContent = "Vui lòng nhập họ và tên.");
+      if (!f.name || f.name.trim().length < 2)
+        return (regFb.textContent = "Vui lòng nhập họ và tên.");
       const cleanPhone = (f.phone || "").trim().replace(/\D/g, "");
-      if (!/^\d{10}$/.test(cleanPhone)) return (regFb.textContent = "Số điện thoại phải bao gồm đúng 10 chữ số.");
-      const cleanMail = String(f.email || "").trim().toLowerCase();
+      if (!/^\d{10}$/.test(cleanPhone))
+        return (regFb.textContent =
+          "Số điện thoại phải bao gồm đúng 10 chữ số.");
+      const cleanMail = String(f.email || "")
+        .trim()
+        .toLowerCase();
       if (!/^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(cleanMail)) {
-        return (regFb.textContent = "Email đăng ký phải có đầy đủ cú pháp @gmail.com sau cùng (ví dụ: ban@gmail.com).");
+        return (regFb.textContent =
+          "Email đăng ký phải có đầy đủ cú pháp @gmail.com sau cùng (ví dụ: ban@gmail.com).");
       }
-      if (f.password !== f.confirm) return (regFb.textContent = "Mật khẩu xác nhận chưa khớp.");
+      if (f.password !== f.confirm)
+        return (regFb.textContent = "Mật khẩu xác nhận chưa khớp.");
       regSubmit.disabled = true;
       regFb.textContent = "";
       try {
-        const data = await api("/auth/register", { method: "POST", body: { name: f.name, email: cleanMail, phone: cleanPhone, password: f.password } });
+        const data = await api("/auth/register", {
+          method: "POST",
+          body: {
+            name: f.name,
+            email: cleanMail,
+            phone: cleanPhone,
+            password: f.password,
+          },
+        });
         setAuthToken(data.token);
         if (data.user?.email) {
           sessionStorage.setItem("jewels_user_email", data.user.email);
@@ -789,11 +922,15 @@
         }
         state.user = data.user;
         regForm.reset();
-        const p = pendingLogin; pendingLogin = null;
+        const p = pendingLogin;
+        pendingLogin = null;
         dlg.close();
         renderAccount();
         await refreshCartCount();
-        toast("Chúc mừng " + data.user.name + " đã gia nhập thành viên Jewels!", "ok");
+        toast(
+          "Chúc mừng " + data.user.name + " đã gia nhập thành viên Jewels!",
+          "ok",
+        );
         if (p) p.resolve(data.user);
         listeners.forEach((fn) => fn(state.user));
       } catch (err) {
@@ -825,21 +962,31 @@
   // Đảm bảo đã đăng nhập; mở hộp thoại nếu chưa.
   function requireLogin() {
     if (state.user) return Promise.resolve(state.user);
-    return new Promise((resolve, reject) => { pendingLogin = { resolve, reject }; openAuth(); });
+    return new Promise((resolve, reject) => {
+      pendingLogin = { resolve, reject };
+      openAuth();
+    });
   }
 
   function logout() {
     clearAuth();
     state.user = null;
     toast("Bạn đã đăng xuất.");
-    if (["cart", "checkout", "orders", "user"].includes(document.body.dataset.page)) location.href = "home.html";
+    if (
+      ["cart", "checkout", "orders", "user"].includes(
+        document.body.dataset.page,
+      )
+    )
+      location.href = "home.html";
     else renderAccount();
   }
 
   // ---------- thành phần dùng chung ----------
   function productCard(p) {
-    const range = p.maxPrice > p.price ? `Từ ${money(p.price)}` : money(p.price);
-    const isOut = p.inStock === false || (typeof p.stock === "number" && p.stock <= 0);
+    const range =
+      p.maxPrice > p.price ? `Từ ${money(p.price)}` : money(p.price);
+    const isOut =
+      p.inStock === false || (typeof p.stock === "number" && p.stock <= 0);
     let badgeHtml = "";
     if (isOut) {
       badgeHtml = '<span class="tag" style="background:#555">Hết hàng</span>';
@@ -849,14 +996,20 @@
       badgeHtml = '<span class="tag">💎 Kim cương cao cấp</span>';
     } else if (p.id === 3 || p.isBestseller) {
       badgeHtml = '<span class="tag">🔥 Bán chạy nhất</span>';
-    } else if (p.id === 4 || (p.category && p.category.toLowerCase().includes("vàng"))) {
+    } else if (
+      p.id === 4 ||
+      (p.category && p.category.toLowerCase().includes("vàng"))
+    ) {
       badgeHtml = '<span class="tag">✦ Vàng 18K Ý</span>';
     }
-    const stockQty = typeof p.stock === "number" ? p.stock : (p.stockQuantity ?? (isOut ? 0 : ""));
+    const stockQty =
+      typeof p.stock === "number"
+        ? p.stock
+        : (p.stockQuantity ?? (isOut ? 0 : ""));
     const stockHtml = isOut
       ? '<div class="card-stock card-stock-out"><span class="stock-pill out">Hết hàng</span></div>'
       : `<div class="card-stock card-stock-in"><span class="stock-dot"></span><span>Hiện đang có sẵn: <strong>${stockQty !== "" ? stockQty : "nhiều"}</strong> sản phẩm</span></div>`;
-    const maxQty = (typeof p.stock === "number" && p.stock > 0) ? p.stock : 99;
+    const maxQty = typeof p.stock === "number" && p.stock > 0 ? p.stock : 99;
 
     return `<a class="card" href="product.html?id=${p.id}" data-stock="${stockQty}">
       ${badgeHtml}
@@ -982,7 +1135,10 @@
         variantId = v.id;
       }
 
-      await api("/cart/items", { method: "POST", body: { variantId: Number(variantId), quantity: qty } });
+      await api("/cart/items", {
+        method: "POST",
+        body: { variantId: Number(variantId), quantity: qty },
+      });
       await refreshCartCount();
       btn.classList.add("added");
       btn.innerHTML = `<span>✓ Đã thêm (${qty})</span>`;
@@ -1001,7 +1157,10 @@
     }
   });
 
-  const variantLabel = (l) => [l.material, l.gemstone, l.size != null ? "Size " + l.size : null].filter(Boolean).join(" · ");
+  const variantLabel = (l) =>
+    [l.material, l.gemstone, l.size != null ? "Size " + l.size : null]
+      .filter(Boolean)
+      .join(" · ");
 
   // ---------- HIỆU ỨNG POP-UP ĐẨY MÀN HÌNH 2 CHIỀU KHI LƯỚT LÊN & LƯỚT XUỐNG ----------
   function initScrollReveal() {
@@ -1020,37 +1179,42 @@
     handleHeaderScroll();
 
     if (typeof IntersectionObserver === "undefined") {
-      document.querySelectorAll(".reveal-on-scroll").forEach((el) => el.classList.add("is-revealed"));
+      document
+        .querySelectorAll(".reveal-on-scroll")
+        .forEach((el) => el.classList.add("is-revealed"));
       return;
     }
 
     // 2. IntersectionObserver kích hoạt hiệu ứng 2 chiều
-    const observer = new IntersectionObserver((entries) => {
-      const winH = window.innerHeight || 800;
-      entries.forEach((entry) => {
-        const el = entry.target;
-        if (entry.isIntersecting) {
-          // Khi phần tử bước vào khung nhìn -> trồi về vị trí chuẩn translateY(0)
-          el.classList.add("is-revealed");
-        } else {
-          // Khi phần tử ra khỏi khung nhìn -> thiết lập hướng sẵn sàng để lướt quay lại sẽ trồi tiếp
-          const rect = entry.boundingClientRect;
-          if (rect.top >= winH - 20) {
-            // Nằm dưới đáy màn hình -> chuẩn bị trồi lên từ dưới khi cuộn xuống
-            el.classList.remove("is-revealed", "from-top");
-            el.classList.add("from-bottom");
-          } else if (rect.bottom <= 20) {
-            // Nằm trên đỉnh màn hình -> chuẩn bị trôi xuống từ trên khi cuộn ngược lên
-            el.classList.remove("is-revealed", "from-bottom");
-            el.classList.add("from-top");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const winH = window.innerHeight || 800;
+        entries.forEach((entry) => {
+          const el = entry.target;
+          if (entry.isIntersecting) {
+            // Khi phần tử bước vào khung nhìn -> trồi về vị trí chuẩn translateY(0)
+            el.classList.add("is-revealed");
+          } else {
+            // Khi phần tử ra khỏi khung nhìn -> thiết lập hướng sẵn sàng để lướt quay lại sẽ trồi tiếp
+            const rect = entry.boundingClientRect;
+            if (rect.top >= winH - 20) {
+              // Nằm dưới đáy màn hình -> chuẩn bị trồi lên từ dưới khi cuộn xuống
+              el.classList.remove("is-revealed", "from-top");
+              el.classList.add("from-bottom");
+            } else if (rect.bottom <= 20) {
+              // Nằm trên đỉnh màn hình -> chuẩn bị trôi xuống từ trên khi cuộn ngược lên
+              el.classList.remove("is-revealed", "from-bottom");
+              el.classList.add("from-top");
+            }
           }
-        }
-      });
-    }, {
-      root: null,
-      rootMargin: "10px 0px -10px 0px",
-      threshold: [0, 0.05]
-    });
+        });
+      },
+      {
+        root: null,
+        rootMargin: "10px 0px -10px 0px",
+        threshold: [0, 0.05],
+      },
+    );
 
     const targetSelectors = [
       "main > section",
@@ -1073,7 +1237,7 @@
       ".profile-card",
       ".auth-box",
       ".site-footer",
-      ".editorial-grid"
+      ".editorial-grid",
     ];
 
     function observeElements() {
@@ -1129,7 +1293,8 @@
           api("/cart").catch(() => null),
         ]);
         state.user = user;
-        if (user?.email) sessionStorage.setItem("jewels_user_email", user.email);
+        if (user?.email)
+          sessionStorage.setItem("jewels_user_email", user.email);
         if (user?.id) sessionStorage.setItem("jewels_user_id", user.id);
         if (cart) setCartCount(cart.count);
       } catch {
@@ -1142,7 +1307,10 @@
   })();
 
   // ---------- THỜI GIAN THỰC (REALTIME SSE & BROADCAST) ----------
-  const realtimeChannel = typeof window.BroadcastChannel !== "undefined" ? new BroadcastChannel("jewels_realtime") : null;
+  const realtimeChannel =
+    typeof window.BroadcastChannel !== "undefined"
+      ? new BroadcastChannel("jewels_realtime")
+      : null;
   const realtimeListeners = [];
 
   function broadcast(type, data = {}) {
@@ -1155,7 +1323,9 @@
 
   function handleIncomingRealtime(type, data, notifyChannel = false) {
     if (notifyChannel && realtimeChannel) {
-      try { realtimeChannel.postMessage({ type, data, timestamp: Date.now() }); } catch {}
+      try {
+        realtimeChannel.postMessage({ type, data, timestamp: Date.now() });
+      } catch {}
     }
 
     // Xử lý các loại sự kiện hệ thống
@@ -1168,29 +1338,49 @@
           delivered: "Đã giao thành công",
           cancelled: "Đã hủy",
         };
-        const statusText = data.statusLabel || statusMap[data.status] || data.status;
-        toast(`🔔 Đơn hàng #${data.orderId} đã được cập nhật: ${statusText}!`, "ok");
-        document.dispatchEvent(new CustomEvent("jewels:order-updated", { detail: data }));
+        const statusText =
+          data.statusLabel || statusMap[data.status] || data.status;
+        toast(
+          `🔔 Đơn hàng #${data.orderId} đã được cập nhật: ${statusText}!`,
+          "ok",
+        );
+        document.dispatchEvent(
+          new CustomEvent("jewels:order-updated", { detail: data }),
+        );
         break;
       }
       case "PRODUCT_CHANGED":
       case "STOCK_CHANGED": {
-        document.dispatchEvent(new CustomEvent("jewels:catalog-updated", { detail: data }));
+        document.dispatchEvent(
+          new CustomEvent("jewels:catalog-updated", { detail: data }),
+        );
         break;
       }
       case "PROMOTION_CHANGED": {
-        document.dispatchEvent(new CustomEvent("jewels:promotions-updated", { detail: data }));
+        document.dispatchEvent(
+          new CustomEvent("jewels:promotions-updated", { detail: data }),
+        );
         break;
       }
       case "ACCOUNT_CHANGED": {
         // 1. Nếu tài khoản hiện tại đang đăng nhập bị Admin khóa -> TỰ ĐỘNG ĐĂNG XUẤT VÀ VĂNG RA NGAY
         const myId = (getLoggedInUserId() || "").trim().toLowerCase();
         const myEmail = (getLoggedInUserEmail() || "").trim().toLowerCase();
-        const targetId = String(data?.userId || "").trim().toLowerCase();
-        const targetEmail = String(data?.email || "").trim().toLowerCase();
+        const targetId = String(data?.userId || "")
+          .trim()
+          .toLowerCase();
+        const targetEmail = String(data?.email || "")
+          .trim()
+          .toLowerCase();
         const matchId = Boolean(targetId && myId && targetId === myId);
-        const matchEmail = Boolean(targetEmail && myEmail && targetEmail === myEmail);
-        const isLocked = data?.isActive === false || data?.isActive === "false" || data?.status === "Khóa" || data?.status === "Bị khóa";
+        const matchEmail = Boolean(
+          targetEmail && myEmail && targetEmail === myEmail,
+        );
+        const isLocked =
+          data?.isActive === false ||
+          data?.isActive === "false" ||
+          data?.status === "Khóa" ||
+          data?.status === "Bị khóa";
 
         if ((matchId || matchEmail) && isLocked) {
           handleAccountLocked();
@@ -1202,10 +1392,16 @@
         const box = $(".locked-modal-box");
         const mailInput = $('[name="email"]', $("#authDialog"));
         const curEmail = (mailInput?.value || "").trim().toLowerCase();
-        if (curEmail && data?.email && data.email.toLowerCase() === curEmail && (data?.isActive !== false)) {
+        if (
+          curEmail &&
+          data?.email &&
+          data.email.toLowerCase() === curEmail &&
+          data?.isActive !== false
+        ) {
           if (notice) {
             notice.style.color = "#047857";
-            notice.innerHTML = "🎉 <strong>Tài khoản đã được Quản trị viên mở khóa!</strong> Vui lòng bấm Đăng nhập.";
+            notice.innerHTML =
+              "🎉 <strong>Tài khoản đã được Quản trị viên mở khóa!</strong> Vui lòng bấm Đăng nhập.";
           }
           if (box) {
             box.style.borderColor = "#a7f3d0";
@@ -1224,7 +1420,8 @@
         if (curEmail && data?.email && data.email.toLowerCase() === curEmail) {
           if (notice) {
             notice.style.color = "#047857";
-            notice.innerHTML = "🎉 <strong>Tài khoản đã được Quản trị viên mở khóa!</strong> Vui lòng bấm Đăng nhập.";
+            notice.innerHTML =
+              "🎉 <strong>Tài khoản đã được Quản trị viên mở khóa!</strong> Vui lòng bấm Đăng nhập.";
           }
           if (box) {
             box.style.borderColor = "#a7f3d0";
@@ -1239,7 +1436,11 @@
 
     // Gọi các listener đăng ký
     realtimeListeners.forEach((fn) => {
-      try { fn(type, data); } catch (e) { console.error("Realtime listener error:", e); }
+      try {
+        fn(type, data);
+      } catch (e) {
+        console.error("Realtime listener error:", e);
+      }
     });
   }
 
@@ -1279,7 +1480,9 @@
       const email = getLoggedInUserEmail();
       if (token && email) {
         try {
-          const res = await fetch("/api/auth/unlock-status?email=" + encodeURIComponent(email));
+          const res = await fetch(
+            "/api/auth/unlock-status?email=" + encodeURIComponent(email),
+          );
           if (res.ok) {
             const st = await res.json();
             if (st && st.isActive === false) {
@@ -1294,9 +1497,25 @@
   initRealtime();
 
   window.Jewels = {
-    api, money, esc, $, $$, dateVN, toast, ready, state, productCard, variantLabel,
-    openAuth, requireLogin, setCartCount, refreshCartCount, broadcast,
-    navigate, updateNavIndicator, showPageLoading,
+    api,
+    money,
+    esc,
+    $,
+    $$,
+    dateVN,
+    toast,
+    ready,
+    state,
+    productCard,
+    variantLabel,
+    openAuth,
+    requireLogin,
+    setCartCount,
+    refreshCartCount,
+    broadcast,
+    navigate,
+    updateNavIndicator,
+    showPageLoading,
     onLogin: (fn) => listeners.push(fn),
     onRealtime: (fn) => realtimeListeners.push(fn),
   };
