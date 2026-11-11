@@ -1,7 +1,6 @@
 (async () => {
   const { api, $, money, esc, toast, dateVN, variantLabel, openAuth, onLogin, ready } = Jewels;
   const root = $("#ordersRoot");
-  if (!root) return;
   const dlg = $("#orderDialog");
   const STATUS = { pending: "Chờ xác nhận", processing: "Đang xử lý", shipped: "Đang giao", delivered: "Đã giao", cancelled: "Đã hủy", returned: "Đã trả hàng" };
   const METHOD = { cod: "Thanh toán khi nhận hàng", bank_transfer: "Chuyển khoản", e_wallet: "Ví điện tử", credit_card: "Thẻ tín dụng" };
@@ -77,22 +76,20 @@
   document.addEventListener("click", (e) => {
     const t = e.target.closest("button");
     if (!t) return;
-    const curDlg = $("#orderDialog");
     if (t.dataset.view) {
-      if (curDlg) curDlg._currentOrderId = t.dataset.view;
+      dlg._currentOrderId = t.dataset.view;
       view(t.dataset.view);
     }
     else if (t.dataset.cancel) cancel(t.dataset.cancel);
-    else if (t.hasAttribute("data-close") && curDlg && curDlg.contains(t)) curDlg.close();
+    else if (t.hasAttribute("data-close") && dlg.contains(t)) dlg.close();
   });
-  if (dlg) dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
 
   // Tự động cập nhật tức thì khi Admin đổi trạng thái
   document.addEventListener("jewels:order-updated", (e) => {
     load();
-    const curDlg = $("#orderDialog");
-    if (curDlg && curDlg.open && curDlg._currentOrderId) {
-      view(curDlg._currentOrderId);
+    if (dlg.open && dlg._currentOrderId) {
+      view(dlg._currentOrderId);
     }
   });
 

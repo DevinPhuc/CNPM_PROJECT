@@ -2,7 +2,6 @@
   const { api, $, $$, money, esc, toast, variantLabel, requireLogin, refreshCartCount, productCard } = Jewels;
   const id = new URLSearchParams(location.search).get("id");
   const root = $("#productRoot");
-  if (!root) return;
   if (!id) { root.innerHTML = '<div class="empty"><h3>Thiếu mã sản phẩm</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>'; return; }
 
   let p;
