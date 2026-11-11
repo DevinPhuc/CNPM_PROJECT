@@ -40,23 +40,22 @@
     if (st.sort && st.sort !== "new") p.set("sort", st.sort);
     if (st.page > 1) p.set("page", st.page);
     history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : ""));
+    sessionStorage.setItem("jewels_last_shop_url", location.href);
   }
 
   // Khởi tạo giao diện các nút danh mục 1 lần duy nhất (không dựng lại DOM khi lọc)
   function buildCategoryFilters() {
     const roots = categories.filter((c) => !c.parent_cat_id);
     const item = (c, sub) => {
-      const isSel = st.cats.includes(String(c.cat_id));
-      return `<button data-cat="${c.cat_id}" class="${isSel ? "active" : ""}" style="${sub ? "margin-left:14px;font-size:.92em" : ""}">
-        <span class="f-check">${isSel ? "✓" : ""}</span>
+      return `<button data-cat="${c.cat_id}" style="${sub ? "margin-left:14px;font-size:.92em" : ""}">
+        <span class="f-check"></span>
         ${sub ? "– " : ""}${esc(c.name)}
       </button>`;
     };
 
-    const isAllCats = st.cats.length === 0;
     $("#catFilter").innerHTML =
-      `<button data-cat="" class="${isAllCats ? "active" : ""}">
-        <span class="f-check">${isAllCats ? "✓" : ""}</span>
+      `<button data-cat="">
+        <span class="f-check"></span>
         Tất cả
       </button>` +
       roots
@@ -64,7 +63,7 @@
           (r) =>
             item(r) +
             categories
-              .filter((c) => c.parent_cat_id === r.cat_id)
+              .filter((c) => String(c.parent_cat_id) === String(r.cat_id))
               .map((c) => item(c, true))
               .join("")
         )
@@ -73,7 +72,7 @@
 
   // Cập nhật trạng thái active & dấu tích trên các nút bộ lọc hiện có (không giật lag)
   function updateFilterStates() {
-    // 1. Kiểm tra danh mục
+    // 1. Kiểm tra danh mục: nếu chọn hết tất cả các danh mục hiển thị -> Tự động chuyển về "Tất cả"
     const allCatBtns = Array.from($("#catFilter").querySelectorAll("button[data-cat]"))
       .filter((b) => Boolean(b.dataset.cat));
     const allCatIds = allCatBtns.map((b) => b.dataset.cat);
@@ -95,24 +94,24 @@
       }
     });
 
-    // 2. Kiểm tra khoảng giá
+    // 2. Kiểm tra khoảng giá: nếu chọn hết tất cả các khoảng giá -> Tự động chuyển về "Tất cả"
     const allPriceBtns = Array.from($("#priceFilter").querySelectorAll("button[data-range]"))
       .filter((b) => Boolean(b.dataset.range));
     const allPriceRanges = allPriceBtns.map((b) => b.dataset.range);
     if (allPriceRanges.length > 0 && (st.prices.length >= allPriceRanges.length || allPriceRanges.every((rng) => st.prices.includes(rng)))) {
       st.prices = [];
     }
+
     const isAllPrices = st.prices.length === 0;
-    $$("#priceFilter button").forEach((b) => {
+    Array.from($("#priceFilter").querySelectorAll("button[data-range]")).forEach((b) => {
       const r = b.dataset.range;
+      const chk = b.querySelector(".f-check");
       if (!r) {
         b.classList.toggle("active", isAllPrices);
-        const chk = b.querySelector(".f-check");
         if (chk) chk.textContent = isAllPrices ? "✓" : "";
       } else {
         const isSel = st.prices.includes(r);
         b.classList.toggle("active", isSel);
-        const chk = b.querySelector(".f-check");
         if (chk) chk.textContent = isSel ? "✓" : "";
       }
     });
@@ -180,6 +179,9 @@
     const b = e.target.closest("button");
     if (!b) return;
     const catId = b.dataset.cat;
+    const allCatBtns = $$("#catFilter button").filter((btn) => Boolean(btn.dataset.cat));
+    const allCatIds = allCatBtns.map((btn) => btn.dataset.cat);
+
     if (!catId) {
       // Bấm "Tất cả" -> Xóa hết danh mục đã chọn
       st.cats = [];
@@ -190,6 +192,10 @@
         st.cats.splice(idx, 1);
       } else {
         st.cats.push(catId);
+      }
+      // Nếu đã chọn hết tất cả các danh mục hiển thị -> Tự động nhảy qua "Tất cả"
+      if (allCatIds.length > 0 && (st.cats.length >= allCatIds.length || allCatIds.every((id) => st.cats.includes(id)))) {
+        st.cats = [];
       }
     }
     st.page = 1;
@@ -202,6 +208,9 @@
     const b = e.target.closest("button");
     if (!b) return;
     const r = b.dataset.range;
+    const allPriceBtns = $$("#priceFilter button").filter((btn) => Boolean(btn.dataset.range));
+    const allPriceRanges = allPriceBtns.map((btn) => btn.dataset.range);
+
     if (!r) {
       // Bấm "Tất cả" -> Xóa hết khoảng giá đã chọn
       st.prices = [];
@@ -212,6 +221,10 @@
         st.prices.splice(idx, 1);
       } else {
         st.prices.push(r);
+      }
+      // Nếu đã chọn hết tất cả các khoảng giá -> Tự động nhảy qua "Tất cả"
+      if (allPriceRanges.length > 0 && (st.prices.length >= allPriceRanges.length || allPriceRanges.every((rng) => st.prices.includes(rng)))) {
+        st.prices = [];
       }
     }
     st.page = 1;

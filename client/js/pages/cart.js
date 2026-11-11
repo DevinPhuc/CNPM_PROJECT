@@ -18,9 +18,31 @@
     }
   }
 
+  function continueShopping(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const lastUrl = sessionStorage.getItem("jewels_last_shop_url");
+    if (document.referrer) {
+      try {
+        const refUrl = new URL(document.referrer);
+        if (refUrl.origin === location.origin && !refUrl.pathname.includes("cart") && !refUrl.pathname.includes("checkout") && !refUrl.pathname.includes("login")) {
+          window.history.back();
+          return;
+        }
+      } catch { }
+    }
+    if (lastUrl && !lastUrl.includes("cart") && !lastUrl.includes("checkout") && !lastUrl.includes("login")) {
+      location.href = lastUrl;
+      return;
+    }
+    location.href = "shop.html";
+  }
+
   function render(cart) {
     if (!cart.items.length) {
-      root.innerHTML = `<div class="empty"><h3>Giỏ hàng đang trống</h3><p>Hãy chọn cho mình món trang sức ưng ý.</p><a class="btn" href="shop.html">Tiếp tục mua sắm</a></div>`;
+      root.innerHTML = `<div class="empty"><h3>Giỏ hàng đang trống</h3><p>Hãy chọn cho mình món trang sức ưng ý.</p><a class="btn btn-continue-shopping" href="javascript:void(0)">Tiếp tục mua sắm</a></div>`;
       return;
     }
     const total = cart.subtotal + cart.shipping;
@@ -41,11 +63,11 @@
               </div>
               <div class="right">
                 <strong class="price">${money(i.subtotal)}</strong>
-                <div class="qty"><button data-act="dec" aria-label="Giảm">−</button><span>${i.quantity}</span><button data-act="inc" aria-label="Tăng">+</button></div>
+                <div class="qty"><button data-act="dec" aria-label="Giảm">−</button><input type="number" class="qty-field cart-qty-inp" value="${i.quantity}" min="1" max="${i.stock || 99}"><button data-act="inc" aria-label="Tăng">+</button></div>
                 <button class="remove" data-act="rm">Xóa</button>
               </div>
             </article>`).join("")}
-          <a class="link-btn" href="shop.html" style="display:inline-block;margin-top:14px">← Tiếp tục mua sắm</a>
+          <a class="link-btn btn-continue-shopping" href="javascript:void(0)" style="display:inline-block;margin-top:14px">← Tiếp tục mua sắm</a>
         </section>
         <aside class="panel">
           <h3>Tóm tắt đơn hàng</h3>
@@ -61,17 +83,39 @@
   }
 
   root.addEventListener("click", async (e) => {
+    const contBtn = e.target.closest(".btn-continue-shopping");
+    if (contBtn) {
+      continueShopping(e);
+      return;
+    }
+
     const b = e.target.closest("button[data-act]");
     if (!b) return;
     const row = b.closest(".line-item");
     const id = row.dataset.id;
-    const current = +row.querySelector(".qty span")?.textContent;
+    const current = +(row.querySelector(".qty input")?.value || row.querySelector(".qty span")?.textContent) || 1;
     try {
       if (b.dataset.act === "rm") await api("/cart/items/" + id, { method: "DELETE" });
       else if (b.dataset.act === "inc") await api("/cart/items/" + id, { method: "PUT", body: { quantity: current + 1 } });
       else if (current > 1) await api("/cart/items/" + id, { method: "PUT", body: { quantity: current - 1 } });
       await load();
     } catch (err) { toast(err.message, "error"); }
+  });
+
+  root.addEventListener("change", async (e) => {
+    const inp = e.target.closest(".cart-qty-inp");
+    if (!inp) return;
+    const row = inp.closest(".line-item");
+    const id = row.dataset.id;
+    let val = parseInt(inp.value) || 1;
+    if (val < 1) val = 1;
+    try {
+      await api("/cart/items/" + id, { method: "PUT", body: { quantity: val } });
+      await load();
+    } catch (err) {
+      toast(err.message, "error");
+      await load();
+    }
   });
 
   onLogin(load);

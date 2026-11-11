@@ -2,6 +2,12 @@
 // Module quản lý kết nối thời gian thực (SSE & Server Events)
 const sseClients = new Set();
 
+let currentInstanceId = "";
+
+function setServerInstanceId(id) {
+  currentInstanceId = id;
+}
+
 function handleSseConnection(req, res) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -10,8 +16,8 @@ function handleSseConnection(req, res) {
     "Access-Control-Allow-Origin": "*",
   });
 
-  // Gửi thông điệp chào mở kết nối
-  res.write("data: " + JSON.stringify({ type: "CONNECTED", message: "Jewels Realtime Connected" }) + "\n\n");
+  // Gửi thông điệp chào mở kết nối kèm instanceId của server
+  res.write("data: " + JSON.stringify({ type: "CONNECTED", instanceId: currentInstanceId, message: "Jewels Realtime Connected" }) + "\n\n");
   sseClients.add(res);
 
   // Gửi heartbeat giữ kết nối sau mỗi 25s
@@ -45,4 +51,4 @@ function broadcastRealtime(type, data = {}) {
   }
 }
 
-module.exports = { handleSseConnection, broadcastRealtime };
+module.exports = { handleSseConnection, broadcastRealtime, setServerInstanceId };

@@ -13,11 +13,27 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !JWT_SECRET) {
   process.exit(1);
 }
 
+// Định danh duy nhất cho mỗi lần server khởi động
+const SERVER_BOOT_TIME = Date.now();
+const SERVER_INSTANCE_ID = `srv_${SERVER_BOOT_TIME}_${Math.random().toString(36).slice(2, 8)}`;
+
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-const { handleSseConnection, broadcastRealtime } = require("./realtime");
+const { handleSseConnection, broadcastRealtime, setServerInstanceId } = require("./realtime");
+setServerInstanceId(SERVER_INSTANCE_ID);
 const unlockRequests = require("./unlock-requests");
 const app = express();
 app.use(express.json({ limit: "100kb" }));
+
+// Gửi header X-Server-Instance trong mọi response
+app.use((_req, res, next) => {
+  res.setHeader("X-Server-Instance", SERVER_INSTANCE_ID);
+  next();
+});
+
+// Endpoint kiểm tra định danh phiên của server
+app.get("/api/server-instance", (_req, res) => {
+  res.json({ instanceId: SERVER_INSTANCE_ID, bootTime: SERVER_BOOT_TIME });
+});
 
 const SHIPPING_FEE = 30000;
 const FREE_SHIPPING_FROM = 10000000;
@@ -45,7 +61,8 @@ const auth = wrap(async (req, _res, next) => {
   try {
     payload = jwt.verify(header.replace(/^Bearer /, ""), JWT_SECRET);
     req.uid = payload.sub;
-  } catch {
+  } catch (err) {
+    if (err.status === 401) throw err;
     throw new HttpError(401, "Vui lòng đăng nhập.");
   }
   const user = one(must(await db.from("users").select("id,is_active").eq("id", req.uid).limit(1)));
@@ -351,7 +368,10 @@ app.get("/api/products", wrap(async (req, res) => {
     const defVariant = inStockVariants[0] || variants[0] || null;
     const totalStock = inStockVariants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
     return {
-      id: p.pro_id, name: p.name, category: p.categories?.name || "", image: mainImage(images[p.pro_id]),
+      id: p.pro_id,
+      name: p.name,
+      category: p.categories?.name || "",
+      image: mainImage(images[p.pro_id]),
       price: prices.length ? Math.min(...prices) : Number(p.base_price),
       maxPrice: prices.length ? Math.max(...prices) : Number(p.base_price),
       inStock: inStockVariants.length > 0 && totalStock > 0,
@@ -544,10 +564,14 @@ app.post("/api/orders", auth, wrap(async (req, res) => {
 
   let discount = null;
   if (code) discount = await evaluateCode(code, cart.lines, cart.subtotal, req.uid);
-  const shipping = shippingFor(cart.subtotal);
   const discountAmount = discount?.amount || 0;
-  const total = cart.subtotal - discountAmount + shipping;
+  const taxable = Math.max(0, cart.subtotal - discountAmount);
+  const vatRate = 8;
+  const vatAmount = Math.round(taxable * (vatRate / 100));
+  const shipping = shippingFor(cart.subtotal);
+  const total = taxable + vatAmount + shipping;
 
+  const isPaidOnline = Boolean(method !== "cod" || req.body?.paid);
   const order = one(must(await db.from("orders").insert({
     customer_id: req.uid,
     discount_id: discount?.discount_id || null,
@@ -565,7 +589,15 @@ app.post("/api/orders", auth, wrap(async (req, res) => {
       order_id: order.order_id, variant_id: l.variantId, quantity: l.quantity, unit_price: l.price, subtotal: l.subtotal,
       product_name: l.name, material: l.material, gemstone: l.gemstone, size: l.size, image_url: l.image,
     }))));
-    must(await db.from("payments").insert({ order_id: order.order_id, method, amount: total, status: "pending" }));
+    must(await db.from("payments").insert({
+      order_id: order.order_id,
+      method,
+      amount: total,
+      status: isPaidOnline ? "completed" : "pending"
+    }));
+    if (isPaidOnline) {
+      await db.from("orders").update({ status: "processing" }).eq("order_id", order.order_id);
+    }
   } catch (e) {
     await db.from("orders").delete().eq("order_id", order.order_id);
     throw e;
@@ -581,30 +613,97 @@ app.post("/api/orders", auth, wrap(async (req, res) => {
   }
   must(await db.from("cart_items").delete().eq("cart_id", cart.cartId));
   await syncCartStatus(cart.cartId);
+
+  // Nếu là thanh toán thành công (các phương thức online), tự động tạo hóa đơn ngay
+  let invoice = null;
+  if (isPaidOnline) {
+    invoice = one(must(await db.from("invoices").insert({
+      order_id: order.order_id,
+      buyer_name: cus_name,
+      buyer_phone: cus_phone,
+      buyer_address: cus_address,
+      vat_rate: 8,
+      vat_amount: vatAmount,
+      discount_amount: Number(discountAmount || 0),
+      total_price: Number(total),
+      invoice_date: new Date().toISOString(),
+    }).select("invoice_id")));
+
+    if (cart.lines && cart.lines.length > 0) {
+      await db.from("invoice_detail").insert(cart.lines.map((l) => ({
+        invoice_id: invoice.invoice_id,
+        variant_id: l.variantId,
+        product_name: l.name,
+        quantity: l.quantity,
+        unit_price: l.price,
+        subtotal: l.subtotal,
+      })));
+    }
+
+    broadcastRealtime("INVOICE_CREATED", {
+      invoiceId: invoice.invoice_id,
+      orderId: order.order_id,
+      amount: total,
+    });
+  }
+
   broadcastRealtime("ORDER_CREATED", {
     orderId: order.order_id,
     total,
     customer: cus_name || "Khách hàng",
     phone: cus_phone,
     linesCount: cart.lines.length,
+    status: isPaidOnline ? "processing" : "pending",
   });
-  res.status(201).json({ orderId: order.order_id, total });
+  res.status(201).json({
+    orderId: order.order_id,
+    total,
+    method,
+    isPaidOnline,
+    hasInvoice: Boolean(invoice),
+    invoiceId: invoice?.invoice_id || null,
+    invoiceCode: invoice ? `HD-${String(invoice.invoice_id).padStart(5, "0")}` : null,
+  });
 }));
 
 app.get("/api/orders", auth, wrap(async (req, res) => {
   const rows = must(await db.from("orders")
-    .select("order_id,order_date,status,total_amount,order_items(product_name,quantity,image_url),payments(method,status)")
+    .select("order_id,order_date,status,total_amount,discount_amount,shipping_fee,order_items(product_name,quantity,image_url,subtotal),payments(method,status)")
     .eq("customer_id", req.uid).order("order_date", { ascending: false }));
-  res.json(rows.map((o) => ({
-    id: o.order_id, date: o.order_date, status: o.status, total: Number(o.total_amount),
-    items: o.order_items || [], payment: one(o.payments) || null,
-  })));
+  res.json(rows.map((o) => {
+    const itemsSub = (o.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+    const disc = Number(o.discount_amount || 0);
+    const taxable = Math.max(0, itemsSub - disc);
+    const vat = Math.round(taxable * 0.08);
+    const shipping = Number(o.shipping_fee || 0);
+    const total = taxable + vat + shipping;
+    return {
+      id: o.order_id, date: o.order_date, status: o.status, total: total,
+      items: o.order_items || [], payment: one(o.payments) || null,
+    };
+  }));
 }));
 
 app.get("/api/orders/:id", auth, wrap(async (req, res) => {
   const o = one(must(await db.from("orders").select("*,order_items(*),payments(*),discounts(name,code)").eq("order_id", req.params.id).eq("customer_id", req.uid).limit(1)));
   if (!o) throw new HttpError(404, "Không tìm thấy đơn hàng.");
-  res.json({ ...o, payment: one(o.payments) || null, discount: o.discounts || null });
+  const inv = one(must(await db.from("invoices").select("*").eq("order_id", o.order_id).limit(1)));
+
+  const itemsSub = (o.order_items || []).reduce((s, it) => s + Number(it.subtotal || 0), 0);
+  const disc = Number(o.discount_amount || 0);
+  const taxable = Math.max(0, itemsSub - disc);
+  const vat = Math.round(taxable * 0.08);
+  const shipping = Number(o.shipping_fee || 0);
+  const total = taxable + vat + shipping;
+
+  res.json({
+    ...o,
+    total_amount: total,
+    vat_amount: vat,
+    payment: one(o.payments) || null,
+    discount: o.discounts || null,
+    invoice: inv ? { ...inv, vat_amount: vat, total_price: total } : null,
+  });
 }));
 
 app.post("/api/orders/:id/cancel", auth, wrap(async (req, res) => {
@@ -631,22 +730,24 @@ app.get("/api/realtime/events", handleSseConnection);
 
 // ---------- api quản trị (admin) ----------
 const { createAdminRouter } = require("./admin-routes");
-app.use("/api/admin", createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName, bcrypt, jwt, JWT_SECRET, broadcastRealtime, unlockRequests }));
+app.use("/api/admin", createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName, bcrypt, jwt, JWT_SECRET, broadcastRealtime, unlockRequests, SERVER_INSTANCE_ID }));
 
 // ---------- file tĩnh & lỗi ----------
 const root = path.join(__dirname, "..");
 const staticOpts = {
-  maxAge: "2h",
-  etag: true,
+  maxAge: 0,
+  etag: false,
   setHeaders: (res, pathUrl) => {
-    // Không lưu cache HTML lâu để đảm bảo nội dung mới nhất
-    if (pathUrl.endsWith(".html")) {
-      res.setHeader("Cache-Control", "no-cache, must-revalidate");
-    }
+    // Không lưu cache tĩnh để đảm bảo mã nguồn JS/CSS/HTML luôn mới nhất ngay khi sửa
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
   },
 };
 app.use("/shared", express.static(path.join(root, "shared"), staticOpts));
 app.use("/client", express.static(path.join(root, "client"), staticOpts));
+app.get("/admin", (_req, res) => res.redirect("/admin/login.html"));
+app.get("/admin/", (_req, res) => res.redirect("/admin/login.html"));
 app.use("/admin", express.static(path.join(root, "admin"), staticOpts));
 app.get("/", (_req, res) => res.redirect("/client/home.html"));
 // Chuyển hướng các trang HTML truy cập trực tiếp từ root (ví dụ /shop.html) về /client/

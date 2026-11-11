@@ -9,6 +9,7 @@ const productDal = require("../dal/productDal");
 const userDal = require("../dal/userDal");
 const addressDal = require("../dal/addressDal");
 const { HttpError, one } = require("../utils/helpers");
+const { db } = require("../config/db");
 const { PAYMENT_METHODS } = require("../utils/constants");
 const { broadcastRealtime } = require("../realtime");
 
@@ -106,6 +107,40 @@ class OrderBll {
     await cartDal.clearCartItems(cart.cartId);
     await cartBll.syncCartStatus(cart.cartId);
 
+    // Tự động tạo hóa đơn tài chính ngay khi đặt hàng
+    let invoiceId = null;
+    try {
+      const invRes = await db.from("invoices").insert({
+        order_id: order.order_id,
+        buyer_name: cus_name,
+        buyer_phone: cus_phone,
+        buyer_address: cus_address,
+        vat_rate: 8,
+        vat_amount: Math.round(Number(total) * 0.08),
+        discount_amount: discountAmount,
+        total_price: total,
+        invoice_date: new Date().toISOString(),
+      }).select("invoice_id");
+      const inv = one(invRes?.data || []);
+      if (inv) {
+        invoiceId = inv.invoice_id;
+        if (cart.lines.length > 0) {
+          await db.from("invoice_detail").insert(
+            cart.lines.map((l) => ({
+              invoice_id: inv.invoice_id,
+              variant_id: l.variantId,
+              product_name: l.name,
+              quantity: l.quantity,
+              unit_price: l.price,
+              subtotal: l.subtotal,
+            }))
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("Lưu hóa đơn tự động:", e.message);
+    }
+
     broadcastRealtime("ORDER_CREATED", {
       orderId: order.order_id,
       total,
@@ -114,7 +149,7 @@ class OrderBll {
       linesCount: cart.lines.length,
     });
 
-    return { orderId: order.order_id, total };
+    return { orderId: order.order_id, total, invoiceId };
   }
 
   async getMyOrders(customerId) {

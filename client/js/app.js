@@ -5,6 +5,25 @@
   const state = { user: null, cartCount: 0 };
   const listeners = [];
 
+  const getAuthToken = () => sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+  const setAuthToken = (token) => {
+    if (token) {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  };
+  const clearAuth = () => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem("jewels_user_email");
+    sessionStorage.removeItem("jewels_user_id");
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem("jewels_user_email");
+    localStorage.removeItem("jewels_user_id");
+  };
+
   const money = (n) => Number(n || 0).toLocaleString("vi-VN") + "đ";
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -13,7 +32,7 @@
 
   async function api(path, { method = "GET", body } = {}) {
     const headers = { "Content-Type": "application/json" };
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     if (token) headers.Authorization = "Bearer " + token;
     let res;
     try {
@@ -28,9 +47,7 @@
           handleAccountLocked();
           return;
         }
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem("jewels_user_email");
-        localStorage.removeItem("jewels_user_id");
+        clearAuth();
         state.user = null;
         state.cartCount = 0;
         renderAccount();
@@ -47,9 +64,9 @@
 
   function getLoggedInUserId() {
     if (state.user && state.user.id) return String(state.user.id);
-    const saved = localStorage.getItem("jewels_user_id");
+    const saved = sessionStorage.getItem("jewels_user_id");
     if (saved) return String(saved);
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
@@ -61,16 +78,14 @@
 
   function getLoggedInUserEmail() {
     if (state.user && state.user.email) return String(state.user.email).toLowerCase();
-    const saved = localStorage.getItem("jewels_user_email");
+    const saved = sessionStorage.getItem("jewels_user_email");
     if (saved) return String(saved).toLowerCase();
     return "";
   }
 
   function handleAccountLocked() {
     const curEmail = getLoggedInUserEmail();
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem("jewels_user_email");
-    localStorage.removeItem("jewels_user_id");
+    clearAuth();
     state.user = null;
     state.cartCount = 0;
     renderAccount();
@@ -652,9 +667,15 @@
       loginFb.textContent = "";
       try {
         const data = await api("/auth/login", { method: "POST", body: { email: f.email, password: f.password } });
-        localStorage.setItem(TOKEN_KEY, data.token);
-        if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
-        if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+        setAuthToken(data.token);
+        if (data.user?.email) {
+          sessionStorage.setItem("jewels_user_email", data.user.email);
+          localStorage.setItem("jewels_user_email", data.user.email);
+        }
+        if (data.user?.id) {
+          sessionStorage.setItem("jewels_user_id", data.user.id);
+          localStorage.setItem("jewels_user_id", data.user.id);
+        }
         state.user = data.user;
         loginForm.reset();
         const p = pendingLogin; pendingLogin = null;
@@ -757,9 +778,15 @@
       regFb.textContent = "";
       try {
         const data = await api("/auth/register", { method: "POST", body: { name: f.name, email: cleanMail, phone: cleanPhone, password: f.password } });
-        localStorage.setItem(TOKEN_KEY, data.token);
-        if (data.user?.email) localStorage.setItem("jewels_user_email", data.user.email);
-        if (data.user?.id) localStorage.setItem("jewels_user_id", data.user.id);
+        setAuthToken(data.token);
+        if (data.user?.email) {
+          sessionStorage.setItem("jewels_user_email", data.user.email);
+          localStorage.setItem("jewels_user_email", data.user.email);
+        }
+        if (data.user?.id) {
+          sessionStorage.setItem("jewels_user_id", data.user.id);
+          localStorage.setItem("jewels_user_id", data.user.id);
+        }
         state.user = data.user;
         regForm.reset();
         const p = pendingLogin; pendingLogin = null;
@@ -802,7 +829,7 @@
   }
 
   function logout() {
-    localStorage.removeItem(TOKEN_KEY);
+    clearAuth();
     state.user = null;
     toast("Bạn đã đăng xuất.");
     if (["cart", "checkout", "orders", "user"].includes(document.body.dataset.page)) location.href = "home.html";
@@ -825,7 +852,6 @@
     } else if (p.id === 4 || (p.category && p.category.toLowerCase().includes("vàng"))) {
       badgeHtml = '<span class="tag">✦ Vàng 18K Ý</span>';
     }
-
     const stockQty = typeof p.stock === "number" ? p.stock : (p.stockQuantity ?? (isOut ? 0 : ""));
     const stockHtml = isOut
       ? '<div class="card-stock card-stock-out"><span class="stock-pill out">Hết hàng</span></div>'
@@ -1095,7 +1121,7 @@
       sessionStorage.setItem("jewels_last_shop_url", location.href);
     }
 
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getAuthToken();
     if (token) {
       try {
         const [user, cart] = await Promise.all([
@@ -1103,11 +1129,12 @@
           api("/cart").catch(() => null),
         ]);
         state.user = user;
-        if (user?.email) localStorage.setItem("jewels_user_email", user.email);
-        if (user?.id) localStorage.setItem("jewels_user_id", user.id);
+        if (user?.email) sessionStorage.setItem("jewels_user_email", user.email);
+        if (user?.id) sessionStorage.setItem("jewels_user_id", user.id);
         if (cart) setCartCount(cart.count);
       } catch {
         state.user = null;
+        clearAuth();
       }
     }
     renderAccount();
@@ -1231,7 +1258,11 @@
       es.onmessage = (e) => {
         try {
           const payload = JSON.parse(e.data);
-          if (payload.type && payload.type !== "CONNECTED") {
+          if (payload.type === "CONNECTED") {
+            if (payload.instanceId) {
+              window._serverInstance = payload.instanceId;
+            }
+          } else if (payload.type) {
             handleIncomingRealtime(payload.type, payload.data, false);
           }
         } catch {}
@@ -1244,7 +1275,7 @@
 
     // 3. Kiểm tra định kỳ (heartbeat) tài khoản đang đăng nhập phòng trường hợp mất mạng/SSE
     setInterval(async () => {
-      const token = localStorage.getItem(TOKEN_KEY);
+      const token = getAuthToken();
       const email = getLoggedInUserEmail();
       if (token && email) {
         try {
