@@ -314,19 +314,30 @@ app.get("/api/products", wrap(async (req, res) => {
     if (max) query = query.lte("base_price", Number(max));
   }
   const order = { new: ["created_at", false], "price-asc": ["base_price", true], "price-desc": ["base_price", false], name: ["name", true] }[sort] || ["created_at", false];
-  query = query.order(order[0], { ascending: order[1] }).range((page - 1) * size, page * size - 1);
+  query = query.order(order[0], { ascending: order[1] });
 
-  const { data, error, count } = await query;
+  const { data: allRows, error, count } = await query;
   if (error) throw new HttpError(500, error.message);
+  // Đưa sản phẩm hết hàng xuống cuối danh sách (giữ nguyên thứ tự sắp xếp trong từng nhóm), rồi mới phân trang
+  const rowInStock = (p) => (p.product_variants || []).some((v) => v.is_active && Number(v.stock_quantity) > 0);
+  const rows = allRows || [];
+  const data = [...rows.filter(rowInStock), ...rows.filter((p) => !rowInStock(p))]
+    .slice((page - 1) * size, page * size);
   const images = await imagesFor(data.map((p) => p.pro_id));
   const items = data.map((p) => {
     const variants = (p.product_variants || []).filter((v) => v.is_active);
     const prices = variants.map((v) => Number(v.price ?? p.base_price));
+    const inStockVariants = variants.filter((v) => Number(v.stock_quantity) > 0);
+    const defVariant = inStockVariants[0] || variants[0] || null;
+    const totalStock = inStockVariants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
     return {
       id: p.pro_id, name: p.name, category: p.categories?.name || "", image: mainImage(images[p.pro_id]),
       price: prices.length ? Math.min(...prices) : Number(p.base_price),
       maxPrice: prices.length ? Math.max(...prices) : Number(p.base_price),
-      inStock: variants.some((v) => v.stock_quantity > 0),
+      inStock: inStockVariants.length > 0 && totalStock > 0,
+      stock: totalStock,
+      stockQuantity: totalStock,
+      defaultVariantId: defVariant?.variant_id || null,
     };
   });
   res.json({ items, total: count || 0, page, pages: Math.max(1, Math.ceil((count || 0) / size)) });
@@ -618,6 +629,17 @@ app.use("/shared", express.static(path.join(root, "shared"), staticOpts));
 app.use("/client", express.static(path.join(root, "client"), staticOpts));
 app.use("/admin", express.static(path.join(root, "admin"), staticOpts));
 app.get("/", (_req, res) => res.redirect("/client/home.html"));
+// Chuyển hướng các trang HTML truy cập trực tiếp từ root (ví dụ /shop.html) về /client/
+app.get("/:page.html", (req, res, next) => {
+  const page = req.params.page;
+  const fs = require("fs");
+  const target = path.join(root, "client", `${page}.html`);
+  if (fs.existsSync(target)) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/client/${page}.html${qs}`);
+  }
+  next();
+});
 app.use("/api", (_req, res) => res.status(404).json({ error: "Không tìm thấy API." }));
 
 app.use((err, _req, res, _next) => {

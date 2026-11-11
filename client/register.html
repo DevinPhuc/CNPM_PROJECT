@@ -8,29 +8,76 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Upright:wght@300;400;500;600;700&family=Sofia+Sans:wght@300..800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/store.css">
+  <link rel="stylesheet" href="css/store.css?v=20261111_7">
   <style>
-    .auth-page-wrap {
-      min-height: calc(100vh - 80px - 250px);
+    html, body {
+      margin: 0;
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 60px 20px;
+      background: radial-gradient(circle at 50% 35%, #2a1e16 0%, #17110c 55%, #0b0704 100%);
+      font-family: var(--body, "Sofia Sans", sans-serif);
+      color: var(--ink, #141210);
+      padding: 20px 16px;
+      box-sizing: border-box;
+      overflow-x: hidden !important;
+      max-width: 100% !important;
+    }
+    .auth-page-wrap {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden !important;
+      max-width: 100% !important;
     }
     .auth-box {
-      width: min(1040px, 100%);
+      position: relative;
+      width: min(1000px, 100%);
       background: #fff;
       border-radius: 24px;
-      overflow: hidden;
-      box-shadow: 0 30px 80px -15px rgba(30, 20, 10, 0.12), 0 0 0 1px var(--line);
+      overflow: hidden !important;
+      box-shadow: 0 35px 85px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      scrollbar-width: none !important;
+    }
+    .auth-box::-webkit-scrollbar,
+    .auth-box *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    .auth-close-btn {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #f7f3ec;
+      border: none;
+      font-size: 1.25rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink-soft, #635b54);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+      text-decoration: none;
+    }
+    .auth-close-btn:hover {
+      background: #ebe4d8;
+      color: var(--ink, #141210);
+      transform: scale(1.05);
     }
   </style>
 </head>
 <body data-page="register">
-  <header id="site-header"></header>
-
   <main class="auth-page-wrap">
     <div class="auth-box auth-register-view">
+      <a href="home.html" class="auth-close-btn" title="Về trang chủ Jewels" aria-label="Đóng" data-no-spa>×</a>
       <div class="auth-layout">
         <aside class="auth-aside">
           <div>
@@ -103,14 +150,18 @@
                 Mật khẩu
                 <div class="pw-wrap">
                   <input name="password" type="password" minlength="8" placeholder="Tối thiểu 8 ký tự" required autocomplete="new-password">
-                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
+                    <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
+                  </button>
                 </div>
               </label>
               <label class="field">
                 Xác nhận mật khẩu
                 <div class="pw-wrap">
                   <input name="confirm" type="password" minlength="8" placeholder="Nhập lại mật khẩu" required autocomplete="new-password">
-                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
+                    <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
+                  </button>
                 </div>
               </label>
             </div>
@@ -134,8 +185,7 @@
     </div>
   </main>
 
-  <footer id="site-footer"></footer>
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=20261111_7"></script>
   <script>
     (async () => {
       await Jewels.ready;
@@ -143,6 +193,11 @@
         location.href = "user.html";
         return;
       }
+      document.querySelector(".auth-close-btn")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        window.location.href = "home.html";
+      });
+
       const form = document.getElementById("pageRegForm");
       const btn = document.getElementById("pageRegBtn");
       const fb = document.getElementById("pageRegFb");
@@ -154,7 +209,11 @@
           if (!inp) return;
           const isPw = inp.type === "password";
           inp.type = isPw ? "text" : "password";
-          b.textContent = isPw ? "🙈" : "👁️";
+          const img = b.querySelector("img");
+          if (img) {
+            img.src = isPw ? "../shared/images/Icons/eye-closed.png" : "../shared/images/Icons/eye.png";
+            img.alt = isPw ? "Ẩn mật khẩu" : "Hiện mật khẩu";
+          }
         });
       });
 

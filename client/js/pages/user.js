@@ -1,14 +1,16 @@
 (async () => {
   const { api, $, $$, esc, toast, openAuth, onLogin, ready, state } = Jewels;
   const root = $("#userRoot");
-  const dlg = $("#addrDialog");
+  if (!root) return;
+  const getDlg = () => $("#addrDialog");
   let tab = "profile";
   let editingId = null;
 
   async function load() {
     if (!state.user) {
       root.innerHTML = `<div class="empty"><h3>Vui lòng đăng nhập</h3><p>Đăng nhập để quản lý tài khoản.</p><button class="btn" id="goLogin">Đăng nhập / Đăng ký</button></div>`;
-      $("#goLogin").addEventListener("click", () => openAuth());
+      const goBtn = $("#goLogin");
+      if (goBtn) goBtn.addEventListener("click", () => openAuth());
       return;
     }
     $("#hello").textContent = "Xin chào, " + state.user.name;
@@ -59,14 +61,18 @@
   function openAddr(a) {
     editingId = a?.address_id || null;
     const f = $("#addrForm");
+    if (!f) return;
     f.reset();
-    $("#addrTitle").textContent = a ? "Sửa địa chỉ" : "Thêm địa chỉ";
-    $("#addrFb").textContent = "";
-    f.recipient_name.value = a?.recipient_name || state.user.name;
-    f.phone.value = a?.phone || state.user.phone || "";
-    f.address_line.value = a?.address_line || "";
-    f.is_default.checked = !!a?.is_default;
-    dlg.showModal();
+    const titleEl = $("#addrTitle");
+    if (titleEl) titleEl.textContent = a ? "Sửa địa chỉ" : "Thêm địa chỉ";
+    const fbEl = $("#addrFb");
+    if (fbEl) fbEl.textContent = "";
+    if (f.recipient_name) f.recipient_name.value = a?.recipient_name || state.user?.name || "";
+    if (f.phone) f.phone.value = a?.phone || state.user?.phone || "";
+    if (f.address_line) f.address_line.value = a?.address_line || "";
+    if (f.is_default) f.is_default.checked = !!a?.is_default;
+    const d = getDlg();
+    if (d && typeof d.showModal === "function") d.showModal();
   }
 
   root.addEventListener("click", async (e) => {
@@ -126,34 +132,51 @@
     }
   });
 
-  $("#addrForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const d = Object.fromEntries(new FormData(e.target));
-    d.is_default = e.target.is_default.checked;
-    const phoneVal = (d.phone || "").trim();
-    const cleanPhone = phoneVal.replace(/\D/g, "");
-    if (!/^\d{10}$/.test(cleanPhone)) {
-      $("#addrFb").textContent = "Số điện thoại phải bao gồm đúng 10 chữ số.";
-      return;
-    }
-    try {
-      await api(editingId ? "/addresses/" + editingId : "/addresses", { method: editingId ? "PUT" : "POST", body: { ...d, phone: cleanPhone } });
-      dlg.close(); toast("Đã lưu địa chỉ", "ok"); renderTab();
-    } catch (err) { $("#addrFb").textContent = err.message; }
-  });
-  $("[data-close]", dlg).addEventListener("click", () => dlg.close());
-  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+  const addrForm = $("#addrForm");
+  if (addrForm) {
+    addrForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target));
+      d.is_default = Boolean(e.target.is_default && e.target.is_default.checked);
+      const phoneVal = (d.phone || "").trim();
+      const cleanPhone = phoneVal.replace(/\D/g, "");
+      if (!/^\d{10}$/.test(cleanPhone)) {
+        const fbEl = $("#addrFb");
+        if (fbEl) fbEl.textContent = "Số điện thoại phải bao gồm đúng 10 chữ số.";
+        return;
+      }
+      try {
+        await api(editingId ? "/addresses/" + editingId : "/addresses", { method: editingId ? "PUT" : "POST", body: { ...d, phone: cleanPhone } });
+        const dEl = getDlg();
+        if (dEl && typeof dEl.close === "function") dEl.close();
+        toast("Đã lưu địa chỉ", "ok");
+        renderTab();
+      } catch (err) {
+        const fbEl = $("#addrFb");
+        if (fbEl) fbEl.textContent = err.message;
+      }
+    });
+  }
 
-  root.addEventListener("input", (e) => {
-    if (e.target && e.target.name === "phone") {
-      e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
-    }
-  });
-  dlg.addEventListener("input", (e) => {
-    if (e.target && e.target.name === "phone") {
-      e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
-    }
-  });
+  const curDlg = getDlg();
+  if (curDlg) {
+    const closeBtn = $("[data-close]", curDlg);
+    if (closeBtn) closeBtn.addEventListener("click", () => curDlg.close());
+    curDlg.addEventListener("click", (e) => { if (e.target === curDlg) curDlg.close(); });
+    curDlg.addEventListener("input", (e) => {
+      if (e.target && e.target.name === "phone") {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+      }
+    });
+  }
+
+  if (root) {
+    root.addEventListener("input", (e) => {
+      if (e.target && e.target.name === "phone") {
+        e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+      }
+    });
+  }
 
   onLogin(load);
   await ready;

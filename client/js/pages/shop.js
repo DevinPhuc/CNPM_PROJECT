@@ -1,5 +1,6 @@
 (() => {
   const { api, $, $$, productCard, esc } = Jewels;
+  if (!$("#grid")) return;
   const params = new URLSearchParams(location.search);
 
   // Khởi tạo state bộ lọc (hỗ trợ chọn nhiều danh mục và khoảng giá)
@@ -28,6 +29,8 @@
   };
 
   let categories = [];
+  let currentRequestId = 0;
+  let isFirstLoad = true;
 
   function syncUrl() {
     const p = new URLSearchParams();
@@ -39,7 +42,8 @@
     history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : ""));
   }
 
-  function renderFilters() {
+  // Khởi tạo giao diện các nút danh mục 1 lần duy nhất (không dựng lại DOM khi lọc)
+  function buildCategoryFilters() {
     const roots = categories.filter((c) => !c.parent_cat_id);
     const item = (c, sub) => {
       const isSel = st.cats.includes(String(c.cat_id));
@@ -65,8 +69,39 @@
               .join("")
         )
         .join("");
+  }
 
-    // Render bộ lọc giá
+  // Cập nhật trạng thái active & dấu tích trên các nút bộ lọc hiện có (không giật lag)
+  function updateFilterStates() {
+    // 1. Kiểm tra danh mục
+    const allCatBtns = Array.from($("#catFilter").querySelectorAll("button[data-cat]"))
+      .filter((b) => Boolean(b.dataset.cat));
+    const allCatIds = allCatBtns.map((b) => b.dataset.cat);
+    if (allCatIds.length > 0 && (st.cats.length >= allCatIds.length || allCatIds.every((id) => st.cats.includes(id)))) {
+      st.cats = [];
+    }
+
+    const isAllCats = st.cats.length === 0;
+    Array.from($("#catFilter").querySelectorAll("button[data-cat]")).forEach((b) => {
+      const cid = b.dataset.cat;
+      const chk = b.querySelector(".f-check");
+      if (!cid) {
+        b.classList.toggle("active", isAllCats);
+        if (chk) chk.textContent = isAllCats ? "✓" : "";
+      } else {
+        const isSel = st.cats.includes(cid);
+        b.classList.toggle("active", isSel);
+        if (chk) chk.textContent = isSel ? "✓" : "";
+      }
+    });
+
+    // 2. Kiểm tra khoảng giá
+    const allPriceBtns = Array.from($("#priceFilter").querySelectorAll("button[data-range]"))
+      .filter((b) => Boolean(b.dataset.range));
+    const allPriceRanges = allPriceBtns.map((b) => b.dataset.range);
+    if (allPriceRanges.length > 0 && (st.prices.length >= allPriceRanges.length || allPriceRanges.every((rng) => st.prices.includes(rng)))) {
+      st.prices = [];
+    }
     const isAllPrices = st.prices.length === 0;
     $$("#priceFilter button").forEach((b) => {
       const r = b.dataset.range;
@@ -84,7 +119,7 @@
 
     $("#sortSel").value = st.sort;
 
-    // Tiêu đề trang
+    // 3. Tiêu đề trang
     if (st.q) {
       $("#shopTitle").textContent = `Kết quả cho “${st.q}”`;
     } else if (st.cats.length === 1) {
@@ -100,8 +135,17 @@
     }
   }
 
+  // Tải danh sách sản phẩm theo bộ lọc (không giật màn hình, không hiện skeleton khi lọc)
   async function load() {
-    $("#grid").innerHTML = '<div class="skeleton"></div>'.repeat(6);
+    const grid = $("#grid");
+    if (isFirstLoad) {
+      grid.innerHTML = '<div class="skeleton"></div>'.repeat(6);
+    } else {
+      // Khi lọc: giữ nguyên sản phẩm và làm mờ nhẹ, không tải lại trang hay chớp khung xám
+      grid.classList.add("is-filtering");
+    }
+
+    const reqId = ++currentRequestId;
     const qs = new URLSearchParams({ sort: st.sort, page: st.page, size: 12 });
     if (st.cats.length) qs.set("cats", st.cats.join(","));
     if (st.prices.length) qs.set("prices", st.prices.join(","));
@@ -109,20 +153,27 @@
 
     try {
       const data = await api("/products?" + qs);
+      if (reqId !== currentRequestId) return; // Bỏ qua nếu có yêu cầu lọc mới hơn
+
       $("#resultCount").textContent = `${data.total} sản phẩm`;
-      $("#grid").innerHTML = data.items.length
+      grid.innerHTML = data.items.length
         ? data.items.map(productCard).join("")
-        : '<div class="empty" style="grid-column:1/-1"><h3>Không tìm thấy sản phẩm</h3><p>Thử đổi từ khóa hoặc chọn Tất cả.</p></div>';
+        : '<div class="empty" style="grid-column:1/-1"><h3>Không tìm thấy sản phẩm phù hợp</h3><p>Thử đổi từ khóa hoặc chọn Tất cả.</p></div>';
+      
       $("#pager").innerHTML = data.pages > 1
         ? Array.from({ length: data.pages }, (_, i) => `<button class="${i + 1 === data.page ? "active" : ""}" data-page="${i + 1}">${i + 1}</button>`).join("")
         : "";
     } catch (e) {
-      $("#grid").innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Không tải được sản phẩm</h3><p>${esc(e.message)}</p></div>`;
+      if (reqId !== currentRequestId) return;
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Không tải được sản phẩm</h3><p>${esc(e.message)}</p></div>`;
+    } finally {
+      if (reqId === currentRequestId) {
+        grid.classList.remove("is-filtering");
+        isFirstLoad = false;
+        syncUrl();
+      }
     }
-    syncUrl();
   }
-
-  const refresh = () => { renderFilters(); load(); };
 
   // Xử lý chọn nhiều danh mục
   $("#catFilter").addEventListener("click", (e) => {
@@ -142,7 +193,8 @@
       }
     }
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
   // Xử lý chọn nhiều khoảng giá
@@ -163,7 +215,8 @@
       }
     }
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
   $("#sortSel").addEventListener("change", (e) => {
@@ -181,23 +234,27 @@
     }
   });
 
-  // Nút "Tất cả" (trước đây là "Xóa bộ lọc"): Xóa sạch tất cả bộ lọc
+  // Nút "Tất cả": Xóa sạch tất cả bộ lọc
   $("#clearFilters").addEventListener("click", () => {
     st.cats = [];
     st.prices = [];
     st.q = "";
     st.sort = "new";
     st.page = 1;
-    refresh();
+    updateFilterStates();
+    load();
   });
 
+  // Khởi chạy ban đầu
   (async () => {
-    const pCat = api("/categories").then((c) => {
-      categories = c;
-      renderFilters();
-    }).catch(() => { categories = []; });
-    const pLoad = load();
-    await Promise.all([pCat, pLoad]);
+    try {
+      categories = await api("/categories");
+    } catch {
+      categories = [];
+    }
+    buildCategoryFilters();
+    updateFilterStates();
+    await load();
   })();
 
   // Tự động cập nhật sản phẩm khi Admin thay đổi hàng hoặc tồn kho

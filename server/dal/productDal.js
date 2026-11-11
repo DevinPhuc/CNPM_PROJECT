@@ -93,13 +93,19 @@ class ProductDal {
       name: ["name", true],
     }[sort] || ["created_at", false];
 
-    query = query
-      .order(order[0], { ascending: order[1] })
-      .range((page - 1) * size, page * size - 1);
+    query = query.order(order[0], { ascending: order[1] });
 
     const { data, error, count } = await query;
     if (error) throw new HttpError(500, error.message);
-    return { data, count: count || 0 };
+
+    // Đưa sản phẩm hết hàng xuống cuối danh sách (giữ nguyên thứ tự sắp xếp đã chọn trong từng nhóm),
+    // sau đó mới phân trang để sản phẩm hết hàng luôn nằm ở cuối toàn bộ danh sách.
+    const isInStock = (p) =>
+      (p.product_variants || []).some((v) => v.is_active && Number(v.stock_quantity) > 0);
+    const rows = data || [];
+    const sorted = [...rows.filter(isInStock), ...rows.filter((p) => !isInStock(p))];
+    const start = (page - 1) * size;
+    return { data: sorted.slice(start, start + size), count: count ?? rows.length };
   }
 
   async findProductDetailById(proId) {

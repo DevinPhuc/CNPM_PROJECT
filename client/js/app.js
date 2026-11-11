@@ -105,9 +105,237 @@
     menu: '<svg viewBox="0 0 16 16"><path d="M1 3h14v1H1zm0 4.5h14v1H1zM1 12h14v1H1z"/></svg>',
   };
 
+  // ---------- THANH GẠCH DƯỚI LƯỚT MƯỢT GIỮA CÁC TAB ----------
+  function updateNavIndicator(targetEl, immediate = false) {
+    const navLinks = $("#navLinks");
+    let indicator = $("#navIndicator");
+    if (!navLinks) return;
+    if (!indicator) {
+      indicator = document.createElement("span");
+      indicator.id = "navIndicator";
+      indicator.className = "nav-indicator";
+      navLinks.appendChild(indicator);
+    }
+    const el = targetEl || navLinks.querySelector("a.active");
+    if (!el) {
+      indicator.style.opacity = "0";
+      return;
+    }
+    const navRect = navLinks.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const left = elRect.left - navRect.left;
+    const width = elRect.width;
+
+    if (immediate) {
+      indicator.style.transition = "none";
+    }
+    indicator.style.width = width + "px";
+    indicator.style.transform = `translateX(${left}px)`;
+    indicator.style.opacity = "1";
+    if (immediate) {
+      void indicator.offsetWidth;
+      indicator.style.transition = "";
+    }
+  }
+
+  // ---------- THÔNG BÁO TẢI DỮ LIỆU KÈM ICON BOT NẢY & NHẮM MẮT ----------
+  let pageLoadingTimer = null;
+  function showPageLoading(show) {
+    let toast = $("#pageLoadingToast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "pageLoadingToast";
+      toast.className = "page-loading-toast";
+      toast.innerHTML = `
+        <div class="bot-bouncer">
+          <div class="bot-figure">
+            <img class="bot-img bot-open" src="../shared/images/Icons/bot.png" alt="Bot">
+            <img class="bot-img bot-blink" src="../shared/images/Icons/bot-blink.png" alt="Bot nhắm mắt">
+          </div>
+          <div class="bot-shadow"></div>
+        </div>
+        <div class="loading-content">
+          <span class="loading-msg">Đang tải dữ liệu, xin chờ trong giây lát…</span>
+        </div>`;
+      document.body.appendChild(toast);
+    }
+
+    if (show) {
+      clearTimeout(pageLoadingTimer);
+      pageLoadingTimer = setTimeout(() => {
+        toast.classList.add("active");
+      }, 50);
+    } else {
+      clearTimeout(pageLoadingTimer);
+      toast.classList.remove("active");
+    }
+  }
+
+  // ---------- CHUYỂN TRANG MƯỢT MÀ (SPA ROUTER) KHÔNG RESET TOÀN BỘ TRANG ----------
+  let currentNavId = 0;
+
+  function resolveClientUrl(url) {
+    try {
+      // Dùng window.location.href làm base để đường dẫn tương đối (e.g. "shop.html", "shop.html?cat=1")
+      // luôn giữ đúng thư mục /client/
+      const parsed = new URL(url, window.location.href);
+      if (
+        !parsed.pathname.startsWith("/client/") &&
+        !parsed.pathname.startsWith("/admin/") &&
+        !parsed.pathname.startsWith("/api/") &&
+        !parsed.pathname.startsWith("/shared/")
+      ) {
+        parsed.pathname = "/client/" + parsed.pathname.replace(/^\/+/, "");
+      }
+      return parsed;
+    } catch {
+      return new URL(url, window.location.origin + "/client/");
+    }
+  }
+
+  async function navigate(url, { push = true } = {}) {
+    const navId = ++currentNavId;
+    const destUrl = resolveClientUrl(url);
+
+    // Bật thông báo tải trang có chú bot nảy lên xuống
+    showPageLoading(true);
+
+    // Lướt thanh gạch dưới đến nút được chọn ngay tức thì
+    const fileName = destUrl.pathname.split("/").pop() || "home.html";
+    const targetLink =
+      $(`#navLinks a[href="${fileName}"]`) ||
+      $(`#navLinks a[href^="${fileName}?"]`) ||
+      $(`#navLinks a[href$="/${fileName}"]`);
+    if (targetLink) {
+      $$("#navLinks a").forEach((a) => a.classList.remove("active"));
+      targetLink.classList.add("active");
+      updateNavIndicator(targetLink);
+    }
+
+    try {
+      const res = await fetch(destUrl.href);
+      if (!res.ok) throw new Error("Không thể tải trang: HTTP " + res.status);
+      const html = await res.text();
+
+      // Nếu đã có lệnh chuyển trang mới hơn thì bỏ qua lệnh cũ
+      if (navId !== currentNavId) return;
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+
+      const newMain = doc.querySelector("main");
+      const curMain = $("main");
+      if (newMain && curMain) {
+        curMain.style.transition = "opacity 0.16s ease, transform 0.16s ease";
+        curMain.style.opacity = "0";
+        curMain.style.transform = "translateY(6px)";
+
+        await new Promise((r) => setTimeout(r, 160));
+        if (navId !== currentNavId) return;
+
+        // Thay nội dung phần main mà không làm mất header/footer/realtime
+        curMain.innerHTML = newMain.innerHTML;
+        if (newMain.className) curMain.className = newMain.className;
+        document.title = doc.title;
+        document.body.dataset.page = doc.body.dataset.page || "";
+
+        // Đồng bộ các dialog bên ngoài main (như #addrDialog trong user.html, #orderDialog trong orders.html)
+        $$("body > dialog:not(#authDialog)").forEach((d) => d.remove());
+        const newDialogs = doc.querySelectorAll("body > dialog:not(#authDialog)");
+        const siteFooter = $("#site-footer");
+        newDialogs.forEach((d) => {
+          if (siteFooter) {
+            document.body.insertBefore(d.cloneNode(true), siteFooter);
+          } else {
+            document.body.appendChild(d.cloneNode(true));
+          }
+        });
+        if (!$("#authDialog")) {
+          createAuthDialog();
+        }
+
+        // Cập nhật URL trình duyệt TRƯỚC KHI thực thi script mới
+        // để các script (như shop.js) đọc đúng query parameters từ location.search
+        if (push) {
+          history.pushState({ page: document.body.dataset.page, url: destUrl.href }, "", destUrl.href);
+          sessionStorage.setItem("jewels_last_shop_url", location.href);
+        }
+
+        // Nạp và thực thi script trang mới
+        const newScripts = doc.querySelectorAll("body script");
+        newScripts.forEach((s) => {
+          const rawSrc = s.getAttribute("src") || "";
+          if (rawSrc.includes("js/pages/")) {
+            // Xóa script trang cũ
+            $$('script[src*="js/pages/"]').forEach((el) => el.remove());
+            const resolvedSrc = new URL(rawSrc, destUrl.href).href;
+            const scriptEl = document.createElement("script");
+            scriptEl.src = resolvedSrc.split("?")[0] + "?v=" + Date.now();
+            document.body.appendChild(scriptEl);
+          }
+        });
+
+        // Đồng bộ lại nav links
+        const curPage = document.body.dataset.page || "";
+        $$("#navLinks a").forEach((a) => {
+          a.classList.toggle("active", a.dataset.nav === curPage);
+        });
+        updateNavIndicator();
+
+        // Cuộn lên đầu
+        window.scrollTo({ top: 0, behavior: "instant" });
+
+        // Khởi tạo lại scroll reveal cho các phần tử mới
+        if (typeof initScrollReveal === "function") {
+          initScrollReveal();
+        }
+
+        curMain.style.opacity = "1";
+        curMain.style.transform = "translateY(0)";
+      }
+    } catch (err) {
+      console.warn("Chuyển trang SPA thất bại, chuyển bằng trình duyệt:", err);
+      location.href = destUrl.href;
+    } finally {
+      if (navId === currentNavId) {
+        setTimeout(() => {
+          if (navId === currentNavId) showPageLoading(false);
+        }, 150);
+      }
+    }
+  }
+
+  // Bắt sự kiện click các liên kết nội bộ trang client
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a");
+    if (!a) return;
+    const href = a.getAttribute("href");
+    if (!href || href.startsWith("#") || href.startsWith("javascript:") || href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:") || href.startsWith("tel:") || a.target === "_blank") {
+      return;
+    }
+    const curPage = document.body.dataset.page || "";
+    const baseName = href.split("?")[0].split("#")[0];
+    if (curPage === "login" || curPage === "register" || curPage === "admin-login" || baseName === "login.html" || baseName === "register.html" || a.hasAttribute("data-no-spa")) {
+      return;
+    }
+    const internalPages = ["home.html", "shop.html", "orders.html", "user.html", "cart.html", "checkout.html", "product.html"];
+    if (internalPages.includes(baseName) || (baseName.endsWith(".html") && !baseName.includes("/admin/"))) {
+      e.preventDefault();
+      navigate(href);
+    }
+  });
+
+  // Xử lý nút Back/Forward của trình duyệt
+  window.addEventListener("popstate", () => {
+    navigate(location.href, { push: false });
+  });
+
   function buildLayout() {
     const page = document.body.dataset.page || "";
-    const link = (href, label, key) => `<a href="${href}" class="${page === key ? "active" : ""}">${label}</a>`;
+    if (page === "login" || page === "register" || page === "admin-login") {
+      return;
+    }
+    const link = (href, label, key) => `<a href="${href}" class="${page === key ? "active" : ""}" data-nav="${key}">${label}</a>`;
     const header = $("#site-header");
     if (header) {
       header.className = "site-header";
@@ -119,6 +347,7 @@
             ${link("shop.html", "Cửa hàng", "shop")}
             ${link("orders.html", "Đơn hàng", "orders")}
             ${link("user.html", "Tài khoản", "user")}
+            <span class="nav-indicator" id="navIndicator"></span>
           </nav>
           <span class="spacer"></span>
           <form class="nav-search" id="navSearch" role="search">
@@ -135,8 +364,21 @@
       $("#navSearch").addEventListener("submit", (e) => {
         e.preventDefault();
         const q = new FormData(e.target).get("q").trim();
-        location.href = "shop.html" + (q ? "?q=" + encodeURIComponent(q) : "");
+        navigate("shop.html" + (q ? "?q=" + encodeURIComponent(q) : ""));
       });
+
+      const navLinks = $("#navLinks");
+      if (navLinks) {
+        navLinks.addEventListener("mouseenter", (e) => {
+          const a = e.target.closest("a");
+          if (a) updateNavIndicator(a);
+        }, true);
+        navLinks.addEventListener("mouseleave", () => {
+          updateNavIndicator();
+        });
+      }
+      setTimeout(updateNavIndicator, 60);
+      window.addEventListener("resize", () => updateNavIndicator(), { passive: true });
     }
     const footer = $("#site-footer");
     if (footer) {
@@ -151,7 +393,16 @@
           <div class="copy-line">© ${new Date().getFullYear()} Jewels · Everyday Treasures</div>
         </div>`;
     }
-    const dlg = document.createElement("dialog");
+    createAuthDialog();
+  }
+
+  function createAuthDialog() {
+    let dlg = $("#authDialog");
+    if (dlg) {
+      if (!dlg._setMode) setupAuthDialog(dlg);
+      return dlg;
+    }
+    dlg = document.createElement("dialog");
     dlg.id = "authDialog";
     dlg.innerHTML = `
       <button class="dlg-close" type="button" data-close aria-label="Đóng">×</button>
@@ -184,7 +435,9 @@
                 Mật khẩu
                 <div class="pw-wrap">
                   <input name="password" type="password" minlength="8" placeholder="Nhập mật khẩu" required autocomplete="current-password">
-                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                  <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
+                    <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
+                  </button>
                 </div>
               </label>
               <div class="auth-util-row">
@@ -194,6 +447,13 @@
               <button class="btn block gold" type="submit" id="loginSubmit">Đăng Nhập Ngay →</button>
               <p class="feedback" id="loginFeedback" role="status" aria-live="polite"></p>
             </form>
+            <div class="auth-switch-card">
+              <div>
+                <strong>Bạn là Quản lý ?</strong>
+                <p>Truy cập không gian quản trị hệ thống Jewels</p>
+              </div>
+              <a href="../admin/login.html" class="auth-switch-btn">Đăng nhập admin →</a>
+            </div>
             <div class="auth-switch-card">
               <div>
                 <strong>Chưa có tài khoản?</strong>
@@ -268,14 +528,18 @@
                   Mật khẩu
                   <div class="pw-wrap">
                     <input name="password" type="password" minlength="8" placeholder="Tối thiểu 8 ký tự" required autocomplete="new-password">
-                    <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                    <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
+                      <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
+                    </button>
                   </div>
                 </label>
                 <label class="field">
                   Xác nhận mật khẩu
                   <div class="pw-wrap">
                     <input name="confirm" type="password" minlength="8" placeholder="Nhập lại mật khẩu" required autocomplete="new-password">
-                    <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu">👁️</button>
+                    <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
+                      <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
+                    </button>
                   </div>
                 </label>
               </div>
@@ -298,6 +562,7 @@
       </div>`;
     document.body.appendChild(dlg);
     setupAuthDialog(dlg);
+    return dlg;
   }
 
   function renderAccount() {
@@ -343,11 +608,11 @@
       if (m === "register") {
         loginView.hidden = true;
         regView.hidden = false;
-        regForm.querySelector("input[name=name]")?.focus();
+        regForm.querySelector("input[name=name]")?.focus({ preventScroll: true });
       } else {
         loginView.hidden = false;
         regView.hidden = true;
-        loginForm.querySelector("input[name=email]")?.focus();
+        loginForm.querySelector("input[name=email]")?.focus({ preventScroll: true });
       }
       loginFb.textContent = "";
       regFb.textContent = "";
@@ -367,7 +632,11 @@
         if (!inp) return;
         const isPw = inp.type === "password";
         inp.type = isPw ? "text" : "password";
-        btn.textContent = isPw ? "🙈" : "👁️";
+        const img = btn.querySelector("img");
+        if (img) {
+          img.src = isPw ? "../shared/images/Icons/eye-closed.png" : "../shared/images/Icons/eye.png";
+          img.alt = isPw ? "Ẩn mật khẩu" : "Hiện mật khẩu";
+        }
       });
     });
 
@@ -509,10 +778,21 @@
   }
 
   function openAuth(m = "login") {
-    const dlg = $("#authDialog");
-    dlg._setMode(m);
-    dlg.showModal();
-    dlg.querySelector("input[name=email]").focus();
+    let dlg = $("#authDialog");
+    if (!dlg || !dlg._setMode) {
+      dlg = createAuthDialog();
+    }
+    if (dlg && typeof dlg._setMode === "function") {
+      dlg._setMode(m);
+      if (typeof dlg.showModal === "function") {
+        try {
+          if (!dlg.open) dlg.showModal();
+        } catch {
+          dlg.showModal();
+        }
+      }
+      dlg.querySelector("input[name=email]")?.focus({ preventScroll: true });
+    }
   }
 
   // Đảm bảo đã đăng nhập; mở hộp thoại nếu chưa.
@@ -532,12 +812,36 @@
   // ---------- thành phần dùng chung ----------
   function productCard(p) {
     const range = p.maxPrice > p.price ? `Từ ${money(p.price)}` : money(p.price);
-    const badgeHtml = p.inStock === false
-      ? '<span class="tag" style="background:#555">Hết hàng</span>'
-      : (p.id === 1 ? '<span class="tag">✨ Tuyệt tác</span>' : (p.id === 3 ? '<span class="tag">Bán chạy</span>' : ''));
-    return `<a class="card" href="product.html?id=${p.id}">
+    const isOut = p.inStock === false || (typeof p.stock === "number" && p.stock <= 0);
+    let badgeHtml = "";
+    if (isOut) {
+      badgeHtml = '<span class="tag" style="background:#555">Hết hàng</span>';
+    } else if (p.id === 1 || p.isFeatured) {
+      badgeHtml = '<span class="tag">✨ Tuyệt tác 2026</span>';
+    } else if (p.id === 2 || (p.price && p.price >= 30000000)) {
+      badgeHtml = '<span class="tag">💎 Kim cương cao cấp</span>';
+    } else if (p.id === 3 || p.isBestseller) {
+      badgeHtml = '<span class="tag">🔥 Bán chạy nhất</span>';
+    } else if (p.id === 4 || (p.category && p.category.toLowerCase().includes("vàng"))) {
+      badgeHtml = '<span class="tag">✦ Vàng 18K Ý</span>';
+    }
+
+    const stockQty = typeof p.stock === "number" ? p.stock : (p.stockQuantity ?? (isOut ? 0 : ""));
+    const stockHtml = isOut
+      ? '<div class="card-stock card-stock-out"><span class="stock-pill out">Hết hàng</span></div>'
+      : `<div class="card-stock card-stock-in"><span class="stock-dot"></span><span>Hiện đang có sẵn: <strong>${stockQty !== "" ? stockQty : "nhiều"}</strong> sản phẩm</span></div>`;
+    const maxQty = (typeof p.stock === "number" && p.stock > 0) ? p.stock : 99;
+
+    return `<a class="card" href="product.html?id=${p.id}" data-stock="${stockQty}">
       ${badgeHtml}
-      <div class="thumb"><img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}"></div>
+      <div class="thumb">
+        <img loading="lazy" src="${esc(p.image)}" alt="${esc(p.name)}">
+        <div class="sparkle-container" aria-hidden="true">
+          <span class="sparkle sp-1">✦</span>
+          <span class="sparkle sp-2">✦</span>
+          <span class="sparkle sp-3">✦</span>
+        </div>
+      </div>
       <div class="body">
         <span class="cat">${esc(p.category || "")}</span>
         <h3>${esc(p.name)}</h3>
@@ -545,14 +849,246 @@
           <span class="price">${range}</span>
           <span style="font-size:0.8rem;color:var(--gold);font-weight:600;letter-spacing:0.04em">Khám phá →</span>
         </div>
+        ${stockHtml}
+        <div class="card-add-wrap">
+          <div class="card-qty-row">
+            <div class="card-qty-stepper" title="Nhập hoặc chọn số lượng">
+              <button type="button" class="btn-card-qty btn-card-qty-dec" aria-label="Giảm số lượng" ${isOut ? "disabled" : ""}>−</button>
+              <input type="number" class="card-qty-input" value="1" min="1" max="${maxQty}" aria-label="Số lượng" ${isOut ? "disabled" : ""}>
+              <button type="button" class="btn-card-qty btn-card-qty-inc" aria-label="Tăng số lượng" ${isOut ? "disabled" : ""}>+</button>
+            </div>
+            <button type="button" class="btn-card-add ${isOut ? "disabled" : ""}" data-pro-id="${p.id}" data-variant-id="${p.defaultVariantId || ""}" ${isOut ? "disabled" : ""} title="${isOut ? "Sản phẩm tạm hết hàng" : "Thêm vào giỏ hàng"}">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .491.592l-1.5 8A.5.5 0 0 1 13 12H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+              <span>${isOut ? "Hết hàng" : "Thêm giỏ"}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </a>`;
   }
 
+  // Xử lý nút tăng giảm số lượng (+ / -) trên từng thẻ sản phẩm
+  document.addEventListener("click", (e) => {
+    const qtyBtn = e.target.closest(".btn-card-qty");
+    if (!qtyBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const stepper = qtyBtn.closest(".card-qty-stepper");
+    const input = stepper?.querySelector(".card-qty-input");
+    if (!input || input.disabled) return;
+
+    let val = parseInt(input.value) || 1;
+    const maxVal = parseInt(input.getAttribute("max")) || 99;
+    if (qtyBtn.classList.contains("btn-card-qty-inc")) {
+      val = Math.min(maxVal, val + 1);
+    } else if (qtyBtn.classList.contains("btn-card-qty-dec")) {
+      val = Math.max(1, val - 1);
+    }
+    input.value = val;
+  });
+
+  // Chặn mở liên kết thẻ khi người dùng click, focus hoặc gõ số lượng trong ô input
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".card-qty-input")) {
+      e.stopPropagation();
+    }
+  });
+  document.addEventListener("input", (e) => {
+    const input = e.target.closest(".card-qty-input");
+    if (!input) return;
+    e.stopPropagation();
+    const maxVal = parseInt(input.getAttribute("max")) || 99;
+    let val = parseInt(input.value);
+    if (!isNaN(val)) {
+      if (val < 1) input.value = 1;
+      else if (val > maxVal) input.value = maxVal;
+    }
+  });
+  document.addEventListener("change", (e) => {
+    const input = e.target.closest(".card-qty-input");
+    if (!input) return;
+    e.stopPropagation();
+    const maxVal = parseInt(input.getAttribute("max")) || 99;
+    let val = parseInt(input.value);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > maxVal) val = maxVal;
+    input.value = val;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest(".card-qty-input")) {
+      e.stopPropagation();
+    }
+  });
+
+  // Lắng nghe bấm nút "Thêm vào giỏ hàng" trực tiếp trên từng thẻ sản phẩm
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".btn-card-add");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (btn.disabled || btn.classList.contains("disabled")) return;
+
+    try {
+      await requireLogin();
+    } catch {
+      return;
+    }
+
+    const proId = btn.dataset.proId;
+    let variantId = btn.dataset.variantId;
+
+    // Lấy số lượng từ ô input của thẻ
+    const wrap = btn.closest(".card-add-wrap");
+    const qtyInput = wrap?.querySelector(".card-qty-input");
+    const qty = Math.max(1, Math.min(99, parseInt(qtyInput?.value) || 1));
+
+    btn.disabled = true;
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = `<span>⏳ Đang thêm…</span>`;
+
+    try {
+      if (!variantId) {
+        const p = await api("/products/" + encodeURIComponent(proId));
+        const v = p.variants?.find((x) => x.stock > 0) || p.variants?.[0];
+        if (!v || v.stock <= 0) throw new Error("Sản phẩm đã tạm hết hàng.");
+        variantId = v.id;
+      }
+
+      await api("/cart/items", { method: "POST", body: { variantId: Number(variantId), quantity: qty } });
+      await refreshCartCount();
+      btn.classList.add("added");
+      btn.innerHTML = `<span>✓ Đã thêm (${qty})</span>`;
+      toast(`Đã thêm ${qty} sản phẩm vào giỏ hàng thành công!`, "ok");
+
+      setTimeout(() => {
+        btn.classList.remove("added");
+        btn.innerHTML = oldHtml;
+        btn.disabled = false;
+        if (qtyInput) qtyInput.value = 1;
+      }, 1500);
+    } catch (err) {
+      toast(err.message || "Không thể thêm vào giỏ hàng", "error");
+      btn.innerHTML = oldHtml;
+      btn.disabled = false;
+    }
+  });
+
   const variantLabel = (l) => [l.material, l.gemstone, l.size != null ? "Size " + l.size : null].filter(Boolean).join(" · ");
+
+  // ---------- HIỆU ỨNG POP-UP ĐẨY MÀN HÌNH 2 CHIỀU KHI LƯỚT LÊN & LƯỚT XUỐNG ----------
+  function initScrollReveal() {
+    // 1. Cập nhật trạng thái scrolled cho site-header
+    const header = $("#site-header");
+    const handleHeaderScroll = () => {
+      if (header) {
+        if (window.scrollY > 15) {
+          header.classList.add("scrolled");
+        } else {
+          header.classList.remove("scrolled");
+        }
+      }
+    };
+    window.addEventListener("scroll", handleHeaderScroll, { passive: true });
+    handleHeaderScroll();
+
+    if (typeof IntersectionObserver === "undefined") {
+      document.querySelectorAll(".reveal-on-scroll").forEach((el) => el.classList.add("is-revealed"));
+      return;
+    }
+
+    // 2. IntersectionObserver kích hoạt hiệu ứng 2 chiều
+    const observer = new IntersectionObserver((entries) => {
+      const winH = window.innerHeight || 800;
+      entries.forEach((entry) => {
+        const el = entry.target;
+        if (entry.isIntersecting) {
+          // Khi phần tử bước vào khung nhìn -> trồi về vị trí chuẩn translateY(0)
+          el.classList.add("is-revealed");
+        } else {
+          // Khi phần tử ra khỏi khung nhìn -> thiết lập hướng sẵn sàng để lướt quay lại sẽ trồi tiếp
+          const rect = entry.boundingClientRect;
+          if (rect.top >= winH - 20) {
+            // Nằm dưới đáy màn hình -> chuẩn bị trồi lên từ dưới khi cuộn xuống
+            el.classList.remove("is-revealed", "from-top");
+            el.classList.add("from-bottom");
+          } else if (rect.bottom <= 20) {
+            // Nằm trên đỉnh màn hình -> chuẩn bị trôi xuống từ trên khi cuộn ngược lên
+            el.classList.remove("is-revealed", "from-bottom");
+            el.classList.add("from-top");
+          }
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: "10px 0px -10px 0px",
+      threshold: [0, 0.05]
+    });
+
+    const targetSelectors = [
+      "main > section",
+      ".hero .copy",
+      ".section-head",
+      ".cat-row > .cat-tile",
+      ".grid > .card",
+      ".perks > .perk",
+      ".cart-layout",
+      ".cart-card",
+      ".checkout-grid > *",
+      ".order-card",
+      ".order-detail",
+      ".profile-card",
+      ".auth-box",
+      ".site-footer",
+      ".editorial-grid"
+    ];
+
+    function observeElements() {
+      const elements = document.querySelectorAll(targetSelectors.join(","));
+      const winH = window.innerHeight || 800;
+      elements.forEach((el) => {
+        if (!el.classList.contains("reveal-on-scroll")) {
+          const rect = el.getBoundingClientRect();
+          el.classList.add("reveal-on-scroll");
+          // Nếu phần tử đang ở ngay trong khung nhìn lúc đầu: hiện ngay
+          if (rect.top < winH * 0.85 && rect.bottom > 20) {
+            el.classList.add("is-revealed");
+          } else if (rect.top >= winH * 0.85) {
+            // Nằm ở dưới
+            el.classList.add("from-bottom");
+          } else {
+            // Nằm ở trên
+            el.classList.add("from-top");
+          }
+          observer.observe(el);
+        }
+      });
+    }
+
+    observeElements();
+    setTimeout(observeElements, 100);
+    setTimeout(observeElements, 400);
+
+    // Tự động gán cho phần tử render động (như sản phẩm nổi bật từ API)
+    let scanTimer = null;
+    const mutObs = new MutationObserver(() => {
+      clearTimeout(scanTimer);
+      scanTimer = setTimeout(observeElements, 50);
+    });
+    mutObs.observe(document.body, { childList: true, subtree: true });
+  }
 
   const ready = (async () => {
     buildLayout();
+    initScrollReveal();
+
+    // Ghi nhớ trang mua sắm gần nhất (để khi bấm "Tiếp tục mua sắm" trong giỏ hàng sẽ quay lại đúng nơi này)
+    const curPage = document.body.dataset.page || "";
+    if (["home", "shop", "product"].includes(curPage)) {
+      sessionStorage.setItem("jewels_last_shop_url", location.href);
+    }
+
     const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       try {
@@ -723,6 +1259,7 @@
   window.Jewels = {
     api, money, esc, $, $$, dateVN, toast, ready, state, productCard, variantLabel,
     openAuth, requireLogin, setCartCount, refreshCartCount, broadcast,
+    navigate, updateNavIndicator, showPageLoading,
     onLogin: (fn) => listeners.push(fn),
     onRealtime: (fn) => realtimeListeners.push(fn),
   };
