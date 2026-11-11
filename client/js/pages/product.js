@@ -2,6 +2,7 @@
   const { api, $, $$, money, esc, toast, variantLabel, requireLogin, refreshCartCount, productCard } = Jewels;
   const id = new URLSearchParams(location.search).get("id");
   const root = $("#productRoot");
+  if (!root) return;
   if (!id) { root.innerHTML = '<div class="empty"><h3>Thiếu mã sản phẩm</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>'; return; }
 
   let p;
@@ -32,7 +33,14 @@
     root.innerHTML = `
       <div class="product">
         <div class="gallery">
-          <div class="main"><img id="mainImg" src="${esc(p.images[imgIndex].url)}" alt="${esc(p.name)}"></div>
+          <div class="main">
+            <img id="mainImg" src="${esc(p.images[imgIndex].url)}" alt="${esc(p.name)}">
+            <div class="sparkle-container" aria-hidden="true">
+              <span class="sparkle sp-1">✦</span>
+              <span class="sparkle sp-2">✦</span>
+              <span class="sparkle sp-3">✦</span>
+            </div>
+          </div>
           ${p.images.length > 1 ? `<div class="thumbs">${p.images.map((im, i) => `<button class="${i === imgIndex ? "active" : ""}" data-img="${i}" aria-label="Ảnh ${i + 1}"><img src="${esc(im.url)}" alt=""></button>`).join("")}</div>` : ""}
         </div>
         <div class="info">
