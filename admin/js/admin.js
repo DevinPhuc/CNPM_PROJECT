@@ -2826,9 +2826,19 @@
   window.exportAnalyticsToExcel = exportAnalyticsToExcel;
 
   // ---------- MODAL POPUP TIỆN ÍCH ----------
+  // Đưa toàn bộ modal backdrop ra trực tiếp thẻ body để tránh bị giới hạn khung bởi transform của panel/module
+  document.querySelectorAll(".admin-modal-backdrop").forEach((modalEl) => {
+    if (modalEl.parentElement !== document.body) {
+      document.body.appendChild(modalEl);
+    }
+  });
+
   window.openFormModal = (modalId) => {
     const modal = document.getElementById(modalId);
     if (modal) {
+      if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
       modal.hidden = false;
       modal.removeAttribute("hidden");
     }
