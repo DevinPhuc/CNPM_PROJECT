@@ -1,0 +1,13 @@
+{
+  "files": [
+    "client/**/*.html",
+    "admin/**/*.html"
+  ],
+  "exclude": [
+    "client/index.html",
+    "admin/index.html"
+  ],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

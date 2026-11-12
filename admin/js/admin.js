@@ -38,7 +38,7 @@
   if (topbarDropName) topbarDropName.textContent = adminName;
   if (topbarDropEmail) topbarDropEmail.textContent = adminEmail;
 
-  // 3. Xử lý nhấp vào avatar của admin để hiển thị menu đăng xuất
+  // 3. Xử lý nhấp vào avatar của admin để hiển thị menu đăng xuất & giao diện
   const setupAvatarDropdown = (triggerId, dropdownId, logoutBtnId) => {
     const trigger = document.getElementById(triggerId);
     const dropdown = document.getElementById(dropdownId);
@@ -49,8 +49,10 @@
         e.stopPropagation();
         const isHidden = dropdown.hasAttribute("hidden");
         document.querySelectorAll(".admin-profile-dropdown").forEach((d) => d.setAttribute("hidden", ""));
+        document.querySelectorAll(".topbar-avatar-wrap").forEach((w) => w.classList.remove("is-open"));
         if (isHidden) {
           dropdown.removeAttribute("hidden");
+          trigger.classList.add("is-open");
         }
       });
       dropdown.addEventListener("click", (e) => e.stopPropagation());
@@ -72,6 +74,237 @@
 
   document.addEventListener("click", () => {
     document.querySelectorAll(".admin-profile-dropdown").forEach((d) => d.setAttribute("hidden", ""));
+    document.querySelectorAll(".topbar-avatar-wrap").forEach((w) => w.classList.remove("is-open"));
+  });
+
+  // ---------- IGNARA THEME ENGINE (LIGHT / DARK) + TOOLTIP + ANIMATIONS ----------
+  const ADMIN_THEME_KEY = "jewels-admin-theme";
+  const themeToggleBtn = document.getElementById("themeToggleBtn");
+  let activeTipEl = null;
+
+  function syncThemeUI(theme) {
+    const isDark = theme === "dark";
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+    if (themeToggleBtn) {
+      themeToggleBtn.setAttribute("data-tip", isDark ? "Light  T" : "Dark  T");
+      if (activeTipEl && activeTipEl._anchor === themeToggleBtn) {
+        renderTipContent(activeTipEl, themeToggleBtn.getAttribute("data-tip"));
+      }
+    }
+    document.querySelectorAll(".dropdown-theme-item[data-set-theme]").forEach((btn) => {
+      const btnTheme = btn.getAttribute("data-set-theme");
+      btn.classList.toggle("is-active", btnTheme === (isDark ? "dark" : "light"));
+    });
+  }
+
+  function applyAdminTheme(nextTheme, originEl) {
+    const normalized = nextTheme === "dark" ? "dark" : "light";
+    const current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+
+    const commitTheme = () => {
+      syncThemeUI(normalized);
+      try {
+        localStorage.setItem(ADMIN_THEME_KEY, normalized);
+      } catch { }
+    };
+
+    if (themeToggleBtn && typeof themeToggleBtn.animate === "function") {
+      const activeSvg = themeToggleBtn.querySelector(
+        normalized === "dark" ? ".theme-icon-sun" : ".theme-icon-moon"
+      ) || themeToggleBtn;
+      activeSvg.animate(
+        [
+          { transform: "scale(0.68) rotate(-28deg)" },
+          { transform: "scale(1) rotate(0deg)" },
+        ],
+        { duration: 520, easing: "cubic-bezier(0.34, 1.8, 0.64, 1)" }
+      );
+    }
+
+    if (current === normalized) {
+      commitTheme();
+      return;
+    }
+
+    const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!document.startViewTransition || reduceMotion) {
+      commitTheme();
+      return;
+    }
+
+    const refEl = originEl || themeToggleBtn;
+    const rect = refEl ? refEl.getBoundingClientRect() : null;
+    const cx = rect ? rect.left + rect.width / 2 : window.innerWidth - 120;
+    const cy = rect ? rect.top + rect.height / 2 : 36;
+    const maxRadius = Math.hypot(
+      Math.max(cx, window.innerWidth - cx),
+      Math.max(cy, window.innerHeight - cy)
+    );
+
+    const vt = document.startViewTransition(() => {
+      commitTheme();
+    });
+
+    vt.ready
+      .then(() => {
+        document.documentElement.animate(
+          {
+            clipPath: [
+              `circle(0px at ${cx}px ${cy}px)`,
+              `circle(${maxRadius}px at ${cx}px ${cy}px)`,
+            ],
+          },
+          {
+            duration: 450,
+            easing: "cubic-bezier(.65, 0, .35, 1)",
+            pseudoElement: "::view-transition-new(root)",
+          }
+        );
+      })
+      .catch(() => { });
+  }
+
+  // Khởi tạo trạng thái UI cho theme hiện tại
+  syncThemeUI(
+    (document.documentElement.getAttribute("data-theme") ||
+      localStorage.getItem(ADMIN_THEME_KEY) ||
+      "light") === "dark"
+      ? "dark"
+      : "light"
+  );
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      applyAdminTheme(cur === "dark" ? "light" : "dark", themeToggleBtn);
+    });
+  }
+
+  document.querySelectorAll(".dropdown-theme-item[data-set-theme]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const targetTheme = btn.getAttribute("data-set-theme") || "light";
+      const avatarTrigger = document.getElementById("topbarAvatarTrigger") || btn;
+      applyAdminTheme(targetTheme, avatarTrigger);
+    });
+  });
+
+  // Phím tắt 'T' chuyển đổi giao diện Sáng / Tối (giống Ignara)
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = (e.target && e.target.tagName ? e.target.tagName : "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || (e.target && e.target.isContentEditable)) {
+      return;
+    }
+    if (e.key === "t" || e.key === "T") {
+      e.preventDefault();
+      const cur = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+      applyAdminTheme(cur === "dark" ? "light" : "dark", themeToggleBtn);
+    }
+  });
+
+  // Floating Tooltip (.ignara-tip) khi di chuột vào nút có [data-tip]
+  function renderTipContent(tipEl, rawText) {
+    const parts = String(rawText || "").split("  ");
+    tipEl.innerHTML = "";
+    const mainSpan = document.createElement("span");
+    mainSpan.textContent = parts[0] || "";
+    tipEl.appendChild(mainSpan);
+    if (parts[1]) {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = parts[1];
+      tipEl.appendChild(kbd);
+    }
+  }
+
+  function showIgnaraTip(anchor) {
+    hideIgnaraTip();
+    const text = anchor.getAttribute("data-tip");
+    if (!text) return;
+    const tip = document.createElement("div");
+    tip.className = "ignara-tip";
+    tip._anchor = anchor;
+    renderTipContent(tip, text);
+    document.body.appendChild(tip);
+    const r = anchor.getBoundingClientRect();
+    const tr = tip.getBoundingClientRect();
+    const left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, r.left + r.width / 2 - tr.width / 2));
+    const top = r.bottom + 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    activeTipEl = tip;
+  }
+
+  function hideIgnaraTip() {
+    if (activeTipEl) {
+      activeTipEl.remove();
+      activeTipEl = null;
+    }
+  }
+
+  document.querySelectorAll("[data-tip]").forEach((el) => {
+    el.addEventListener("mouseenter", () => showIgnaraTip(el));
+    el.addEventListener("mouseleave", hideIgnaraTip);
+    el.addEventListener("focus", () => showIgnaraTip(el));
+    el.addEventListener("blur", hideIgnaraTip);
+  });
+
+  // Liquid sliding sidebar pill (.admin-nav-pill)
+  const adminNav = document.querySelector(".admin-nav");
+  let navPillEl = null;
+  if (adminNav) {
+    navPillEl = document.createElement("div");
+    navPillEl.className = "admin-nav-pill";
+    adminNav.prepend(navPillEl);
+    adminNav.classList.add("has-pill");
+  }
+
+  function updateSidebarPill() {
+    if (!adminNav || !navPillEl) return;
+    const activeItem = adminNav.querySelector(".admin-nav-item.is-active");
+    if (!activeItem) {
+      navPillEl.style.opacity = "0";
+      return;
+    }
+    const y = activeItem.offsetTop;
+    const h = activeItem.offsetHeight;
+    navPillEl.style.opacity = "1";
+    navPillEl.style.height = `${h}px`;
+    navPillEl.style.transform = `translateY(${y}px)`;
+  }
+
+  window.addEventListener("resize", updateSidebarPill);
+
+  // Hiệu ứng tách từ (split-word reveal) cho tiêu đề Topbar
+  function animateTopbarTitle(text) {
+    const tt = document.getElementById("topbarTitle");
+    if (!tt) return;
+    const words = String(text || "").trim().split(/\s+/);
+    tt.innerHTML = words
+      .map((w, idx) => `<span class="ignara-word" style="animation-delay:${idx * 38}ms">${w}</span>`)
+      .join(" ");
+  }
+
+  // Tự động gắn animation stagger mượt cho các dòng bảng (.admin-row) khi danh sách cập nhật
+  const listObserver = new MutationObserver((mutations) => {
+    mutations.forEach((m) => {
+      if (m.type === "childList" && m.addedNodes.length > 0) {
+        const container = m.target;
+        if (container && container.classList && container.classList.contains("admin-list")) {
+          const rows = container.querySelectorAll(".admin-row:not(.header-row)");
+          rows.forEach((row, idx) => {
+            if (idx < 25) {
+              row.style.animationDelay = `${idx * 18}ms`;
+            }
+          });
+        }
+      }
+    });
+  });
+
+  document.querySelectorAll(".admin-list").forEach((listEl) => {
+    listObserver.observe(listEl, { childList: true });
   });
 
   // ---------- TIỆN ÍCH API & TOAST ----------
@@ -1069,18 +1302,18 @@
           `}
         </div>
 
-        <div style="margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; letter-spacing: 0.5px;">Thông tin khách hàng</h4>
+        <div class="inv-customer-box" style="margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h4 class="inv-customer-title" style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">Thông tin khách hàng</h4>
           <div style="display: grid; gap: 5px; font-size: 13px;">
-            <div style="display:flex; justify-content:space-between;"><span style="color:#64748b;">Khách hàng:</span> <strong style="color:#0f172a;">${inv.customer}</strong></div>
-            <div style="display:flex; justify-content:space-between;"><span style="color:#64748b;">Điện thoại:</span> <strong style="color:#1e293b;">${inv.phone || "Không có SĐT"}</strong></div>
-            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#64748b; flex-shrink:0;">Địa chỉ:</span> <span style="color:#334155; text-align:right; word-break:break-word;">${inv.address || "Mua trực tiếp tại showroom"}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Khách hàng:</span> <strong style="color:#0f172a;">${inv.customer}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Điện thoại:</span> <strong style="color:#0f172a;">${inv.phone || "Không có SĐT"}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#475569; flex-shrink:0;">Địa chỉ:</span> <span style="color:#1e293b; text-align:right; word-break:break-word;">${inv.address || "Mua trực tiếp tại showroom"}</span></div>
           </div>
         </div>
 
         <div style="margin-bottom: 16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h4 style="margin:0; font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; letter-spacing:0.5px;">
+            <h4 class="inv-items-heading" style="margin:0; font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; letter-spacing:0.5px;">
               Chi tiết mặt hàng (${items.length} món)
             </h4>
             <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700; font-size:11.5px; padding:3px 9px; border-radius:12px;">
@@ -1092,41 +1325,41 @@
             ${(items.length > 0) ? items.map((it) => {
               const subtotalNum = it.subtotal || (it.quantity * (it.unit_price || 0));
               return `
-                <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                <div class="inv-item-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:10px;">
-                    <strong style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Trang sức cao cấp"}</strong>
+                    <strong class="inv-item-name" style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Trang sức cao cấp"}</strong>
                     <div style="text-align:right; flex-shrink:0;">
                       <span style="font-size:11px; color:#64748b; margin-right:4px;">Thành tiền:</span>
                       <strong style="font-size:15px; font-weight:800; color:#b45309; letter-spacing:0.2px;">${formatMoney(subtotalNum)}</strong>
                     </div>
                   </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
+                  <div class="inv-item-meta-pill" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span style="display:inline-flex; align-items:center; background:#ecfdf5; color:#065f46; border:1px solid #10b981; font-weight:800; font-size:11.5px; padding:2px 8px; border-radius:4px;">
                         SL: ${it.quantity}
                       </span>
                       ${it.unit_price ? `
-                        <span style="color:#64748b;">
-                          Đơn giá: <strong style="color:#1e293b; font-weight:700;">${formatMoney(it.unit_price)}</strong>
+                        <span style="color:#475569;">
+                          Đơn giá: <strong style="color:#0f172a; font-weight:700;">${formatMoney(it.unit_price)}</strong>
                         </span>
                       ` : ''}
                     </div>
-                    <span style="font-size:11px; color:#94a3b8; font-style:italic;">Chính hãng Jewels</span>
+                    <span style="font-size:11px; color:#64748b; font-style:italic;">Chính hãng Jewels</span>
                   </div>
                 </div>
               `;
             }).join('') : `
-              <div style="color: #64748b; font-size: 12px; font-style: italic; padding: 12px; text-align: center; background:#f8fafc; border-radius:8px;">
+              <div style="color: #475569; font-size: 12px; font-style: italic; padding: 12px; text-align: center; background:#f8fafc; border-radius:8px;">
                 Hóa đơn dịch vụ / Mua sắm lẻ tại quầy
               </div>
             `}
           </div>
         </div>
 
-        <div style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
-          <div style="display:flex; justify-content:space-between; color:#475569;">
-            <span>Tạm tính tiền hàng:</span>
-            <strong style="color:#0f172a; font-size:13.5px;">${formatMoney(inv.subtotal)}</strong>
+        <div class="inv-summary-section" style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
+          <div class="inv-summary-line" style="display:flex; justify-content:space-between; color:#475569;">
+            <span class="inv-summary-label">Tạm tính tiền hàng:</span>
+            <strong class="inv-summary-val" style="color:#0f172a; font-size:13.5px;">${formatMoney(inv.subtotal)}</strong>
           </div>
           ${inv.discountAmount > 0 ? `
             <div style="display:flex; justify-content:space-between; color:#15803d;">
@@ -1135,9 +1368,9 @@
             </div>
           ` : ''}
           
-          <div style="display:flex; justify-content:space-between; color:#475569;">
-            <span>Phí vận chuyển:</span>
-            <strong style="color:${inv.shippingFee > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">
+          <div class="inv-summary-line" style="display:flex; justify-content:space-between; color:#475569;">
+            <span class="inv-summary-label">Phí vận chuyển:</span>
+            <strong class="${inv.shippingFee > 0 ? 'inv-summary-val' : ''}" style="color:${inv.shippingFee > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">
               ${inv.shippingFee > 0 ? formatMoney(inv.shippingFee) : 'Miễn phí'}
             </strong>
           </div>
@@ -1149,7 +1382,7 @@
               ${formatMoney(inv.amount)}
             </strong>
           </div>
-          <div style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
+          <div class="inv-vat-note" style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
             (Đã bao gồm thuế VAT)
           </div>
         </div>
@@ -1841,16 +2074,16 @@
 
     showModal(`Chi tiết đơn hàng ${order.code}`, `
       <div style="font-size:13px; display:grid; gap:10px;">
-        <div style="padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
-          <p style="margin:2px 0;"><strong>Người nhận:</strong> ${order.customer} - ${order.phone || "Không có SĐT"}</p>
-          <p style="margin:2px 0;"><strong>Địa chỉ nhận:</strong> ${order.address || "Tại cửa hàng"}</p>
-          <p style="margin:2px 0;"><strong>Ngày đặt:</strong> ${formatDateTime(order.date)}</p>
-          <p style="margin:2px 0; display:flex; align-items:center; gap:6px;"><strong>Trạng thái:</strong> ${renderStatusBadge(order.status)}</p>
+        <div class="inv-customer-box" style="padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; color:#0f172a;">
+          <p style="margin:2px 0; color:#0f172a;"><strong style="color:#0f172a;">Người nhận:</strong> ${order.customer} - ${order.phone || "Không có SĐT"}</p>
+          <p style="margin:2px 0; color:#0f172a;"><strong style="color:#0f172a;">Địa chỉ nhận:</strong> ${order.address || "Tại cửa hàng"}</p>
+          <p style="margin:2px 0; color:#0f172a;"><strong style="color:#0f172a;">Ngày đặt:</strong> ${formatDateTime(order.date)}</p>
+          <p style="margin:2px 0; display:flex; align-items:center; gap:6px; color:#0f172a;"><strong style="color:#0f172a;">Trạng thái:</strong> ${renderStatusBadge(order.status)}</p>
         </div>
 
         <div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <h4 style="font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; margin:0;">
+            <h4 class="inv-items-heading" style="font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; margin:0;">
               Danh sách sản phẩm (${(order.items || []).length} món)
             </h4>
             <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700; font-size:11.5px; padding:3px 9px; border-radius:12px;">
@@ -1862,26 +2095,26 @@
             ${(order.items || []).map((it) => {
               const subtotalNum = it.subtotal || (it.quantity * (it.unit_price || 0));
               return `
-                <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                <div class="inv-item-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:10px;">
-                    <strong style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Sản phẩm"}</strong>
+                    <strong class="inv-item-name" style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${it.product_name || "Sản phẩm"}</strong>
                     <div style="text-align:right; flex-shrink:0;">
                       <span style="font-size:11px; color:#64748b; margin-right:4px;">Thành tiền:</span>
                       <strong style="font-size:15px; font-weight:800; color:#b45309; letter-spacing:0.2px;">${formatMoney(subtotalNum)}</strong>
                     </div>
                   </div>
-                  <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
+                  <div class="inv-item-meta-pill" style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:6px 10px; border-radius:6px; border:1px solid #f1f5f9; font-size:12px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span style="display:inline-flex; align-items:center; background:#ecfdf5; color:#065f46; border:1px solid #10b981; font-weight:800; font-size:11.5px; padding:2px 8px; border-radius:4px;">
                         SL: ${it.quantity}
                       </span>
                       ${it.unit_price ? `
-                        <span style="color:#64748b;">
-                          Đơn giá: <strong style="color:#1e293b; font-weight:700;">${formatMoney(it.unit_price)}</strong>
+                        <span style="color:#475569;">
+                          Đơn giá: <strong style="color:#0f172a; font-weight:700;">${formatMoney(it.unit_price)}</strong>
                         </span>
                       ` : ''}
                     </div>
-                    <span style="font-size:11px; color:#94a3b8; font-style:italic;">Chính hãng Jewels</span>
+                    <span style="font-size:11px; color:#64748b; font-style:italic;">Chính hãng Jewels</span>
                   </div>
                 </div>
               `;
@@ -1889,16 +2122,16 @@
           </div>
         </div>
 
-        <div style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
-          <div style="display:flex; justify-content:space-between; color:#475569;"><span>Tạm tính tiền hàng:</span> <strong style="color:#0f172a; font-size:13.5px;">${formatMoney(itemsSub)}</strong></div>
+        <div class="inv-summary-section" style="display:grid; gap:7px; font-size:13px; padding-top:12px; border-top:1px solid #e2e8f0;">
+          <div class="inv-summary-line" style="display:flex; justify-content:space-between; color:#475569;"><span class="inv-summary-label">Tạm tính tiền hàng:</span> <strong class="inv-summary-val" style="color:#0f172a; font-size:13.5px;">${formatMoney(itemsSub)}</strong></div>
           ${disc > 0 ? `<div style="display:flex; justify-content:space-between; color:#15803d;"><span>Giảm giá:</span> <strong style="font-size:13.5px; color:#15803d;">-${formatMoney(disc)}</strong></div>` : ''}
           
-          <div style="display:flex; justify-content:space-between; color:#475569;"><span>Phí vận chuyển:</span> <strong style="color:${ship > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">${ship > 0 ? formatMoney(ship) : "Miễn phí"}</strong></div>
+          <div class="inv-summary-line" style="display:flex; justify-content:space-between; color:#475569;"><span class="inv-summary-label">Phí vận chuyển:</span> <strong class="${ship > 0 ? 'inv-summary-val' : ''}" style="color:${ship > 0 ? '#0f172a' : '#15803d'}; font-size:13.5px;">${ship > 0 ? formatMoney(ship) : "Miễn phí"}</strong></div>
           <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border:1.5px solid #10b981; border-radius:8px; padding:11px 14px; margin-top:6px; box-shadow:0 1px 3px rgba(16,185,129,0.1);">
             <span style="font-size:13px; font-weight:800; color:#065f46; text-transform:uppercase; letter-spacing:0.5px;">Tổng cộng thanh toán:</span>
             <strong style="font-size:19px; font-weight:900; color:#047857;">${formatMoney(total)}</strong>
           </div>
-          <div style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
+          <div class="inv-vat-note" style="text-align:right; font-size:11.5px; color:#64748b; font-style:italic; margin-top:4px;">
             (Đã bao gồm thuế VAT)
           </div>
         </div>
@@ -2593,9 +2826,19 @@
   window.exportAnalyticsToExcel = exportAnalyticsToExcel;
 
   // ---------- MODAL POPUP TIỆN ÍCH ----------
+  // Đưa toàn bộ modal backdrop ra trực tiếp thẻ body để tránh bị giới hạn khung bởi transform của panel/module
+  document.querySelectorAll(".admin-modal-backdrop").forEach((modalEl) => {
+    if (modalEl.parentElement !== document.body) {
+      document.body.appendChild(modalEl);
+    }
+  });
+
   window.openFormModal = (modalId) => {
     const modal = document.getElementById(modalId);
     if (modal) {
+      if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
       modal.hidden = false;
       modal.removeAttribute("hidden");
     }
@@ -2653,22 +2896,23 @@
     // Cập nhật tiêu đề Topbar
     const titles = {
       overview: { eyebrow: "BẢNG ĐIỀU KHIỂN", title: "Tổng quan cửa hàng" },
-      accounts: { eyebrow: "HỆ THỐNG", title: "1. Quản lý tài khoản & vai trò" },
-      staff: { eyebrow: "NHÂN SỰ", title: "2. Quản lý nhân viên" },
-      customers: { eyebrow: "KHÁCH HÀNG", title: "3. Quản lý khách hàng" },
-      products: { eyebrow: "SẢN PHẨM", title: "4. Quản lý sản phẩm" },
-      invoices: { eyebrow: "HÓA ĐƠN", title: "5. Quản lý hóa đơn" },
-      promotions: { eyebrow: "KHUYẾN MÃI", title: "6. Quản lý khuyến mãi" },
-      orders: { eyebrow: "ĐƠN HÀNG", title: "7. Quản lý đơn đặt hàng" },
-      stock: { eyebrow: "KHO HÀNG", title: "8. Quản lý nhập hàng" },
-      suppliers: { eyebrow: "ĐỐI TÁC", title: "9. Quản lý nhà cung cấp" },
-      analytics: { eyebrow: "BÁO CÁO", title: "10. Thống kê & Phân tích" },
+      accounts: { eyebrow: "HỆ THỐNG", title: "Quản lý tài khoản & vai trò" },
+      staff: { eyebrow: "NHÂN SỰ", title: "Quản lý nhân viên" },
+      customers: { eyebrow: "KHÁCH HÀNG", title: "Quản lý khách hàng" },
+      products: { eyebrow: "SẢN PHẨM", title: "Quản lý sản phẩm" },
+      invoices: { eyebrow: "HÓA ĐƠN", title: "Quản lý hóa đơn" },
+      promotions: { eyebrow: "KHUYẾN MÃI", title: "Quản lý khuyến mãi" },
+      orders: { eyebrow: "ĐƠN HÀNG", title: "Quản lý đơn đặt hàng" },
+      stock: { eyebrow: "KHO HÀNG", title: "Quản lý nhập hàng" },
+      suppliers: { eyebrow: "ĐỐI TÁC", title: "Quản lý nhà cung cấp" },
+      analytics: { eyebrow: "BÁO CÁO", title: "Thống kê & Phân tích" },
     };
     const t = titles[moduleName] || titles.overview;
     const eb = document.getElementById("topbarEyebrow");
     const tt = document.getElementById("topbarTitle");
     if (eb) eb.textContent = t.eyebrow;
-    if (tt) tt.textContent = t.title;
+    if (tt) animateTopbarTitle(t.title);
+    requestAnimationFrame(updateSidebarPill);
 
     // Kích hoạt load dữ liệu
     switch (moduleName) {
