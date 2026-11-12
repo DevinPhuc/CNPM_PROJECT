@@ -1185,24 +1185,19 @@
       return;
     }
 
-    // 2. IntersectionObserver kích hoạt hiệu ứng 2 chiều
     const observer = new IntersectionObserver(
       (entries) => {
         const winH = window.innerHeight || 800;
         entries.forEach((entry) => {
           const el = entry.target;
           if (entry.isIntersecting) {
-            // Khi phần tử bước vào khung nhìn -> trồi về vị trí chuẩn translateY(0)
             el.classList.add("is-revealed");
           } else {
-            // Khi phần tử ra khỏi khung nhìn -> thiết lập hướng sẵn sàng để lướt quay lại sẽ trồi tiếp
             const rect = entry.boundingClientRect;
             if (rect.top >= winH - 20) {
-              // Nằm dưới đáy màn hình -> chuẩn bị trồi lên từ dưới khi cuộn xuống
               el.classList.remove("is-revealed", "from-top");
               el.classList.add("from-bottom");
             } else if (rect.bottom <= 20) {
-              // Nằm trên đỉnh màn hình -> chuẩn bị trôi xuống từ trên khi cuộn ngược lên
               el.classList.remove("is-revealed", "from-bottom");
               el.classList.add("from-top");
             }

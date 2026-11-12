@@ -14,9 +14,13 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="css/admin.css?v=20261109_fix" />
+  <link rel="stylesheet" href="css/admin.css?v=20261112_3" />
   <script>
     (function () {
+      try {
+        var savedTheme = localStorage.getItem("jewels-admin-theme") || "light";
+        document.documentElement.setAttribute("data-theme", savedTheme === "dark" ? "dark" : "light");
+      } catch (e) {}
       try {
         var s = JSON.parse(localStorage.getItem("jewels-admin-session") || "null");
         if (!s || !s.token) {
@@ -41,45 +45,6 @@
         </div>
       </div>
 
-      <div class="admin-profile-card" id="adminProfileTrigger" role="button" tabindex="0"
-        title="Nhấp vào avatar để đăng xuất">
-        <div class="admin-avatar" id="adminAvatar">QT</div>
-        <div class="admin-profile-meta">
-          <strong id="adminProfileName">Quản trị viên</strong>
-          <span id="adminProfileEmail">admin@jewels.vn</span>
-        </div>
-        <svg class="admin-profile-arrow" width="14" height="14" viecdwBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-
-        <div class="admin-profile-dropdown" id="adminProfileDropdown" hidden>
-          <div class="dropdown-header">
-            <strong id="dropdownName">Quản trị viên</strong>
-            <span class="status-badge badge-success">Quản trị viên</span>
-          </div>
-          <div class="dropdown-body">
-            <p style="margin: 4px 0; font-size: 11px; color: #555">
-              <strong>Email:</strong>
-              <span id="dropdownEmail">admin@jewels.vn</span>
-            </p>
-            <p style="margin: 4px 0; font-size: 11px; color: #555">
-              <strong>Quyền:</strong> Toàn quyền hệ thống
-            </p>
-          </div>
-          <div class="dropdown-footer">
-            <button type="button" class="admin-logout-btn" id="dropdownLogoutBtn" style="width: 100%">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                style="margin-right: 6px">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-              Đăng xuất tài khoản
-            </button>
-          </div>
-        </div>
-      </div>
 
       <nav class="admin-nav" aria-label="Menu quản lý">
         <a class="admin-nav-item is-active" href="#overview">
@@ -221,21 +186,69 @@
             Làm mới dữ liệu
           </button>
 
-          <!-- TOPBAR AVATAR CÓ MENU ĐĂNG XUẤT -->
+          <!-- NÚT ĐỔI CHẾ ĐỘ SÁNG / TỐI (IGNARA STYLE) -->
+          <button type="button" class="admin-theme-btn" id="themeToggleBtn" data-tip="Dark  T"
+            aria-label="Chuyển chế độ Sáng / Tối">
+            <svg class="theme-icon theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2"></path>
+              <path d="M12 20v2"></path>
+              <path d="m4.93 4.93 1.41 1.41"></path>
+              <path d="m17.66 17.66 1.41 1.41"></path>
+              <path d="M2 12h2"></path>
+              <path d="M20 12h2"></path>
+              <path d="m6.34 17.66-1.41 1.41"></path>
+              <path d="m19.07 4.93-1.41 1.41"></path>
+            </svg>
+            <svg class="theme-icon theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+            </svg>
+          </button>
+
+          <!-- TOPBAR AVATAR CÓ MENU ĐỔI GIAO DIỆN & ĐĂNG XUẤT -->
           <div class="topbar-avatar-wrap" id="topbarAvatarTrigger" role="button" tabindex="0"
-            title="Nhấp vào avatar để đăng xuất">
+            title="Tài khoản & Giao diện">
             <div class="admin-avatar mini-avatar">QT</div>
             <span class="topbar-user-name" id="topbarUserName">Quản trị viên</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="topbar-avatar-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m6 9 6 6 6-6" />
             </svg>
 
             <div class="admin-profile-dropdown topbar-dropdown" id="topbarProfileDropdown" hidden>
               <div class="dropdown-header">
                 <strong id="topbarDropName">Quản trị viên</strong>
-                <small id="topbarDropEmail" style="color: #666; display: block">admin@jewels.vn</small>
+                <small id="topbarDropEmail">admin@jewels.vn</small>
               </div>
-              <button type="button" class="admin-logout-btn" id="topbarLogoutBtn" style="width: 100%; margin-top: 8px">
+              <div class="dropdown-theme-menu" role="group" aria-label="Chế độ màu giao diện">
+                <button type="button" class="dropdown-theme-item" data-set-theme="light">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="m4.93 4.93 1.41 1.41"></path>
+                    <path d="m17.66 17.66 1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="m6.34 17.66-1.41 1.41"></path>
+                    <path d="m19.07 4.93-1.41 1.41"></path>
+                  </svg>
+                  <span class="dropdown-theme-label">Light</span>
+                  <span class="dropdown-theme-check" aria-hidden="true">✓</span>
+                </button>
+                <button type="button" class="dropdown-theme-item" data-set-theme="dark">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
+                  </svg>
+                  <span class="dropdown-theme-label">Dark</span>
+                  <span class="dropdown-theme-check" aria-hidden="true">✓</span>
+                </button>
+              </div>
+              <div class="dropdown-divider"></div>
+              <button type="button" class="admin-logout-btn" id="topbarLogoutBtn" style="width: 100%">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                   style="margin-right: 6px">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -342,7 +355,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">1. HỆ THỐNG PHÂN QUYỀN</p>
+              <p class="account-eyebrow">HỆ THỐNG PHÂN QUYỀN</p>
               <h2>Quản lý tài khoản và vai trò</h2>
             </div>
             <div class="admin-module-actions">
@@ -455,7 +468,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">2. NHÂN SỰ NỘI BỘ</p>
+              <p class="account-eyebrow">NHÂN SỰ NỘI BỘ</p>
               <h2>Quản lý nhân viên</h2>
             </div>
             <div class="admin-module-actions">
@@ -519,7 +532,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">3. QUAN HỆ KHÁCH HÀNG</p>
+              <p class="account-eyebrow">QUAN HỆ KHÁCH HÀNG</p>
               <h2>Quản lý khách hàng</h2>
             </div>
             <div class="admin-module-actions">
@@ -574,7 +587,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">4. DANH MỤC TRANG SỨC</p>
+              <p class="account-eyebrow">DANH MỤC TRANG SỨC</p>
               <h2>Quản lý sản phẩm</h2>
             </div>
             <div class="admin-module-actions">
@@ -650,7 +663,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">5. CHỨNG TỪ BÁN HÀNG</p>
+              <p class="account-eyebrow">CHỨNG TỪ BÁN HÀNG</p>
               <h2>Quản lý hóa đơn</h2>
             </div>
             <div class="admin-module-actions">
@@ -709,7 +722,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">6. MARKETING & ƯU ĐÃI</p>
+              <p class="account-eyebrow">MARKETING & ƯU ĐÃI</p>
               <h2>Quản lý khuyến mãi</h2>
             </div>
             <div class="admin-module-actions">
@@ -845,7 +858,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">7. XỬ LÝ ĐƠN HÀNG</p>
+              <p class="account-eyebrow">XỬ LÝ ĐƠN HÀNG</p>
               <h2>Quản lý đơn đặt hàng</h2>
             </div>
             <div class="admin-module-actions">
@@ -932,7 +945,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">8. KHO & NHẬP HÀNG</p>
+              <p class="account-eyebrow">KHO & NHẬP HÀNG</p>
               <h2>Quản lý nhập hàng</h2>
             </div>
             <div class="admin-module-actions">
@@ -999,7 +1012,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">9. ĐỐI TÁC CUNG ỨNG</p>
+              <p class="account-eyebrow">ĐỐI TÁC CUNG ỨNG</p>
               <h2>Quản lý nhà cung cấp</h2>
             </div>
             <div class="admin-module-actions">
@@ -1056,7 +1069,7 @@
         <section class="admin-panel admin-panel-wide">
           <div class="panel-heading">
             <div>
-              <p class="account-eyebrow">10. DỮ LIỆU KINH DOANH</p>
+              <p class="account-eyebrow">DỮ LIỆU KINH DOANH</p>
               <h2>Báo cáo và thống kê</h2>
             </div>
             <div class="admin-module-actions" style="display: flex; gap: 8px; align-items: center;">
@@ -1282,7 +1295,7 @@
 
   <script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
   <script src="../shared/js/vendor/xlsx.full.min.js"></script>
-  <script src="js/admin.js?v=20261109_time_rev"></script>
+  <script src="js/admin.js?v=20261112_3"></script>
 </body>
 
 </html>
