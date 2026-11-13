@@ -512,6 +512,33 @@ button {
   color: var(--ink-soft);
   padding: 22px 0 0;
 }
+.product-back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.product-back-button:hover {
+  border-color: var(--gold);
+  background: var(--gold-wash);
+  color: var(--gold-rich);
+}
+.product-back-button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+.product-back-button + .crumbs {
+  padding-top: 12px;
+}
 .crumbs a:hover {
   color: var(--gold);
 }
