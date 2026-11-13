@@ -2909,6 +2909,8 @@
   // ---------- BÁO CÁO TỔNG HỢP (sản phẩm/quý, thu-chi/quý, nhân viên/năm, khách hàng/quý) ----------
   const REPORT_QUARTER_COLS = ["", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
 
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
   function sumCol(arr = []) {
     return arr.reduce((a, v) => a + (Number(v) || 0), 0);
   }
@@ -2925,8 +2927,8 @@
       `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="grid-template-columns: ${gridCols};">` +
       cells.map((cell, idx) =>
         idx === 0
-          ? `<strong>${cell}</strong>`
-          : `<strong${isTotal ? ' style="color: var(--admin-green);"' : ""}>${cell}</strong>`
+          ? `<strong>${esc(cell)}</strong>`
+          : `<strong${isTotal ? ' style="color: var(--admin-green);"' : ""}>${esc(cell)}</strong>`
       ).join("") +
       `</div>`;
     box.innerHTML =
@@ -3035,7 +3037,6 @@
 
     const qCols = ["Hạng mục", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
     const money = (n) => formatMoney(n || 0);
-    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const sumCol = (arr = []) => arr.reduce((a, v) => a + (Number(v) || 0), 0);
 
     const table = (title, headers, rows, footRow = null) => {
