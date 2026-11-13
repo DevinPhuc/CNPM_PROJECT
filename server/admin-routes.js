@@ -467,6 +467,153 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     });
   }));
 
+  // ---------- BÁO CÁO THỐNG KÊ (sản phẩm/quý, thu-chi-lợi nhuận/quý, nhân viên/năm, khách hàng/quý) ----------
+  router.get("/reports", wrap(async (req, res) => {
+    const { year } = req.query || {};
+
+    const [
+      { data: invoices },
+      { data: orders },
+      { data: receipts },
+      { data: invoiceDetails },
+      { data: users },
+    ] = await Promise.all([
+      safeQuery(db.from("invoices").select("invoice_id,order_id,total_price,invoice_date,employee_id,customer_id")),
+      safeQuery(db.from("orders").select("order_id,status")),
+      safeQuery(db.from("goods_receipt").select("total_amount,receipt_date")),
+      safeQuery(db.from("invoice_detail").select("invoice_id,product_name,quantity,subtotal")),
+      safeQuery(db.from("users").select("id,first_name,last_name")),
+    ]);
+
+    // Chuyển đổi timestamp sang ngày theo múi giờ Việt Nam (UTC+7) - dùng lại kỹ thuật của /analytics
+    const toVnDateKey = (dStr) => {
+      if (!dStr) return "";
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return "";
+      const vnTime = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const y = vnTime.getUTCFullYear();
+      const m = String(vnTime.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(vnTime.getUTCDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    const now = new Date();
+    const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const currentYear = vnNow.getUTCFullYear();
+    let targetYear = Number(year) || currentYear;
+    if (!Number.isFinite(targetYear)) targetYear = currentYear;
+    targetYear = Math.min(Math.max(2000, Math.round(targetYear)), currentYear);
+
+    const quarterOf = (dStr) => {
+      const k = toVnDateKey(dStr);
+      if (!k) return 0;
+      const m = Number(k.slice(5, 7));
+      return Math.floor((m - 1) / 3) + 1;
+    };
+    const yearOf = (dStr) => {
+      const k = toVnDateKey(dStr);
+      return k ? Number(k.slice(0, 4)) : 0;
+    };
+
+    // Hóa đơn hợp lệ: loại bỏ hóa đơn thuộc đơn đã hủy / đã hoàn hàng (như /analytics)
+    const orderStatusMap = {};
+    (orders || []).forEach((o) => { orderStatusMap[o.order_id] = o.status; });
+    const isValidInvoice = (inv) => {
+      if (!inv) return false;
+      if (inv.order_id && orderStatusMap[inv.order_id]) {
+        return orderStatusMap[inv.order_id] !== "cancelled" && orderStatusMap[inv.order_id] !== "returned";
+      }
+      return true;
+    };
+    const validInvoices = (invoices || []).filter(isValidInvoice);
+    const validById = new Map(validInvoices.map((i) => [i.invoice_id, i]));
+
+    const userNameMap = {};
+    (users || []).forEach((u) => { userNameMap[u.id] = fullName(u); });
+    const empName = (id) => (id && userNameMap[id]) ? userNameMap[id] : (id ? `Nhân viên #${id}` : "Không rõ nhân viên");
+    const custName = (id) => (id && userNameMap[id]) ? userNameMap[id] : (id ? `Khách hàng #${id}` : "Khách lẻ");
+
+    // Tổng thu / tổng chi / lợi nhuận theo quý của năm được chọn
+    const revenueQ = [0, 0, 0, 0];
+    const costQ = [0, 0, 0, 0];
+    validInvoices.forEach((i) => {
+      if (yearOf(i.invoice_date) !== targetYear) return;
+      const q = quarterOf(i.invoice_date);
+      if (q) revenueQ[q - 1] += Number(i.total_price) || 0;
+    });
+    (receipts || []).forEach((r) => {
+      if (yearOf(r.receipt_date) !== targetYear) return;
+      const q = quarterOf(r.receipt_date);
+      if (q) costQ[q - 1] += Number(r.total_amount) || 0;
+    });
+    const profitQ = revenueQ.map((r, idx) => Math.max(0, r - costQ[idx]));
+
+    // Tổng hóa đơn theo sản phẩm × quý (từ chi tiết hóa đơn của hóa đơn hợp lệ)
+    const prodMap = {};
+    (invoiceDetails || []).forEach((d) => {
+      const inv = validById.get(d.invoice_id);
+      if (!inv || yearOf(inv.invoice_date) !== targetYear) return;
+      const q = quarterOf(inv.invoice_date);
+      if (!q) return;
+      const name = String(d.product_name || "Khác").trim() || "Khác";
+      const row = prodMap[name] || (prodMap[name] = { name, q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
+      row[`q${q}`] += Number(d.subtotal) || 0;
+      row.total += Number(d.subtotal) || 0;
+    });
+    const productQuarters = {
+      year: targetYear,
+      rows: Object.values(prodMap).sort((a, b) => b.total - a.total),
+    };
+
+    // Danh sách năm (từ dữ liệu hóa đơn, ≤ năm hiện tại)
+    const yearSet = new Set([currentYear]);
+    (invoices || []).forEach((i) => {
+      const y = yearOf(i.invoice_date);
+      if (y && y <= currentYear) yearSet.add(y);
+    });
+    const years = [...yearSet].sort((a, b) => b - a);
+
+    // Tổng hóa đơn theo nhân viên × năm
+    const empMap = {};
+    validInvoices.forEach((i) => {
+      const y = yearOf(i.invoice_date);
+      if (!y || y > currentYear) return;
+      const key = i.employee_id ? `u${i.employee_id}` : "null";
+      const row = empMap[key] || (empMap[key] = { name: empName(i.employee_id), values: {} });
+      row.values[y] = (row.values[y] || 0) + (Number(i.total_price) || 0);
+    });
+    const empTotal = (row) => Object.values(row.values).reduce((a, v) => a + v, 0);
+    const employeeYears = {
+      years,
+      rows: Object.values(empMap).sort((a, b) => empTotal(b) - empTotal(a)),
+    };
+
+    // Tổng hóa đơn theo khách hàng × quý (năm được chọn)
+    const custMap = {};
+    validInvoices.forEach((i) => {
+      if (yearOf(i.invoice_date) !== targetYear) return;
+      const q = quarterOf(i.invoice_date);
+      if (!q) return;
+      const key = i.customer_id ? `c${i.customer_id}` : "null";
+      const row = custMap[key] || (custMap[key] = { name: custName(i.customer_id), q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
+      row[`q${q}`] += Number(i.total_price) || 0;
+      row.total += Number(i.total_price) || 0;
+    });
+    const customerQuarters = {
+      year: targetYear,
+      rows: Object.values(custMap).sort((a, b) => b.total - a.total),
+    };
+
+    res.json({
+      currentYear,
+      years,
+      productQuarters,
+      quarterlySummary: { year: targetYear, revenue: revenueQ, cost: costQ, profit: profitQ },
+      employeeYears,
+      customerQuarters,
+    });
+  }));
+
   // ---------- 1. QUẢN LÝ TÀI KHOẢN VÀ VAI TRÒ ----------
   router.get("/accounts", wrap(async (_req, res) => {
     const users = must(await db.from("users")
