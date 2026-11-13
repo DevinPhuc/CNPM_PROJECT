@@ -461,6 +461,7 @@
     stock: [],
     suppliers: [],
     analytics: null,
+    reports: null,
     unlockRequests: [],
   };
 
@@ -2825,6 +2826,120 @@
 
   window.exportAnalyticsToExcel = exportAnalyticsToExcel;
 
+  // ---------- BÁO CÁO TỔNG HỢP (sản phẩm/quý, thu-chi/quý, nhân viên/năm, khách hàng/quý) ----------
+  const REPORT_QUARTER_COLS = ["", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
+
+  function sumCol(arr = []) {
+    return arr.reduce((a, v) => a + (Number(v) || 0), 0);
+  }
+
+  function renderReportTable(containerId, columns, rows, totalRow = null) {
+    const box = document.getElementById(containerId);
+    if (!box) return;
+    if (!rows || rows.length === 0) {
+      box.innerHTML = '<div class="admin-empty">Chưa có dữ liệu trong khoảng thời gian này</div>';
+      return;
+    }
+    const gridCols = `1.8fr ${columns.slice(1).map(() => "minmax(0, 1fr)").join(" ")}`;
+    const rowHtml = (cells, isTotal) =>
+      `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="grid-template-columns: ${gridCols};">` +
+      cells.map((cell, idx) =>
+        idx === 0
+          ? `<strong>${cell}</strong>`
+          : `<strong${isTotal ? ' style="color: var(--admin-green);"' : ""}>${cell}</strong>`
+      ).join("") +
+      `</div>`;
+    box.innerHTML =
+      buildRowHeader(columns, gridCols) +
+      rows.map((r) => rowHtml(r, false)).join("") +
+      (totalRow ? rowHtml(totalRow, true) : "");
+  }
+
+  function renderReports() {
+    const r = state.reports;
+    if (!r) return;
+
+    // A. Tổng hóa đơn theo sản phẩm × quý
+    const pRows = (r.productQuarters.rows || []).map((row) => [
+      row.name,
+      ...[1, 2, 3, 4].map((i) => formatMoney(row[`q${i}`] || 0)),
+      formatMoney(row.total || 0),
+    ]);
+    const pTotal = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => formatMoney(sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      formatMoney(sumCol((r.productQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportProductQuarters", REPORT_QUARTER_COLS, pRows, pTotal);
+
+    // B. Tổng thu / tổng chi / lợi nhuận theo quý
+    const qs = r.quarterlySummary || { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+    const qsRows = [
+      ["Tổng thu", ...qs.revenue.map((v) => formatMoney(v)), formatMoney(sumCol(qs.revenue))],
+      ["Tổng chi", ...qs.cost.map((v) => formatMoney(v)), formatMoney(sumCol(qs.cost))],
+      ["Lợi nhuận", ...qs.profit.map((v) => formatMoney(v)), formatMoney(sumCol(qs.profit))],
+    ];
+    renderReportTable("reportQuarterlySummary", REPORT_QUARTER_COLS, qsRows, null);
+
+    // C. Tổng hóa đơn theo nhân viên × năm
+    const ey = r.employeeYears || { years: [], rows: [] };
+    const eyCols = ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"];
+    const eyRows = (ey.rows || []).map((row) => [
+      row.name,
+      ...ey.years.map((y) => formatMoney(row.values?.[y] || 0)),
+      formatMoney(sumCol(ey.years.map((y) => row.values?.[y] || 0))),
+    ]);
+    const eyTotal = [
+      "Tổng cộng",
+      ...ey.years.map((y) =>
+        formatMoney(sumCol((ey.rows || []).map((row) => row.values?.[y] || 0)))
+      ),
+      formatMoney(sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => row.values?.[y] || 0)))),
+    ];
+    renderReportTable("reportEmployeeYears", eyCols, eyRows, eyTotal);
+
+    // D. Tổng hóa đơn theo khách hàng × quý
+    const cqRows = (r.customerQuarters.rows || []).map((row) => [
+      row.name,
+      ...[1, 2, 3, 4].map((i) => formatMoney(row[`q${i}`] || 0)),
+      formatMoney(row.total || 0),
+    ]);
+    const cqTotal = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => formatMoney(sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      formatMoney(sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportCustomerQuarters", REPORT_QUARTER_COLS, cqRows, cqTotal);
+  }
+
+  async function loadReports(filterParams = {}) {
+    try {
+      const year = filterParams.year || document.getElementById("reportYearSelect")?.value || "";
+      const data = await api(`/reports${year ? `?year=${encodeURIComponent(year)}` : ""}`);
+      state.reports = data;
+
+      // Đổ danh sách năm (≤ năm hiện tại) vào select, giữ lựa chọn hiện tại nếu còn hợp lệ
+      const sel = document.getElementById("reportYearSelect");
+      if (sel) {
+        const years = data.years || [data.currentYear];
+        const chosen = sel.value;
+        sel.innerHTML = years.map((y) => `<option value="${y}">Năm ${y}</option>`).join("");
+        sel.value = years.includes(Number(chosen)) ? chosen : String(data.quarterlySummary?.year || data.currentYear);
+      }
+
+      renderReports();
+    } catch (err) {
+      console.error("Lỗi tải báo cáo tổng hợp:", err);
+      toast("Lỗi tải báo cáo tổng hợp: " + err.message, "error");
+    }
+  }
+
+  window.loadReports = loadReports;
+
+  document.getElementById("reportYearSelect")?.addEventListener("change", (e) => {
+    loadReports({ year: e.target.value });
+  });
+
   // ---------- MODAL POPUP TIỆN ÍCH ----------
   // Đưa toàn bộ modal backdrop ra trực tiếp thẻ body để tránh bị giới hạn khung bởi transform của panel/module
   document.querySelectorAll(".admin-modal-backdrop").forEach((modalEl) => {
@@ -2926,7 +3041,7 @@
       case "orders": loadOrders(); break;
       case "stock": loadStock(); break;
       case "suppliers": loadSuppliers(); break;
-      case "analytics": loadAnalytics(); break;
+      case "analytics": loadAnalytics(); loadReports(); break;
     }
   };
 

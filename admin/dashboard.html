@@ -1094,6 +1094,29 @@
             </div>
           </div>
 
+          <!-- BÁO CÁO TỔNG HỢP THEO QUÝ / NĂM -->
+          <div style="margin-top: 24px">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <h3 style="font-family: var(--heading-font); font-size: 20px; margin-bottom: 0;">
+                Tổng hợp hóa đơn theo quý
+              </h3>
+              <div class="filter-group">
+                <label for="reportYearSelect">Chọn năm:</label>
+                <select id="reportYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+              </div>
+            </div>
+
+            <h4 style="font-family: var(--heading-font); font-size: 16px; margin: 16px 0 8px;">Tổng hóa đơn theo sản phẩm × quý</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportProductQuarters"></div>
+            </div>
+
+            <h4 style="font-family: var(--heading-font); font-size: 16px; margin: 20px 0 8px;">Tổng thu / tổng chi / lợi nhuận theo quý</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportQuarterlySummary"></div>
+            </div>
+          </div>
+
           <!-- BỘ LỌC DOANH THU THEO THỜI GIAN -->
           <div class="analytics-filter-container">
             <div class="analytics-filter-tabs" role="tablist">
@@ -1271,6 +1294,19 @@
               Top sản phẩm bán chạy nhất
             </h3>
             <div class="admin-list" id="analyticsTopProducts"></div>
+          </div>
+
+          <!-- BÁO CÁO NHÂN VIÊN × NĂM, KHÁCH HÀNG × QUÝ -->
+          <div style="margin-top: 28px">
+            <h4 style="font-family: var(--heading-font); font-size: 16px; margin: 0 0 8px;">Tổng hóa đơn theo nhân viên × năm</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportEmployeeYears"></div>
+            </div>
+
+            <h4 style="font-family: var(--heading-font); font-size: 16px; margin: 20px 0 8px;">Tổng hóa đơn theo khách hàng × quý</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportCustomerQuarters"></div>
+            </div>
           </div>
         </section>
       </div>
