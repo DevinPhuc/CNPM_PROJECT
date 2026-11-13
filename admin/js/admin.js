@@ -3000,13 +3000,15 @@
       const data = await api(`/reports${year ? `?year=${encodeURIComponent(year)}` : ""}`);
       state.reports = data;
 
-      // Đổ danh sách năm (≤ năm hiện tại) vào select, giữ lựa chọn hiện tại nếu còn hợp lệ
+      // Danh sách năm: 10 năm gần nhất (≤ năm hiện tại), luôn cho chọn các năm trước đó
       const sel = document.getElementById("reportYearSelect");
       if (sel) {
-        const years = data.years || [data.currentYear];
+        const currentYear = data.currentYear || new Date().getFullYear();
+        const years = [];
+        for (let y = currentYear; y > currentYear - 10; y--) years.push(y);
         const chosen = sel.value;
         sel.innerHTML = years.map((y) => `<option value="${y}">Năm ${y}</option>`).join("");
-        sel.value = years.includes(Number(chosen)) ? chosen : String(data.quarterlySummary?.year || data.currentYear);
+        sel.value = years.includes(Number(chosen)) ? chosen : String(data.quarterlySummary?.year || currentYear);
       }
 
       renderReports();

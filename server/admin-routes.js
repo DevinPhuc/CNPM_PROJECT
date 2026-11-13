@@ -479,7 +479,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       { data: users },
     ] = await Promise.all([
       safeQuery(db.from("invoices").select("invoice_id,order_id,total_price,invoice_date,employee_id,customer_id")),
-      safeQuery(db.from("orders").select("order_id,status")),
+      safeQuery(db.from("orders").select("order_id,status,customer_id")),
       safeQuery(db.from("goods_receipt").select("total_amount,receipt_date")),
       safeQuery(db.from("invoice_detail").select("invoice_id,product_name,quantity,subtotal")),
       safeQuery(db.from("users").select("id,first_name,last_name")),
@@ -531,7 +531,15 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const userNameMap = {};
     (users || []).forEach((u) => { userNameMap[u.id] = fullName(u); });
     const empName = (id) => (id && userNameMap[id]) ? userNameMap[id] : (id ? `Nhân viên #${id}` : "Không rõ nhân viên");
-    const custName = (id) => (id && userNameMap[id]) ? userNameMap[id] : (id ? `Khách hàng #${id}` : "Khách lẻ");
+    // Khách hàng: Ưu tiên customer_id của hóa đơn / đơn hàng liên kết -> tên trong bảng users; nếu không có thì dùng buyer_name
+    const orderCustMap = {};
+    (orders || []).forEach((o) => { orderCustMap[o.order_id] = o.customer_id; });
+    const custIdOf = (inv) => inv.customer_id || orderCustMap[inv.order_id] || null;
+    const custName = (id, buyerName) => {
+      if (id) return userNameMap[id] || `Khách hàng #${id}`;
+      const name = String(buyerName || "").trim();
+      return name || "Khách lẻ";
+    };
 
     // Tổng thu / tổng chi / lợi nhuận theo quý của năm được chọn
     const revenueQ = [0, 0, 0, 0];
@@ -594,8 +602,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       if (yearOf(i.invoice_date) !== targetYear) return;
       const q = quarterOf(i.invoice_date);
       if (!q) return;
-      const key = i.customer_id ? `c${i.customer_id}` : "null";
-      const row = custMap[key] || (custMap[key] = { name: custName(i.customer_id), q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
+      const custId = custIdOf(i);
+      const key = custId ? `c${custId}` : `n${String(i.buyer_name || "").trim().toLowerCase()}`;
+      const row = custMap[key] || (custMap[key] = { name: custName(custId, i.buyer_name), q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
       row[`q${q}`] += Number(i.total_price) || 0;
       row.total += Number(i.total_price) || 0;
     });
