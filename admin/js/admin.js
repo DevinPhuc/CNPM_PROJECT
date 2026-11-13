@@ -2813,6 +2813,86 @@
     wsStatus["!cols"] = [{ wch: 16 }, { wch: 25 }, { wch: 16 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, wsStatus, "TrangThai_DonHang");
 
+    // 5-8. SHEETS BÁO CÁO TỔNG HỢP (từ /admin/reports, tải sẵn khi mở tab Thống kê)
+    if (state.reports) {
+      const r = state.reports;
+      const qCols = ["Hạng mục", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
+      const sumCol = (arr = []) => arr.reduce((a, v) => a + (Number(v) || 0), 0);
+
+      // 5. SẢN PHẨM × QUÝ
+      const pRows = [
+        ["TỔNG HÓA ĐƠN THEO SẢN PHẨM × QUÝ"],
+        [`Năm: ${r.productQuarters?.year || r.currentYear}`],
+        [],
+        qCols,
+      ];
+      (r.productQuarters.rows || []).forEach((row) => {
+        pRows.push([row.name, ...[1, 2, 3, 4].map((i) => Number(row[`q${i}`] || 0)), Number(row.total || 0)]);
+      });
+      pRows.push([
+        "Tổng cộng",
+        ...[1, 2, 3, 4].map((i) => sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0))),
+        sumCol((r.productQuarters.rows || []).map((row) => row.total || 0)),
+      ]);
+      const wsProdQ = XLSX.utils.aoa_to_sheet(pRows);
+      wsProdQ["!cols"] = [{ wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsProdQ, "SanPham_Quy");
+
+      // 6. THU / CHI / LỢI NHUẬN × QUÝ
+      const qs = r.quarterlySummary || { year: r.currentYear, revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+      const qsRows = [
+        ["TỔNG THU / TỔNG CHI / LỢI NHUẬN THEO QUÝ"],
+        [`Năm: ${qs.year || r.currentYear}`],
+        [],
+        qCols,
+        ["Tổng thu", ...qs.revenue.map(Number), sumCol(qs.revenue)],
+        ["Tổng chi", ...qs.cost.map(Number), sumCol(qs.cost)],
+        ["Lợi nhuận", ...qs.profit.map(Number), sumCol(qs.profit)],
+      ];
+      const wsQS = XLSX.utils.aoa_to_sheet(qsRows);
+      wsQS["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsQS, "Thu_Chi_LoiNhuan_Quy");
+
+      // 7. NHÂN VIÊN × NĂM
+      const ey = r.employeeYears || { years: [], rows: [] };
+      const eyRows = [
+        ["TỔNG HÓA ĐƠN THEO NHÂN VIÊN × NĂM"],
+        [],
+        ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"],
+      ];
+      (ey.rows || []).forEach((row) => {
+        const vals = ey.years.map((y) => Number(row.values?.[y] || 0));
+        eyRows.push([row.name, ...vals, sumCol(vals)]);
+      });
+      eyRows.push([
+        "Tổng cộng",
+        ...ey.years.map((y) => sumCol((ey.rows || []).map((row) => row.values?.[y] || 0))),
+        sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => Number(row.values?.[y] || 0)))),
+      ]);
+      const wsEmpY = XLSX.utils.aoa_to_sheet(eyRows);
+      wsEmpY["!cols"] = [{ wch: 30 }, ...ey.years.map(() => ({ wch: 16 })), { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsEmpY, "NhanVien_Nam");
+
+      // 8. KHÁCH HÀNG × QUÝ
+      const cqRows = [
+        ["TỔNG HÓA ĐƠN THEO KHÁCH HÀNG × QUÝ"],
+        [`Năm: ${r.customerQuarters?.year || r.currentYear}`],
+        [],
+        qCols,
+      ];
+      (r.customerQuarters.rows || []).forEach((row) => {
+        cqRows.push([row.name, ...[1, 2, 3, 4].map((i) => Number(row[`q${i}`] || 0)), Number(row.total || 0)]);
+      });
+      cqRows.push([
+        "Tổng cộng",
+        ...[1, 2, 3, 4].map((i) => sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0))),
+        sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0)),
+      ]);
+      const wsCustQ = XLSX.utils.aoa_to_sheet(cqRows);
+      wsCustQ["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsCustQ, "KhachHang_Quy");
+    }
+
     // Đặt tên file xuất
     const now = new Date();
     const dateStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
