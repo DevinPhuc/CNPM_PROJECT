@@ -3020,6 +3020,121 @@
     loadReports({ year: e.target.value });
   });
 
+  // In báo cáo tổng hợp ra cửa sổ riêng -> người dùng chọn "Save as PDF"
+  window.printReportsWindow = () => {
+    const r = state.reports;
+    if (!r) {
+      toast("Chưa có dữ liệu báo cáo để in. Vui lòng thử lại!", "error");
+      return;
+    }
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      alert("Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.");
+      return;
+    }
+
+    const qCols = ["Hạng mục", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
+    const money = (n) => formatMoney(n || 0);
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const sumCol = (arr = []) => arr.reduce((a, v) => a + (Number(v) || 0), 0);
+
+    const table = (title, headers, rows, footRow = null) => {
+      if (!rows.length && !footRow) return "";
+      return `
+        <h3>${esc(title)}</h3>
+        <table>
+          <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${rows.map((cells) => `<tr>${cells.map((c, i) => `<td class="${i === 0 ? "name" : "text-right"}">${esc(c)}</td>`).join("")}</tr>`).join("")}
+            ${footRow ? `<tr class="total-row">${footRow.map((c, i) => `<td class="${i === 0 ? "name" : "text-right"}">${esc(c)}</td>`).join("")}</tr>` : ""}
+          </tbody>
+        </table>`;
+    };
+
+    const pRows = (r.productQuarters.rows || []).map((row) => [
+      row.name, ...[1, 2, 3, 4].map((i) => money(row[`q${i}`])), money(row.total),
+    ]);
+    const pFoot = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => money(sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      money(sumCol((r.productQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+
+    const qs = r.quarterlySummary || { year: r.currentYear, revenue: [], cost: [], profit: [] };
+    const qsRows = [
+      ["Tổng thu", ...qs.revenue.map(money), money(sumCol(qs.revenue))],
+      ["Tổng chi", ...qs.cost.map(money), money(sumCol(qs.cost))],
+      ["Lợi nhuận", ...qs.profit.map(money), money(sumCol(qs.profit))],
+    ];
+
+    const ey = r.employeeYears || { years: [], rows: [] };
+    const eyHeaders = ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"];
+    const eyRows = (ey.rows || []).map((row) => [
+      row.name,
+      ...ey.years.map((y) => money(row.values?.[y])),
+      money(sumCol(ey.years.map((y) => row.values?.[y] || 0))),
+    ]);
+    const eyFoot = [
+      "Tổng cộng",
+      ...ey.years.map((y) => money(sumCol((ey.rows || []).map((row) => row.values?.[y] || 0)))),
+      money(sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => row.values?.[y] || 0)))),
+    ];
+
+    const cqRows = (r.customerQuarters.rows || []).map((row) => [
+      row.name, ...[1, 2, 3, 4].map((i) => money(row[`q${i}`])), money(row.total),
+    ]);
+    const cqFoot = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => money(sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      money(sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Báo cáo tổng hợp - Năm ${r.quarterlySummary?.year || r.currentYear}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #222; }
+          .rep-header { display: flex; justify-content: space-between; border-bottom: 2px solid #b98a3e; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo { font-size: 22px; font-weight: 700; color: #1b382b; }
+          h3 { margin: 22px 0 8px; font-size: 15px; color: #1b382b; }
+          table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+          th, td { border: 1px solid #ddd; padding: 7px 9px; font-size: 12px; }
+          th { background: #f8f6f0; text-align: right; }
+          th:first-child, td.name { text-align: left; }
+          td.text-right { text-align: right; }
+          .total-row td { font-weight: 700; background: #f0f7f1; }
+          @media print {
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="rep-header">
+          <div>
+            <div class="logo">SAIGON JEWELRY</div>
+            <p style="margin: 4px 0; font-size: 12px; color: #666;">Trụ sở chính: TP. Hồ Chí Minh | MST: 0312345678</p>
+          </div>
+          <div style="text-align: right;">
+            <h2 style="margin: 0; font-size: 18px; color: #b98a3e;">BÁO CÁO TỔNG HỢP</h2>
+            <p style="margin: 4px 0; font-weight: 600;">Năm ${r.quarterlySummary?.year || r.currentYear}</p>
+            <p style="margin: 0; font-size: 12px; color: #666;">Xuất lúc: ${new Date().toLocaleString("vi-VN")}</p>
+          </div>
+        </div>
+        ${table(`Tổng hóa đơn theo sản phẩm × quý (năm ${r.productQuarters?.year || r.currentYear})`, qCols, pRows, pFoot)}
+        ${table(`Tổng thu / tổng chi / lợi nhuận theo quý (năm ${qs.year || r.currentYear})`, qCols, qsRows)}
+        ${table("Tổng hóa đơn theo nhân viên × năm", eyHeaders, eyRows, eyFoot)}
+        ${table(`Tổng hóa đơn theo khách hàng × quý (năm ${r.customerQuarters?.year || r.currentYear})`, qCols, cqRows, cqFoot)}
+        <div style="padding-top: 30px; text-align: center; color: #777; font-size: 12px;">
+          <button onclick="window.print()" style="margin-top: 10px; padding: 8px 18px; cursor: pointer; background: #1b382b; color: #fff; border: none; border-radius: 4px;">In ngay / Lưu PDF</button>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // ---------- MODAL POPUP TIỆN ÍCH ----------
   // Đưa toàn bộ modal backdrop ra trực tiếp thẻ body để tránh bị giới hạn khung bởi transform của panel/module
   document.querySelectorAll(".admin-modal-backdrop").forEach((modalEl) => {
