@@ -2772,188 +2772,21 @@ html[data-theme="dark"] .bar-value-tag {
   border-color: #cbd5e1 !important;
 }
 
-/* Các thẻ/khung nền sáng trong Khuyến mãi, Tài khoản, Đơn hàng, Modal: đảm bảo chữ ĐEN trên nền TRẮNG/SÁNG (Sửa triệt để Hình 1, Hình 2 & toàn bộ khung nền trắng) */
-[style*="background:#f8f9fa"],
-[style*="background: #f8f9fa"],
-[style*="background:#f8fafc"],
-[style*="background: #f8fafc"],
-[style*="background:#fffbf7"],
-[style*="background: #fffbf7"],
-[style*="background:#fffaf5"],
-[style*="background: #fffaf5"],
-[style*="background:#fafafa"],
-[style*="background: #fafafa"],
-[style*="background:#f0fdf4"],
-[style*="background: #f0fdf4"],
-[style*="background:#fef2f2"],
-[style*="background: #fef2f2"],
-[style*="background:#faf5ff"],
-[style*="background: #faf5ff"],
-[style*="background:#fefce8"],
-[style*="background: #fefce8"],
-[style*="background:#ecfdf5"],
-[style*="background: #ecfdf5"],
-html[data-theme="dark"] [style*="background:#f8f9fa"],
-html[data-theme="dark"] [style*="background: #f8f9fa"],
+/* Các thẻ/khung nền sáng trong Khuyến mãi, Tài khoản, Đơn hàng: đảm bảo chữ đậm/đen trên nền sáng */
+html[data-theme="dark"] [style*="background:#fdf6ec"],
+html[data-theme="dark"] [style*="background: #fdf6ec"],
+html[data-theme="dark"] [style*="background:#faf8f5"],
+html[data-theme="dark"] [style*="background: #faf8f5"],
 html[data-theme="dark"] [style*="background:#f8fafc"],
 html[data-theme="dark"] [style*="background: #f8fafc"],
 html[data-theme="dark"] [style*="background:#fffbf7"],
-html[data-theme="dark"] [style*="background: #fffbf7"],
-html[data-theme="dark"] [style*="background:#fffaf5"],
-html[data-theme="dark"] [style*="background: #fffaf5"],
-html[data-theme="dark"] [style*="background:#fafafa"],
-html[data-theme="dark"] [style*="background: #fafafa"],
-html[data-theme="dark"] [style*="background:#f0fdf4"],
-html[data-theme="dark"] [style*="background: #f0fdf4"],
-html[data-theme="dark"] [style*="background:#fef2f2"],
-html[data-theme="dark"] [style*="background: #fef2f2"],
-html[data-theme="dark"] [style*="background:#faf5ff"],
-html[data-theme="dark"] [style*="background: #faf5ff"],
-html[data-theme="dark"] [style*="background:#fefce8"],
-html[data-theme="dark"] [style*="background: #fefce8"],
-html[data-theme="dark"] [style*="background:#ecfdf5"],
-html[data-theme="dark"] [style*="background: #ecfdf5"] {
-  color: #0f172a !important;
-}
-
-/* Sửa Hình 1 ("Hình thức khuyến mãi (Bắt buộc chọn)"), Hình 2 ("Cập nhật trạng thái đơn") & toàn bộ tiêu đề/chữ đậm bên trong khung nền trắng/sáng thành chữ ĐEN */
-[style*="background:#f8f9fa"] strong,
-[style*="background: #f8f9fa"] strong,
-[style*="background:#f8fafc"] h3,
-[style*="background: #f8fafc"] h3,
-[style*="background:#f8fafc"] h4,
-[style*="background: #f8fafc"] h4,
-[style*="background:#f8fafc"] strong,
-[style*="background: #f8fafc"] strong,
-[style*="background:#fffaf5"] strong,
-[style*="background: #fffaf5"] strong,
-[style*="background:#fafafa"] strong,
-[style*="background: #fafafa"] strong,
-html[data-theme="dark"] [style*="background:#f8f9fa"] strong,
-html[data-theme="dark"] [style*="background: #f8f9fa"] strong,
-html[data-theme="dark"] [style*="background:#f8f9fa"] span,
-html[data-theme="dark"] [style*="background: #f8f9fa"] span,
-html[data-theme="dark"] .admin-modal-header[style*="background:#f8fafc"] h3,
-html[data-theme="dark"] .admin-modal-header[style*="background: #f8fafc"] h3,
-html[data-theme="dark"] #ordersModal .admin-modal-header h3,
-html[data-theme="dark"] [style*="background:#f8fafc"] h3,
-html[data-theme="dark"] [style*="background: #f8fafc"] h3,
-html[data-theme="dark"] [style*="background:#f8fafc"] h4,
-html[data-theme="dark"] [style*="background: #f8fafc"] h4,
-html[data-theme="dark"] [style*="background:#f8fafc"] strong,
-html[data-theme="dark"] [style*="background: #f8fafc"] strong,
-html[data-theme="dark"] [style*="background:#fffaf5"] strong,
-html[data-theme="dark"] [style*="background: #fffaf5"] strong,
-html[data-theme="dark"] [style*="background:#fafafa"] strong,
-html[data-theme="dark"] [style*="background: #fafafa"] strong,
-html[data-theme="dark"] [style*="background:#faf5ff"] strong,
-html[data-theme="dark"] [style*="background: #faf5ff"] strong {
-  color: #0f172a !important;
-}
-
-html[data-theme="dark"] .admin-modal-header[style*="background:#f8fafc"] p,
-html[data-theme="dark"] .admin-modal-header[style*="background: #f8fafc"] p,
-html[data-theme="dark"] #ordersModal .admin-modal-header p {
-  color: #334155 !important;
-}
-
-html[data-theme="dark"] #ordersModal .admin-modal-header .admin-modal-close {
-  color: #0f172a !important;
+html[data-theme="dark"] [style*="background: #fffbf7"] {
+  color: #111827 !important;
 }
 
 html[data-theme="dark"] [style*="background:#fdf6ec"],
 html[data-theme="dark"] [style*="background: #fdf6ec"] {
-  background: #fdf6ec !important;
-  color: #111827 !important;
-}
-
-/* Sửa Hình 3: Chữ đen/xám/dương đậm trên nền đen trong Modal Cập nhật trạng thái đơn (#ordersModal) & toàn bộ khung nền tối -> Chữ TRẮNG trên nền ĐEN */
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="background: #ffffff"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="background:#ffffff"] {
-  background: var(--ignara-card-2) !important;
-  border-color: var(--ignara-line-2) !important;
-  color: #ffffff !important;
-}
-
-html[data-theme="dark"] #ordersModal #orderModalCode,
-html[data-theme="dark"] #ordersModal #orderModalCustomer,
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color: #0f172a"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color:#0f172a"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color: #1e293b"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color:#1e293b"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color: #475569"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color:#475569"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color: #64748b"],
-html[data-theme="dark"] #ordersModal #orderStatusForm [style*="color:#64748b"],
-html[data-theme="dark"] #ordersModal #orderStatusActionArea > label {
-  color: #ffffff !important;
-}
-
-html[data-theme="dark"] #ordersModal #orderModalTotal {
-  color: #fbbf24 !important;
-}
-
-/* Đảm bảo khung tiến trình xử lý (#orderStatusTracker) có nền trắng giữ chữ đen rõ nét cho bước chưa hoàn thành */
-html[data-theme="dark"] #ordersModal #orderStatusTracker {
-  background: #f8fafc !important;
-  border-color: #e2e8f0 !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="dark"] #ordersModal #orderStatusTracker span[style*="color:#64748b"],
-html[data-theme="dark"] #ordersModal #orderStatusTracker span[style*="color: #64748b"] {
-  color: #0f172a !important;
-}
-
-/* Rà soát toàn bộ các khung nền đen/tối khác (Chi tiết hóa đơn, Chi tiết khuyến mãi, Bảng danh sách, Mini-row, Modal chi tiết) để không còn chữ đen/xám/dương đậm trên nền đen */
-html[data-theme="dark"] #invoiceDetailPanel .side-detail-header h3,
-html[data-theme="dark"] #invoiceDetailPanel .side-detail-header small,
-html[data-theme="dark"] #invoiceDetailPanel .side-detail-header strong,
-html[data-theme="dark"] #promotionDetailPanel .side-detail-header h3,
-html[data-theme="dark"] #promotionDetailPanel .side-detail-title,
-html[data-theme="dark"] #promotionDetailPanel .detail-info-grid,
-html[data-theme="dark"] #promotionDetailPanel .detail-info-grid .lbl,
-html[data-theme="dark"] #promotionDetailPanel .detail-info-grid strong,
-html[data-theme="dark"] .mini-row,
-html[data-theme="dark"] .mini-row span,
-html[data-theme="dark"] .mini-row strong,
-html[data-theme="dark"] #promotionsFilterType ~ span,
-html[data-theme="dark"] .admin-toolbar span[style*="color:#666"],
-html[data-theme="dark"] .admin-panel button[onclick="window.print()"] {
-  color: #ffffff !important;
-}
-
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#0f172a"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color: #0f172a"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#1e293b"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color: #1e293b"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#334155"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color: #334155"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#475569"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color: #475569"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#64748b"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color: #64748b"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#444"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#555"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#666"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#777"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#888"],
-html[data-theme="dark"] .admin-row:not(.header-row) [style*="color:#6b21a8"] {
-  color: #ffffff !important;
-}
-
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]),
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background: #fff"]:not([style*="background: #fffaf5"]):not([style*="background: #fffbf7"]) {
-  color: #ffffff !important;
-}
-
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#0f172a"],
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#1e293b"],
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#334155"],
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#475569"],
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#64748b"],
-html[data-theme="dark"] #detailModal .admin-modal-body [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]) [style*="color:#555"] {
-  color: #ffffff !important;
+  color: #92400e !important;
 }
 
 html[data-theme="dark"] .unlock-requests-card {
@@ -2973,12 +2806,12 @@ html[data-theme="dark"] [style*="background:#faf8f5"],
 html[data-theme="dark"] [style*="background: #faf8f5"] {
   background: var(--ignara-card) !important;
   border-color: var(--ignara-line-2) !important;
-  color: #ffffff !important;
+  color: var(--ignara-ink) !important;
 }
 
 html[data-theme="dark"] [style*="background:#faf8f5"] span:first-child,
 html[data-theme="dark"] [style*="background: #faf8f5"] span:first-child {
-  color: #e2e8f0 !important;
+  color: var(--ignara-muted) !important;
 }
 
 html[data-theme="dark"] .admin-secondary-btn,
@@ -3108,94 +2941,33 @@ html[data-theme="dark"] [style*="background:#fbfcfa"],
 html[data-theme="dark"] [style*="background: #fbfcfa"],
 html[data-theme="dark"] [style*="background:#f1f5f9"],
 html[data-theme="dark"] [style*="background: #f1f5f9"],
-html[data-theme="dark"] [style*="background:#fff"]:not([style*="background:#fffaf5"]):not([style*="background:#fffbf7"]),
-html[data-theme="dark"] [style*="background: #fff"]:not([style*="background: #fffaf5"]):not([style*="background: #fffbf7"]),
+html[data-theme="dark"] [style*="background:#fff"],
+html[data-theme="dark"] [style*="background: #fff"],
 html[data-theme="dark"] [style*="background:#ffffff"],
 html[data-theme="dark"] [style*="background: #ffffff"] {
   background: var(--ignara-card-2) !important;
-  color: #ffffff !important;
+  color: var(--ignara-ink) !important;
   border-color: var(--ignara-line-2) !important;
 }
 
-/* Mọi phần tử con mang màu chữ tối cứng bên trong các khối được chuyển sang nền tối ở trên đều chuyển sang chữ trắng */
-html[data-theme="dark"] [style*="background:#f8faf8"] [style*="color:#"],
-html[data-theme="dark"] [style*="background: #f8faf8"] [style*="color:#"],
-html[data-theme="dark"] [style*="background:#fbfcfa"] [style*="color:#"],
-html[data-theme="dark"] [style*="background: #fbfcfa"] [style*="color:#"],
-html[data-theme="dark"] [style*="background:#f1f5f9"] [style*="color:#"],
-html[data-theme="dark"] [style*="background: #f1f5f9"] [style*="color:#"],
-html[data-theme="dark"] [style*="background:#ffffff"] [style*="color:#0f172a"],
-html[data-theme="dark"] [style*="background: #ffffff"] [style*="color: #0f172a"],
-html[data-theme="dark"] [style*="background:#ffffff"] [style*="color:#1e293b"],
-html[data-theme="dark"] [style*="background: #ffffff"] [style*="color: #1e293b"],
-html[data-theme="dark"] [style*="background:#ffffff"] [style*="color:#334155"],
-html[data-theme="dark"] [style*="background: #ffffff"] [style*="color: #334155"],
-html[data-theme="dark"] [style*="background:#ffffff"] [style*="color:#475569"],
-html[data-theme="dark"] [style*="background: #ffffff"] [style*="color: #475569"],
-html[data-theme="dark"] [style*="background:#ffffff"] [style*="color:#64748b"],
-html[data-theme="dark"] [style*="background: #ffffff"] [style*="color: #64748b"] {
-  color: #ffffff !important;
-}
-
-/* Giữ nguyên nền sáng + chữ đen cho các thẻ thông báo mở khóa (#fffaf5, #fafafa) */
-html[data-theme="dark"] [style*="background:#fffaf5"],
-html[data-theme="dark"] [style*="background: #fffaf5"] {
-  background: #fffaf5 !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="dark"] [style*="background:#fafafa"],
-html[data-theme="dark"] [style*="background: #fafafa"] {
-  background: #fafafa !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="dark"] [style*="background:#fffaf5"] [style*="color:#"],
-html[data-theme="dark"] [style*="background:#fafafa"] [style*="color:#"] {
-  color: #0f172a !important;
-}
-
-/* Trong các khối nền trắng giữ nguyên (.inv-customer-box, #orderStatusTracker, [style*="background:#f8fafc"], [style*="background:#f8f9fa"], .chart-card), các nút/badge nền #fff bên trong vẫn giữ nền trắng chữ đen */
-html[data-theme="dark"] .inv-customer-box [style*="background:#fff"],
-html[data-theme="dark"] .inv-customer-box [style*="background: #fff"],
-html[data-theme="dark"] [style*="background:#f8fafc"] [style*="background:#fff"],
-html[data-theme="dark"] [style*="background: #f8fafc"] [style*="background: #fff"] {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-}
-
-html[data-theme="dark"] #promoFieldProduct {
-  background: #faf5ff !important;
-  border-color: #e9d5ff !important;
-  color: #0f172a !important;
-}
-
-html[data-theme="dark"] #promoFieldProduct strong,
-html[data-theme="dark"] #promoFieldProduct small {
-  color: #0f172a !important;
-}
-
 html[data-theme="dark"] #promoFieldVoucher {
-  background: #fefce8 !important;
-  border-color: #fde047 !important;
-  color: #0f172a !important;
+  background: rgba(234, 179, 8, 0.12) !important;
+  border-color: rgba(234, 179, 8, 0.3) !important;
 }
 
 html[data-theme="dark"] #promoFieldVoucher strong,
 html[data-theme="dark"] #promoFieldVoucher span {
-  color: #0f172a !important;
+  color: #fde047 !important;
 }
 
 html[data-theme="dark"] #promoFieldInvoice {
-  background: #ecfdf5 !important;
-  border-color: #a7f3d0 !important;
-  color: #0f172a !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
 }
 
 html[data-theme="dark"] #promoFieldInvoice strong,
 html[data-theme="dark"] #promoFieldInvoice small {
-  color: #0f172a !important;
+  color: #6ee7b7 !important;
 }
 
 html[data-theme="dark"] .donut-legend-title,

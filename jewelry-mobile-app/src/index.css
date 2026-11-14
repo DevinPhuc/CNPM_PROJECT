@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #faf8f5;
+    --foreground: #1c1917;
+    --card: #ffffff;
+    --card-foreground: #1c1917;
+    --secondary: #f5f0e8;
+    --secondary-foreground: #1c1917;
+    --muted: #f5f0e8;
+    --muted-foreground: #8a7a5c;
+    --primary: #b8922a;
+    --border: #e8dfc8;
+    font-synthesis: none;
+  }
+
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #e8e0d0;
+    color: var(--foreground);
+  }
+}
+
+.bg-background {
+  background-color: var(--background);
+}
+.bg-card {
+  background-color: var(--card);
+}
+.bg-secondary {
+  background-color: var(--secondary);
+}
+.text-foreground {
+  color: var(--foreground);
+}
+.text-muted-foreground {
+  color: var(--muted-foreground);
+}
+.border-card {
+  border-color: var(--card);
+}
+
+/* Hide scrollbars cleanly inside mobile frame */
+::-webkit-scrollbar {
+  width: 0px;
+  height: 0px;
+  display: none;
+}
