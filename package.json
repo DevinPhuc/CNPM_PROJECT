@@ -5,6 +5,8 @@
   "scripts": {
     "start": "npm --prefix server start",
     "dev": "npm --prefix server run dev",
-    "install:all": "npm --prefix server install"
+    "install:all": "npm --prefix server install && npm --prefix jewelry-mobile-app install",
+    "mobile:dev": "npm --prefix jewelry-mobile-app run dev",
+    "mobile:build": "npm --prefix jewelry-mobile-app run build"
   }
 }

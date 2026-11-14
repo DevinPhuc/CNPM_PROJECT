@@ -750,6 +750,8 @@ app.get("/admin", (_req, res) => res.redirect("/admin/login.html"));
 app.get("/admin/", (_req, res) => res.redirect("/admin/login.html"));
 app.use("/admin", express.static(path.join(root, "admin"), staticOpts));
 app.get("/", (_req, res) => res.redirect("/client/home.html"));
+app.get("/app", (_req, res) => res.redirect("/client/mobile-app.html"));
+app.get("/mobile", (_req, res) => res.redirect("/client/mobile-app.html"));
 // Chuyển hướng các trang HTML truy cập trực tiếp từ root (ví dụ /shop.html) về /client/
 app.get("/:page.html", (req, res, next) => {
   const page = req.params.page;
