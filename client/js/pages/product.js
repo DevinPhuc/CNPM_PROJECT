@@ -1,13 +1,27 @@
 (async () => {
-  const { api, $, $$, money, esc, toast, variantLabel, requireLogin, refreshCartCount, productCard } = Jewels;
+  const { api, $, $$, money, esc, toast, variantLabel, requireLogin, refreshCartCount, productCard, navigate } = Jewels;
   const id = new URLSearchParams(location.search).get("id");
   const root = $("#productRoot");
   if (!root) return;
-  if (!id) { root.innerHTML = '<div class="empty"><h3>Thiếu mã sản phẩm</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>'; return; }
+  $("#productBackBtn")?.addEventListener("click", () => {
+    if (history.state?.jewelsSpa) history.back();
+    else navigate("shop.html");
+  });
+  if (!id) {
+    root.innerHTML = '<div class="empty"><h3>Thiếu mã sản phẩm</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>';
+    document.dispatchEvent(new Event("jewels:page-content-ready"));
+    return;
+  }
 
   let p;
   try { p = await api("/products/" + encodeURIComponent(id)); }
-  catch (e) { root.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>`; return; }
+  catch (e) {
+    if (!root.isConnected) return;
+    root.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3><a class="btn" href="shop.html">Về cửa hàng</a></div>`;
+    document.dispatchEvent(new Event("jewels:page-content-ready"));
+    return;
+  }
+  if (!root.isConnected) return;
 
   document.title = p.name + " - Jewels";
   $("#crumbName").textContent = p.name;
@@ -126,4 +140,5 @@
     $("#relatedSection").hidden = false;
     $("#related").innerHTML = p.related.map((r) => productCard({ ...r, category: p.category, maxPrice: r.price })).join("");
   }
+  document.dispatchEvent(new Event("jewels:page-content-ready"));
 })();
