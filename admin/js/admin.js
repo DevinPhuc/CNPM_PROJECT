@@ -2154,9 +2154,19 @@
       state.products = products;
 
       const select = document.getElementById("stockSupplierSelect");
-      if (select && suppliers.length > 0) {
+      if (select) {
+        const activeSuppliers = suppliers.filter((supplier) =>
+          supplier.isActive === true ||
+          (supplier.isActive === undefined && ["Hoạt động", "Đang hợp tác"].includes(supplier.status))
+        );
         select.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>' +
-          suppliers.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+          activeSuppliers.map((supplier) =>
+            `<option value="${Number(supplier.id)}">${escapeReceiptHtml(supplier.name)}</option>`
+          ).join("");
+        select.disabled = activeSuppliers.length === 0;
+        if (activeSuppliers.length === 0) {
+          select.innerHTML = '<option value="">-- Không có nhà cung cấp đang hợp tác --</option>';
+        }
       }
 
       const prodSelect = document.getElementById("stockProductSelect");
@@ -3479,7 +3489,7 @@
 
       try {
         await api("/receipts", { method: "POST", body });
-        toast("Đã gửi phiếu nhập chờ duyệt. Tồn kho sẽ được cộng sau khi xác nhận nhập hàng.", "success");
+        toast("Đã tạo phiếu nhập chờ nhập kho. Tồn kho sẽ được cộng sau khi xác nhận hàng đã nhập.", "success");
         stockForm.reset();
         closeFormModal("stockModal");
         setupReceiptItemsForm();

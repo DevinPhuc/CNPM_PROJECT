@@ -1824,15 +1824,31 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       : [];
     const itemList = rawItems.length ? rawItems : fallbackItem;
     const { supplierId, supplierName, note, date } = req.body || {};
+    let supId = supplierId ? Number(supplierId) : null;
 
     if (!itemList.length || itemList.some((it) => !it.productId || Number(it.quantity || 0) <= 0)) {
       throw new HttpError(400, "Vui lòng chọn ít nhất một mặt hàng và nhập số lượng hợp lệ.");
     }
 
-    let supId = supplierId ? Number(supplierId) : null;
     if (!supId && supplierName) {
-      const sup = one(must(await db.from("suppliers").select("sup_id").ilike("name", `%${supplierName}%`).limit(1)));
-      supId = sup ? sup.sup_id : 1;
+      const sup = one(must(await db.from("suppliers")
+        .select("sup_id")
+        .ilike("name", `%${String(supplierName).trim()}%`)
+        .eq("is_active", true)
+        .limit(1)));
+      supId = sup?.sup_id || null;
+    }
+    if (!Number.isInteger(supId) || supId <= 0) {
+      throw new HttpError(400, "Vui lòng chọn nhà cung cấp đang hợp tác.");
+    }
+
+    const activeSupplier = one(must(await db.from("suppliers")
+      .select("sup_id")
+      .eq("sup_id", supId)
+      .eq("is_active", true)
+      .limit(1)));
+    if (!activeSupplier) {
+      throw new HttpError(400, "Nhà cung cấp đã ngừng hợp tác hoặc không tồn tại. Vui lòng chọn nhà cung cấp khác.");
     }
 
     const normalizedItems = itemList.map((it) => ({
@@ -1866,7 +1882,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const totalAmt = Math.round(normalizedItems.reduce((sum, it) => sum + (it.quantity * it.unitCost), 0));
 
     const gr = one(must(await db.from("goods_receipt").insert({
-      sup_id: supId || 1,
+      sup_id: supId,
       total_amount: totalAmt,
       note: note || `Nhập kho ngày ${date || new Date().toISOString().split("T")[0]}`,
       receipt_date: date ? new Date(date).toISOString() : new Date().toISOString(),
