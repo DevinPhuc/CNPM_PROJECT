@@ -459,6 +459,8 @@
     promotions: [],
     orders: [],
     stock: [],
+    selectedReceiptId: null,
+    receiptSortDescending: false,
     suppliers: [],
     analytics: null,
     unlockRequests: [],
@@ -2151,18 +2153,23 @@
       state.suppliers = suppliers;
       state.products = products;
 
-      // Đổ danh sách nhà cung cấp vào select
       const select = document.getElementById("stockSupplierSelect");
       if (select && suppliers.length > 0) {
         select.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>' +
           suppliers.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
       }
 
-      // Đổ danh sách sản phẩm vào select nhập kho
       const prodSelect = document.getElementById("stockProductSelect");
       if (prodSelect && products.length > 0) {
-        prodSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần nhập --</option>' +
+        prodSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>' +
           products.map((p) => `<option value="${p.id}">${p.name} (Tồn hiện tại: ${p.stock})</option>`).join("");
+      }
+
+      const receiptItemsContainer = document.getElementById("receiptItemsContainer");
+      if (receiptItemsContainer && !receiptItemsContainer.dataset.initialized) {
+        receiptItemsContainer.dataset.initialized = "1";
+        const firstRow = buildReceiptItemRow(0, products || []);
+        receiptItemsContainer.innerHTML = firstRow;
       }
 
       renderStockTable(keyword);
@@ -2171,35 +2178,232 @@
     }
   }
 
+  const RECEIPT_STATUS_ORDER = ["pending", "received"];
+  const RECEIPT_STATUS_LABELS = {
+    pending: "Chờ nhập kho",
+    received: "Đã nhập kho",
+  };
+
+  function getReceiptStatusKey(receipt) {
+    if (receipt.rawStatus === "approved") return "pending";
+    if (RECEIPT_STATUS_ORDER.includes(receipt.rawStatus)) return receipt.rawStatus;
+    return Object.keys(RECEIPT_STATUS_LABELS).find((key) => RECEIPT_STATUS_LABELS[key] === receipt.status) || "pending";
+  }
+
+  function escapeReceiptHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
+  }
+
+  function buildReceiptItemRow(index, productList = state.products || []) {
+    const productOptions = productList.length
+      ? productList.map((p) => `<option value="${p.id}">${p.name} (Tồn: ${p.stock})</option>`).join("")
+      : '<option value="">-- Chưa có sản phẩm --</option>';
+
+    return `
+      <div class="receipt-item-row" data-index="${index}" style="display:grid; grid-template-columns: minmax(160px, 1.8fr) minmax(90px, 0.7fr) minmax(130px, 1fr) 36px; gap:10px; align-items:end; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb;">
+        <strong class="receipt-item-heading" style="grid-column:1 / -1; font-size:12px; color:#1f2937;">Mặt hàng ${index + 1}</strong>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          Sản phẩm
+          <select name="itemProductId" class="receipt-product-select" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;">
+            <option value="">-- Chọn sản phẩm --</option>
+            ${productOptions}
+          </select>
+        </label>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          SL
+          <input name="itemQuantity" type="number" min="1" value="1" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;" />
+        </label>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          Đơn giá nhập
+          <input name="itemUnitCost" type="number" min="0" step="1000" placeholder="500000" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;" />
+        </label>
+        <button type="button" class="receipt-remove-item" aria-label="Xóa hàng" title="Xóa hàng" style="height:40px; border:none; border-radius:8px; background:#fef2f2; color:#b91c1c; cursor:pointer; font-weight:700;">×</button>
+      </div>
+    `;
+  }
+
   function renderStockTable(keyword = "") {
     const table = document.getElementById("stockTable");
     if (!table) return;
     const filter = String(keyword || "").toLowerCase();
-    const rows = state.stock.filter((s) =>
-      s.code.toLowerCase().includes(filter) ||
-      s.supplier.toLowerCase().includes(filter) ||
-      (s.productName && s.productName.toLowerCase().includes(filter))
-    );
+    const rows = state.stock.filter((s) => {
+      if (s.rawStatus === "cancelled") return false;
+      const nameText = (s.productName || "").toLowerCase();
+      const supplierText = (s.supplier || "").toLowerCase();
+      const codeText = (s.code || "").toLowerCase();
+      const statusText = String(s.status || "").toLowerCase();
+      return codeText.includes(filter) || supplierText.includes(filter) || nameText.includes(filter) ||
+        statusText.includes(filter) || String(s.note || "").toLowerCase().includes(filter);
+    });
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy phiếu nhập nào</div>';
+      state.selectedReceiptId = null;
+      renderReceiptDetailPanel(null, true);
       return;
     }
 
-    const grid = "minmax(85px, 0.9fr) minmax(130px, 1.3fr) minmax(140px, 1.5fr) minmax(80px, 0.9fr) minmax(95px, 1fr) minmax(110px, 1.1fr) minmax(120px, 1.3fr)";
-    table.innerHTML = buildRowHeader(["Mã phiếu", "Nhà cung cấp", "Sản phẩm nhập", "Số lượng", "Ngày nhập", "Tổng tiền", "Ghi chú"], grid) +
-      rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
-          <strong>${item.code}</strong>
-          <span>${item.supplier}</span>
-          <strong style="color:var(--admin-green);">${item.productName || "Sản phẩm"}</strong>
-          <span style="font-weight:600; color:#10b981;">+${item.quantity}</span>
-          <small>${formatDate(item.date)}</small>
-          <strong style="color:var(--admin-gold);">${formatMoney(item.totalAmount)}</strong>
-          <small style="color:#666;">${item.note || "--"}</small>
-        </div>
-      `).join("");
+    rows.sort((a, b) => {
+      const rankA = RECEIPT_STATUS_ORDER.indexOf(getReceiptStatusKey(a));
+      const rankB = RECEIPT_STATUS_ORDER.indexOf(getReceiptStatusKey(b));
+      const statusOrder = state.receiptSortDescending ? rankB - rankA : rankA - rankB;
+      return statusOrder || new Date(b.date || 0) - new Date(a.date || 0);
+    });
+
+    const sortButton = document.getElementById("receiptSortBtn");
+    if (sortButton) {
+      sortButton.textContent = state.receiptSortDescending
+        ? "Sắp xếp: Đã nhập kho trước"
+        : "Sắp xếp: Chờ nhập kho trước";
+      sortButton.setAttribute("aria-pressed", String(state.receiptSortDescending));
+    }
+
+    if (!rows.some((receipt) => Number(receipt.id) === Number(state.selectedReceiptId))) {
+      state.selectedReceiptId = rows[0].id;
+    }
+
+    const receiptGrid = "90px 130px 110px 76px 98px 109px 110px";
+    table.innerHTML = buildRowHeader(["Mã phiếu", "Nhà cung cấp", "Mặt hàng", "Số lượng", "Ngày nhập", "Tổng tiền", "Trạng thái"], receiptGrid) +
+      rows.map((item) => {
+        const items = item.items || [];
+        const totalQuantity = items.reduce((sum, receiptItem) => sum + (Number(receiptItem.quantity) || 0), 0);
+        return `
+          <div class="admin-row clickable-row receipt-list-row receipt-status-${getReceiptStatusKey(item)} ${Number(state.selectedReceiptId) === Number(item.id) ? "selected-row" : ""}"
+               id="receipt-row-${Number(item.id)}"
+               role="button"
+               tabindex="0"
+               onclick="selectReceiptRow(${Number(item.id)})"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectReceiptRow(${Number(item.id)})}"
+               style="grid-template-columns: ${receiptGrid};">
+            <strong class="receipt-list-code">${escapeReceiptHtml(item.code)}</strong>
+            <span class="receipt-list-supplier">${escapeReceiptHtml(item.supplier || "--")}</span>
+            <strong class="receipt-list-item-count" style="color:var(--admin-green);">${items.length} loại hàng</strong>
+            <span class="receipt-list-quantity" style="font-weight:600; color:#10b981;">${totalQuantity}</span>
+            <small class="receipt-list-date">${formatDate(item.date)}</small>
+            <strong class="receipt-list-total" style="color:var(--admin-gold);">${formatMoney(item.totalAmount)}</strong>
+            <span class="receipt-list-status">${renderStatusBadge(item.status || RECEIPT_STATUS_LABELS.received)}</span>
+          </div>
+        `;
+      }).join("");
+
+    renderReceiptDetailPanel(state.selectedReceiptId);
   }
+
+  const receiptSortBtn = document.getElementById("receiptSortBtn");
+  if (receiptSortBtn) {
+    receiptSortBtn.addEventListener("click", () => {
+      state.receiptSortDescending = !state.receiptSortDescending;
+      renderStockTable(document.getElementById("stockSearch")?.value || "");
+    });
+  }
+
+  window.selectReceiptRow = (id) => {
+    state.selectedReceiptId = id;
+    document.querySelectorAll("#stockTable .admin-row.clickable-row").forEach((row) => {
+      row.classList.toggle("selected-row", row.id === `receipt-row-${Number(id)}`);
+    });
+    renderReceiptDetailPanel(id);
+  };
+
+  function renderReceiptDetailPanel(id, noResults = false) {
+    const panel = document.getElementById("receiptDetailPanel");
+    if (!panel) return;
+    const receipt = state.stock.find((item) => Number(item.id) === Number(id));
+    if (!receipt) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">📦</span>
+          <h4>${noResults ? "Không có phiếu nhập" : "Chi tiết phiếu nhập"}</h4>
+          <p>${noResults ? "Không tìm thấy phiếu nhập phù hợp với điều kiện tìm kiếm." : "Nhấp vào một phiếu trong danh sách để xem thông tin chi tiết tại đây."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const statusKey = getReceiptStatusKey(receipt);
+    const items = receipt.items || [];
+    const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const actions = statusKey === "pending"
+      ? `
+        <button type="button" class="admin-primary-btn" onclick="updateReceiptStatus(${Number(receipt.id)}, 'received')">Xác nhận đã nhập kho</button>
+      `
+      : "";
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header" style="margin-bottom:14px;">
+          <div>
+            <p class="account-eyebrow" style="margin-bottom:5px;">CHI TIẾT PHIẾU NHẬP</p>
+            <h3 style="font-size:19px;">${escapeReceiptHtml(receipt.code)}</h3>
+          </div>
+          ${renderStatusBadge(RECEIPT_STATUS_LABELS[statusKey])}
+        </div>
+
+        <div style="margin-top:8px;">
+          <strong style="display:block;margin-bottom:9px;">Danh sách mặt hàng (${items.length})</strong>
+          <div style="display:grid;gap:8px;">
+            ${items.length ? items.map((item) => `
+              <div style="display:grid;gap:5px;padding:10px 12px;border:1px solid var(--admin-line);border-radius:8px;font-size:12px;">
+                <strong>${escapeReceiptHtml(item.productName || "Sản phẩm")}</strong>
+                <div style="display:flex;justify-content:space-between;gap:8px;color:var(--admin-muted);">
+                  <span>SL: <strong>${Number(item.quantity) || 0}</strong></span>
+                  <span>Đơn giá: <strong>${formatMoney(item.unitCost)}</strong></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                  <span style="color:var(--admin-muted);">Thành tiền</span>
+                  <strong>${formatMoney(item.subtotal)}</strong>
+                </div>
+              </div>
+            `).join("") : '<div class="admin-empty">Phiếu chưa có chi tiết mặt hàng.</div>'}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;background:var(--admin-paper);border-radius:8px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng số lượng</small><strong>${totalQuantity} sản phẩm</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng tiền</small><strong style="color:var(--admin-gold);">${formatMoney(receipt.totalAmount)}</strong></div>
+        </div>
+
+        <div style="display:grid;gap:12px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Nhà cung cấp</small><strong>${escapeReceiptHtml(receipt.supplier || "Nhà cung cấp")}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Ngày nhập</small><strong>${escapeReceiptHtml(formatDate(receipt.date))}</strong></div>
+        </div>
+
+        <div style="margin-top:14px;padding:10px 12px;background:var(--admin-paper);border-radius:8px;font-size:12px;">
+          <strong>Ghi chú:</strong> ${escapeReceiptHtml(receipt.note || "--")}
+        </div>
+
+        ${actions ? `<div style="margin-top:16px;">${actions}</div>` : ""}
+      </div>
+    `;
+  }
+
+  window.updateReceiptStatus = async (id, status) => {
+    const actionLabels = {
+      received: "xác nhận hàng đã nhập kho và cộng tồn kho",
+    };
+    const confirmation = {
+      received: "Xác nhận hàng đã thực tế nhập kho? Tồn kho sẽ được cộng theo các mặt hàng trong phiếu.",
+    };
+    if (!actionLabels[status]) return;
+    if (!confirm(confirmation[status])) return;
+
+    try {
+      await api(`/receipts/${id}/status`, { method: "PATCH", body: { status } });
+      toast(`Đã ${actionLabels[status]} thành công.`, "success");
+      await loadStock(document.getElementById("stockSearch")?.value || "");
+      if (status === "received") {
+        await Promise.all([loadProducts(), loadOverview()]);
+      }
+    } catch (err) {
+      toast("Không thể cập nhật phiếu nhập: " + err.message, "error");
+    }
+  };
 
   // ---------- 9. QUẢN LÝ NHÀ CUNG CẤP ----------
   async function loadSuppliers(keyword = "") {
@@ -3200,29 +3404,95 @@
 
     // 8. Stock Form (Tạo phiếu nhập)
   const stockForm = document.getElementById("stockForm");
+  const addReceiptItemBtn = document.getElementById("addReceiptItemBtn");
+  const receiptItemsContainer = document.getElementById("receiptItemsContainer");
+
+  function updateReceiptItemLabels() {
+    if (!receiptItemsContainer) return;
+    receiptItemsContainer.querySelectorAll(".receipt-item-row").forEach((row, index) => {
+      row.dataset.index = String(index);
+      const heading = row.querySelector(".receipt-item-heading");
+      if (heading) heading.textContent = `Mặt hàng ${index + 1}`;
+    });
+  }
+
+  function setupReceiptItemsForm() {
+    if (!receiptItemsContainer) return;
+    receiptItemsContainer.innerHTML = "";
+    receiptItemsContainer.appendChild(document.createRange().createContextualFragment(buildReceiptItemRow(0, state.products || [])));
+    updateReceiptItemLabels();
+  }
+
+  if (addReceiptItemBtn && receiptItemsContainer) {
+    addReceiptItemBtn.addEventListener("click", () => {
+      const rows = receiptItemsContainer.querySelectorAll(".receipt-item-row");
+      receiptItemsContainer.insertAdjacentHTML("beforeend", buildReceiptItemRow(rows.length, state.products || []));
+      updateReceiptItemLabels();
+      const newRow = receiptItemsContainer.lastElementChild;
+      newRow?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      newRow?.querySelector('[name="itemProductId"]')?.focus();
+    });
+
+    receiptItemsContainer.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const removeButton = target.closest(".receipt-remove-item");
+      if (!removeButton) return;
+
+      const row = removeButton.closest(".receipt-item-row");
+      if (!row) return;
+      const rows = receiptItemsContainer.querySelectorAll(".receipt-item-row");
+      if (rows.length <= 1) {
+        row.querySelector('[name="itemProductId"]').value = "";
+        row.querySelector('[name="itemQuantity"]').value = 1;
+        row.querySelector('[name="itemUnitCost"]').value = "";
+      } else {
+        row.remove();
+      }
+      updateReceiptItemLabels();
+    });
+  }
+
   if (stockForm) {
     stockForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(stockForm);
+      const rows = [...receiptItemsContainer.querySelectorAll(".receipt-item-row")];
+      const items = rows.map((row) => {
+        const productId = row.querySelector('[name="itemProductId"]').value;
+        const quantity = Number(row.querySelector('[name="itemQuantity"]').value || 0);
+        const unitCost = Number(row.querySelector('[name="itemUnitCost"]').value || 0);
+        return { productId, quantity, unitCost };
+      }).filter((item) => item.productId && item.quantity > 0 && item.unitCost >= 0);
+
+      if (items.length === 0) {
+        toast("Vui lòng chọn ít nhất một mặt hàng nhập kho.", "error");
+        return;
+      }
+
       const body = {
         supplierId: fd.get("supplierId"),
-        productId: fd.get("productId"),
-        quantity: Number(fd.get("quantity")),
-        amount: Number(fd.get("amount")),
         date: fd.get("date") || null,
         note: fd.get("note"),
+        items,
       };
+
       try {
         await api("/receipts", { method: "POST", body });
-        toast("Đã tạo phiếu nhập & tự động cộng tồn kho thành công!");
+        toast("Đã gửi phiếu nhập chờ duyệt. Tồn kho sẽ được cộng sau khi xác nhận nhập hàng.", "success");
         stockForm.reset();
         closeFormModal("stockModal");
+        setupReceiptItemsForm();
         loadStock();
         loadProducts();
       } catch (err) {
         toast("Lỗi: " + err.message, "error");
       }
     });
+  }
+
+  if (receiptItemsContainer) {
+    setupReceiptItemsForm();
   }
 
   // Lắng nghe đổi tab bộ lọc Thống kê (Tháng / Ngày / Năm)
@@ -3451,6 +3721,10 @@
         loadStock();
         loadProducts();
         loadOverview();
+        break;
+      }
+      case "RECEIPT_STATUS_CHANGED": {
+        loadStock();
         break;
       }
       case "PROMOTION_CHANGED": {
