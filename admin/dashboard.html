@@ -14,7 +14,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="css/admin.css?v=20261112_4" />
+  <link rel="stylesheet" href="css/admin.css?v=20261116_2" />
   <script>
     (function () {
       try {
@@ -951,15 +951,25 @@
             <div class="admin-module-actions">
               <input id="stockSearch" class="admin-search" type="search"
                 placeholder="Tìm phiếu nhập, nhà cung cấp..." />
+              <button type="button" class="admin-secondary-btn" id="receiptSortBtn" aria-pressed="false">
+                Sắp xếp: Chờ nhập kho trước
+              </button>
               <button type="button" class="admin-primary-btn" data-add="stock">
                 + Tạo phiếu nhập kho
               </button>
             </div>
           </div>
-          <div class="admin-management-layout">
+          <div class="admin-management-layout split-layout">
             <div class="admin-table-wrap">
               <div class="admin-list" id="stockTable"></div>
             </div>
+            <aside class="admin-side-detail" id="receiptDetailPanel">
+              <div class="admin-detail-placeholder">
+                <span style="font-size:36px; display:block; margin-bottom:12px;">📦</span>
+                <h4>Chi tiết phiếu nhập</h4>
+                <p>Nhấp vào một phiếu trong danh sách để xem thông tin chi tiết tại đây.</p>
+              </div>
+            </aside>
           </div>
 
           <!-- MODAL TẠO PHIẾU NHẬP KHO -->
@@ -976,15 +986,14 @@
                     <option value="">-- Chọn nhà cung cấp --</option>
                   </select>
                 </label>
-                <label>Sản phẩm cần nhập kho
-                  <select name="productId" id="stockProductSelect" required>
-                    <option value="">-- Chọn sản phẩm --</option>
-                  </select>
-                </label>
-                <label>Số lượng sản phẩm nhập<input name="quantity" type="number" min="1" placeholder="20"
-                    required /></label>
-                <label>Tổng giá trị nhập (VNĐ)<input name="amount" type="number" min="0" placeholder="50000000"
-                    required /></label>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 8px 0 6px;">
+                  <strong style="font-size: 13px; color: #1f2937;">Danh sách mặt hàng nhập</strong>
+                  <button type="button" id="addReceiptItemBtn" class="admin-secondary-btn" style="padding: 8px 12px; font-size: 12px; min-width: auto;">+ Thêm loại sản phẩm</button>
+                </div>
+
+                <div id="receiptItemsContainer" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 12px;"></div>
+
                 <label>Ngày nhập hàng<input name="date" type="date" /></label>
                 <label>Ghi chú nhập kho<textarea name="note" rows="2" style="
                         width: 100%;
@@ -998,7 +1007,7 @@
                     Hủy
                   </button>
                   <button type="submit" class="admin-primary-btn">
-                    Lưu phiếu & Cộng tồn kho
+                    Tạo phiếu chờ nhập kho
                   </button>
                 </div>
               </form>
@@ -1295,7 +1304,7 @@
 
   <script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
   <script src="../shared/js/vendor/xlsx.full.min.js"></script>
-  <script src="js/admin.js?v=20261112_4"></script>
+  <script src="js/admin.js?v=20261116_7"></script>
 </body>
 
 </html>

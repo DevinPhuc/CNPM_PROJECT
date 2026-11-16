@@ -720,10 +720,72 @@ h6 {
   gap: 24px;
   align-items: start;
 }
+
+#stockTable > .header-row,
+#stockTable > .receipt-list-row {
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 1280px) {
   .admin-management-layout.split-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  #stockTable > .header-row {
+    display: none !important;
+  }
+
+  #stockTable > .receipt-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "code status"
+      "supplier supplier"
+      "items quantity"
+      "date total";
+    gap: 8px 12px;
+    min-width: 0;
+    width: 100%;
+    padding: 13px 15px;
+    border-bottom: 1px solid var(--admin-line);
+    box-sizing: border-box;
+  }
+
+  #stockTable > .receipt-list-row.selected-row {
+    background: #f8fafc !important;
+    border-left: 4px solid #94a3b8 !important;
+    padding-left: 11px;
+  }
+
+  #stockTable > .receipt-list-row.selected-row.receipt-status-pending {
+    background: #fffbeb !important;
+    border-left-color: #f59e0b !important;
+  }
+
+  #stockTable > .receipt-list-row.selected-row.receipt-status-received {
+    background: #ecfdf5 !important;
+    border-left-color: #10b981 !important;
+  }
+
+  .receipt-list-code { grid-area: code; }
+  .receipt-list-status { grid-area: status; justify-self: end; }
+  .receipt-list-supplier { grid-area: supplier; }
+  .receipt-list-item-count { grid-area: items; }
+  .receipt-list-quantity { grid-area: quantity; justify-self: end; }
+  .receipt-list-date { grid-area: date; }
+  .receipt-list-total { grid-area: total; justify-self: end; }
+}
+
+#stockTable > .receipt-list-row.selected-row.receipt-status-pending {
+  background: #fffbeb !important;
+  border-left-color: #f59e0b !important;
+}
+
+#stockTable > .receipt-list-row.selected-row.receipt-status-received {
+  background: #ecfdf5 !important;
+  border-left-color: #10b981 !important;
 }
 
 .admin-side-detail {
@@ -2991,4 +3053,3 @@ html[data-theme="dark"] .admin-modal-close:hover {
   background: var(--ignara-card-3);
   color: var(--ignara-ink);
 }
-

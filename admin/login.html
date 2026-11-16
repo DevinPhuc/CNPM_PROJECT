@@ -103,12 +103,12 @@
           <form class="auth-form" id="adminLoginForm" novalidate>
             <label class="field">
               Email
-              <input name="email" type="email" autocomplete="email" placeholder="admin@jewels.vn" value="admin@jewels.vn" required>
+              <input name="email" type="email" autocomplete="email" placeholder="admin@jewels.vn" required>
             </label>
             <label class="field">
               Mật khẩu
               <div class="pw-wrap">
-                <input name="password" type="password" placeholder="Nhập mật khẩu" value="Admin@123" required autocomplete="current-password">
+                <input name="password" type="password" placeholder="Nhập mật khẩu" required autocomplete="current-password">
                 <button type="button" class="pw-toggle-btn" title="Hiện/Ẩn mật khẩu" aria-label="Hiện/Ẩn mật khẩu">
                   <img src="../shared/images/Icons/eye.png" alt="Hiện mật khẩu" class="pw-toggle-icon">
                 </button>
@@ -131,7 +131,7 @@
           </div>
 
           <div style="margin-top: 14px; text-align: center; font-size: 0.82rem; color: var(--ink-soft, #635b54);">
-            Tài khoản quản lý mặc định: <strong style="color: var(--gold-rich, #8c5b1b);">admin@jewels.vn</strong> / <strong style="color: var(--gold-rich, #8c5b1b);">Admin@123</strong>
+            Cần chạy máy chủ và đăng nhập bằng tài khoản quản trị đã được tạo trong hệ thống.
           </div>
         </section>
       </div>
@@ -140,12 +140,6 @@
 
   <script>
     const ADMIN_SESSION_KEY = "jewels-admin-session";
-    const ADMIN_ACCOUNT = {
-      name: "Quản trị viên",
-      email: "admin@jewels.vn",
-      password: "Admin@123"
-    };
-
     const loginForm = document.getElementById("adminLoginForm");
     const feedback = document.getElementById("adminLoginFeedback");
     const submitBtn = document.getElementById("adminLoginBtn");
@@ -194,8 +188,8 @@
           throw new Error(data.error || "Email hoặc mật khẩu admin không chính xác.");
         }
         const session = {
-          name: data.user?.name || ADMIN_ACCOUNT.name,
-          email: data.user?.email || ADMIN_ACCOUNT.email,
+          name: data.user?.name || "Quản trị viên",
+          email: data.user?.email || email,
           token: data.token,
           serverInstance: data.serverInstance,
           remember,
@@ -204,13 +198,13 @@
         localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
         redirectToDashboard();
       } catch (err) {
-        if (email === ADMIN_ACCOUNT.email && password === ADMIN_ACCOUNT.password) {
-          const session = { name: ADMIN_ACCOUNT.name, email: ADMIN_ACCOUNT.email, remember };
-          localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
-          redirectToDashboard();
-          return;
-        }
-        feedback.innerHTML = `<span style="color:#e11d48; font-size:13px; font-weight:500;">${err.message || "Email hoặc mật khẩu chưa chính xác."}</span>`;
+        const message = window.location.protocol === "file:"
+          ? "Không thể đăng nhập khi mở trực tiếp file HTML. Hãy chạy máy chủ rồi vào http://localhost:3000/admin/login.html."
+          : err instanceof TypeError
+            ? "Không kết nối được máy chủ. Hãy kiểm tra server tại http://localhost:3000."
+            : err.message || "Không thể đăng nhập.";
+        feedback.textContent = message;
+        feedback.style.color = "#e11d48";
       } finally {
         submitBtn.disabled = false;
       }
