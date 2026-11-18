@@ -19,6 +19,8 @@
         : '<div class="empty" style="grid-column:1/-1"><h3>Hiện các sản phẩm nổi bật tạm hết hàng</h3><p>Vui lòng ghé thăm lại sau hoặc xem cửa hàng.</p></div>';
     } catch (e) {
       $("#featured").innerHTML = `<div class="empty" style="grid-column:1/-1"><h3>Không tải được dữ liệu</h3><p>${esc(e.message)}</p></div>`;
+    } finally {
+      document.dispatchEvent(new Event("jewels:page-content-ready"));
     }
   }
   loadHome();

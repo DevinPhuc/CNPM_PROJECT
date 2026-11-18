@@ -244,9 +244,10 @@
     }
   }
 
-  async function navigate(url, { push = true } = {}) {
+  async function navigate(url, { push = true, restoreScrollY = null } = {}) {
     const navId = ++currentNavId;
     const destUrl = resolveClientUrl(url);
+    const shouldRestoreScroll = !push && Number.isFinite(restoreScrollY);
 
     // Bật thông báo tải trang có chú bot nảy lên xuống
     showPageLoading(true);
@@ -311,11 +312,27 @@
         // để các script (như shop.js) đọc đúng query parameters từ location.search
         if (push) {
           history.pushState(
-            { page: document.body.dataset.page, url: destUrl.href },
+            {
+              page: document.body.dataset.page,
+              url: destUrl.href,
+              jewelsSpa: true,
+            },
             "",
             destUrl.href,
           );
           sessionStorage.setItem("jewels_last_shop_url", location.href);
+        }
+
+        if (shouldRestoreScroll) {
+          document.addEventListener(
+            "jewels:page-content-ready",
+            () => {
+              if (navId === currentNavId) {
+                window.scrollTo({ top: restoreScrollY, behavior: "instant" });
+              }
+            },
+            { once: true },
+          );
         }
 
         // Nạp và thực thi script trang mới
@@ -339,8 +356,9 @@
         });
         updateNavIndicator();
 
-        // Cuộn lên đầu
-        window.scrollTo({ top: 0, behavior: "instant" });
+        if (!shouldRestoreScroll) {
+          window.scrollTo({ top: 0, behavior: "instant" });
+        }
 
         // Khởi tạo lại scroll reveal cho các phần tử mới
         if (typeof initScrollReveal === "function") {
@@ -364,6 +382,7 @@
 
   // Bắt sự kiện click các liên kết nội bộ trang client
   document.addEventListener("click", (e) => {
+    if (e.target.closest(".card-add-wrap")) return;
     const a = e.target.closest("a");
     if (!a) return;
     const href = a.getAttribute("href");
@@ -404,14 +423,29 @@
       internalPages.includes(baseName) ||
       (baseName.endsWith(".html") && !baseName.includes("/admin/"))
     ) {
+      if (baseName === "product.html") {
+        history.replaceState(
+          {
+            ...(history.state || {}),
+            page: curPage,
+            url: location.href,
+            scrollY: window.scrollY,
+          },
+          "",
+          location.href,
+        );
+      }
       e.preventDefault();
       navigate(href);
     }
   });
 
   // Xử lý nút Back/Forward của trình duyệt
-  window.addEventListener("popstate", () => {
-    navigate(location.href, { push: false });
+  window.addEventListener("popstate", (e) => {
+    navigate(location.href, {
+      push: false,
+      restoreScrollY: e.state?.scrollY,
+    });
   });
 
   function buildLayout() {

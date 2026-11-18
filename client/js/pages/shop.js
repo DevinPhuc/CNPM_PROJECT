@@ -39,7 +39,7 @@
     if (st.q) p.set("q", st.q);
     if (st.sort && st.sort !== "new") p.set("sort", st.sort);
     if (st.page > 1) p.set("page", st.page);
-    history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : ""));
+    history.replaceState(history.state, "", location.pathname + (p.toString() ? "?" + p : ""));
     sessionStorage.setItem("jewels_last_shop_url", location.href);
   }
 
@@ -268,6 +268,7 @@
     buildCategoryFilters();
     updateFilterStates();
     await load();
+    document.dispatchEvent(new Event("jewels:page-content-ready"));
   })();
 
   // Tự động cập nhật sản phẩm khi Admin thay đổi hàng hoặc tồn kho

@@ -120,5 +120,6 @@
 
   onLogin(load);
   await ready;
-  load();
+  await load();
+  document.dispatchEvent(new Event("jewels:page-content-ready"));
 })();

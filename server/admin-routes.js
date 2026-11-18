@@ -267,7 +267,12 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const validInvoices = (invoices || []).filter(isValidInvoice);
     const filteredInvoices = validInvoices.filter((i) => isInRange(i.invoice_date));
     const filteredOrders = (orders || []).filter((o) => isInRange(o.order_date));
-    const filteredReceipts = (receipts || []).filter((r) => isInRange(r.receipt_date));
+    const receiptWorkflows = must(await db.from("goods_receipt_workflow").select("gr_id,status"));
+    const receiptStatusById = new Map((receiptWorkflows || []).map((row) => [row.gr_id, row.status]));
+    const receivedReceipts = (receipts || []).filter((r) =>
+      (receiptStatusById.get(r.gr_id) || "received") === "received"
+    );
+    const filteredReceipts = receivedReceipts.filter((r) => isInRange(r.receipt_date));
 
     // Thống kê tổng quan trong kỳ lọc
     const totalRevenue = filteredInvoices.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
@@ -307,7 +312,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const mInvs = validInvoices.filter((i) => toVnMonthKey(i.invoice_date) === mKey);
         const mOrders = (orders || []).filter((o) => toVnMonthKey(o.order_date) === mKey);
-        const mRcps = (receipts || []).filter((r) => toVnMonthKey(r.receipt_date) === mKey);
+        const mRcps = receivedReceipts.filter((r) => toVnMonthKey(r.receipt_date) === mKey);
 
         const rev = mInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = mRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -338,7 +343,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
         const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
-        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
+        const dRcps = receivedReceipts.filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -378,7 +383,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
         const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
-        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
+        const dRcps = receivedReceipts.filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -2080,85 +2085,202 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const receipts = must(await db.from("goods_receipt")
       .select("gr_id,sup_id,receipt_date,total_amount,note,receipt_type,suppliers(name),gr_details(gr_detail_id,quantity,unit_cost,subtotal,variant_id,product_variants(pro_id,products(name)))")
       .order("receipt_date", { ascending: false }));
+    const workflowRows = receipts.length
+      ? must(await db.from("goods_receipt_workflow").select("gr_id,status").in("gr_id", receipts.map((r) => r.gr_id)))
+      : [];
+    const statusByReceiptId = new Map(workflowRows.map((row) => [row.gr_id, row.status]));
+
+    const receiptStatusLabels = {
+      pending: "Chờ nhập kho",
+      received: "Đã nhập kho",
+    };
 
     res.json(receipts.map((r) => {
-      const firstDetail = r.gr_details?.[0];
-      const prodName = firstDetail?.product_variants?.products?.name || "Sản phẩm";
-      const prodId = firstDetail?.product_variants?.pro_id || null;
-      const totalQty = (r.gr_details || []).reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
+      const details = r.gr_details || [];
+      const productNames = [...new Set(details
+        .map((d) => d.product_variants?.products?.name)
+        .filter(Boolean))];
+      const totalQty = details.reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
+      const productName = productNames.length > 0 ? productNames.join(", ") : "Sản phẩm";
+      const storedStatus = statusByReceiptId.get(r.gr_id) || "received";
+      const status = storedStatus === "approved" ? "pending" : storedStatus;
+
       return {
         id: r.gr_id,
         code: `PO-${String(r.gr_id).padStart(5, "0")}`,
         supplier: r.suppliers?.name || "Nhà cung cấp",
         supplierId: r.sup_id,
-        productName: prodName,
-        productId: prodId,
+        productName,
+        productId: details[0]?.product_variants?.pro_id || null,
         totalAmount: Number(r.total_amount || 0),
         quantity: totalQty || 1,
         date: r.receipt_date,
         note: r.note || "",
-        items: r.gr_details || [],
+        rawStatus: status,
+        status: receiptStatusLabels[status] || status,
+        items: details.map((detail) => ({
+          id: detail.gr_detail_id,
+          productId: detail.product_variants?.pro_id || null,
+          productName: detail.product_variants?.products?.name || "Sản phẩm",
+          quantity: Number(detail.quantity || 0),
+          unitCost: Number(detail.unit_cost || 0),
+          subtotal: Number(detail.subtotal || 0),
+          variantId: detail.variant_id,
+        })),
       };
     }));
   }));
 
   router.post("/receipts", wrap(async (req, res) => {
-    const { supplierId, supplierName, productId, quantity, amount, note, date } = req.body || {};
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    const fallbackItem = req.body && (req.body.productId || req.body.quantity || req.body.amount)
+      ? [{ productId: req.body.productId, quantity: req.body.quantity, unitCost: Number(req.body.amount || 0) / Math.max(Number(req.body.quantity || 1), 1) }]
+      : [];
+    const itemList = rawItems.length ? rawItems : fallbackItem;
+    const { supplierId, supplierName, note, date } = req.body || {};
     let supId = supplierId ? Number(supplierId) : null;
 
-    if (!supId && supplierName) {
-      const sup = one(must(await db.from("suppliers").select("sup_id").ilike("name", `%${supplierName}%`).limit(1)));
-      supId = sup ? sup.sup_id : 1;
+    if (!itemList.length || itemList.some((it) => !it.productId || Number(it.quantity || 0) <= 0)) {
+      throw new HttpError(400, "Vui lòng chọn ít nhất một mặt hàng và nhập số lượng hợp lệ.");
     }
 
-    const totalAmt = Number(amount || 0);
-    const qty = Number(quantity || 1);
+    if (!supId && supplierName) {
+      const sup = one(must(await db.from("suppliers")
+        .select("sup_id")
+        .ilike("name", `%${String(supplierName).trim()}%`)
+        .eq("is_active", true)
+        .limit(1)));
+      supId = sup?.sup_id || null;
+    }
+    if (!Number.isInteger(supId) || supId <= 0) {
+      throw new HttpError(400, "Vui lòng chọn nhà cung cấp đang hợp tác.");
+    }
+
+    const activeSupplier = one(must(await db.from("suppliers")
+      .select("sup_id")
+      .eq("sup_id", supId)
+      .eq("is_active", true)
+      .limit(1)));
+    if (!activeSupplier) {
+      throw new HttpError(400, "Nhà cung cấp đã ngừng hợp tác hoặc không tồn tại. Vui lòng chọn nhà cung cấp khác.");
+    }
+
+    const normalizedItems = itemList.map((it) => ({
+      productId: Number(it.productId),
+      quantity: Number(it.quantity || 0),
+      unitCost: Number(it.unitCost ?? it.amount ?? 0),
+    }));
+
+    if (!normalizedItems.length || normalizedItems.some((it) =>
+      !Number.isInteger(it.productId) || it.productId <= 0 ||
+      !Number.isInteger(it.quantity) || it.quantity <= 0 ||
+      !Number.isFinite(it.unitCost) || it.unitCost < 0
+    )) {
+      throw new HttpError(400, "Dữ liệu mặt hàng nhập không hợp lệ.");
+    }
+
+    const itemsWithVariants = [];
+    for (const item of normalizedItems) {
+      const variants = must(await db.from("product_variants")
+        .select("variant_id,pro_id")
+        .eq("pro_id", item.productId)
+        .order("variant_id")
+        .limit(1));
+      const variant = one(variants);
+      if (!variant) {
+        throw new HttpError(400, `Sản phẩm #${item.productId} chưa có biến thể để nhập kho.`);
+      }
+      itemsWithVariants.push({ ...item, variantId: variant.variant_id });
+    }
+
+    const totalAmt = Math.round(normalizedItems.reduce((sum, it) => sum + (it.quantity * it.unitCost), 0));
 
     const gr = one(must(await db.from("goods_receipt").insert({
-      sup_id: supId || 1,
+      sup_id: supId,
       total_amount: totalAmt,
       note: note || `Nhập kho ngày ${date || new Date().toISOString().split("T")[0]}`,
       receipt_date: date ? new Date(date).toISOString() : new Date().toISOString(),
       receipt_type: "receipt",
     }).select("gr_id")));
 
-    // Tìm biến thể theo đúng sản phẩm productId được chọn
-    let variant = null;
-    if (productId) {
-      const vars = must(await db.from("product_variants").select("variant_id,stock_quantity,pro_id").eq("pro_id", Number(productId)).order("variant_id"));
-      if (vars.length > 0) {
-        variant = vars[0];
-      }
-    }
-    if (!variant) {
-      variant = one(must(await db.from("product_variants").select("variant_id,stock_quantity,pro_id").limit(1)));
-    }
+    must(await db.from("gr_details").insert(itemsWithVariants.map((item) => ({
+      gr_id: gr.gr_id,
+      variant_id: item.variantId,
+      quantity: item.quantity,
+      unit_cost: item.unitCost,
+      subtotal: Math.round(item.quantity * item.unitCost),
+    }))));
+    must(await db.from("goods_receipt_workflow").insert({ gr_id: gr.gr_id, status: "pending" }));
 
-    if (variant) {
-      must(await db.from("gr_details").insert({
-        gr_id: gr.gr_id,
-        variant_id: variant.variant_id,
-        quantity: qty,
-        unit_cost: qty > 0 ? Math.round(totalAmt / qty) : totalAmt,
-        subtotal: totalAmt,
-      }));
-
-      // Tăng số lượng tồn kho của chính sản phẩm đó
-      const currentStock = Number(variant.stock_quantity || 0);
-      const newStock = currentStock + qty;
-      must(await db.from("product_variants").update({
-        stock_quantity: newStock,
-        updated_at: new Date().toISOString(),
-      }).eq("variant_id", variant.variant_id));
-    }
-
-    broadcastRealtime("STOCK_CHANGED", {
-      receiptId: gr.gr_id,
-      productId: variant?.pro_id,
-      quantity: qty,
-      newStock: variant ? Number(variant.stock_quantity || 0) + qty : qty,
+    res.status(201).json({
+      id: gr.gr_id,
+      ok: true,
+      totalAmount: totalAmt,
+      itemCount: itemsWithVariants.length,
+      status: "pending",
     });
-    res.status(201).json({ id: gr.gr_id, ok: true, newStock: variant ? Number(variant.stock_quantity || 0) + qty : qty });
+  }));
+
+  router.patch("/receipts/:id/status", wrap(async (req, res) => {
+    const receiptId = Number(req.params.id);
+    const targetStatus = String(req.body?.status || "");
+    if (!Number.isInteger(receiptId) || receiptId <= 0) {
+      throw new HttpError(400, "Mã phiếu nhập không hợp lệ.");
+    }
+    if (targetStatus !== "received") {
+      throw new HttpError(400, "Trạng thái phiếu nhập không hợp lệ.");
+    }
+
+    const userRoles = req.adminUser?.roles || [];
+    if (!req.adminUser) {
+      throw new HttpError(401, "Vui lòng đăng nhập quản trị để cập nhật phiếu nhập.");
+    }
+    if (!userRoles.includes("ADMIN") && !userRoles.includes("SALES_STAFF")) {
+      throw new HttpError(403, "Bạn không có quyền xác nhận nhập kho.");
+    }
+
+    const receipt = one(must(await db.from("goods_receipt_workflow")
+      .select("gr_id,status")
+      .eq("gr_id", receiptId)
+      .limit(1)));
+    if (!receipt) throw new HttpError(404, "Không tìm thấy phiếu nhập.");
+
+    const transitions = {
+      pending: ["received"],
+      received: [],
+      cancelled: [],
+    };
+    if (!(transitions[receipt.status] || []).includes(targetStatus)) {
+      throw new HttpError(409, "Trạng thái phiếu đã thay đổi hoặc không thể chuyển tiếp.");
+    }
+
+    if (targetStatus === "received") {
+      const details = must(await db.from("gr_details")
+        .select("quantity,variant_id,product_variants(pro_id)")
+        .eq("gr_id", receiptId));
+      must(await db.rpc("transition_goods_receipt", {
+        p_gr_id: receiptId,
+        p_target_status: targetStatus,
+      }));
+      details.forEach((detail) => {
+        const variant = detail.product_variants;
+        if (variant) {
+          broadcastRealtime("STOCK_CHANGED", {
+            receiptId,
+            productId: variant.pro_id,
+            quantity: Number(detail.quantity || 0),
+          });
+        }
+      });
+    } else {
+      must(await db.rpc("transition_goods_receipt", {
+        p_gr_id: receiptId,
+        p_target_status: targetStatus,
+      }));
+    }
+
+    broadcastRealtime("RECEIPT_STATUS_CHANGED", { receiptId, status: targetStatus });
+    res.json({ ok: true, id: receiptId, status: targetStatus });
   }));
 
   // ---------- 9. QUẢN LÝ NHÀ CUNG CẤP ----------
