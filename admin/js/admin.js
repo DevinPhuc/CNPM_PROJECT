@@ -471,7 +471,7 @@
       const data = await api("/overview");
       state.overview = data;
 
-      // Cập nhật KPIs
+       // Cập nhật KPIs (banner chỉ có ở Tổng quan)
       const kpis = data.kpis || {};
       const elRev = document.getElementById("kpiRevenue");
       const elOrders = document.getElementById("kpiOrders");
@@ -2284,29 +2284,162 @@
   function initAnalyticsInputs() {
     const now = new Date();
     const curYear = now.getFullYear();
-    const curMonth = String(now.getMonth() + 1).padStart(2, "0");
-    const curDay = String(now.getDate()).padStart(2, "0");
-    const monthVal = `${curYear}-${curMonth}`;
 
-    const mInput = document.getElementById("analyticsMonthInput");
-    if (mInput && (!mInput.value || mInput.value === "2026-10")) {
-      mInput.value = monthVal;
+    // Bộ lọc tháng của khung lọc chung: năm + tháng (có "Tất cả" = cả 12 tháng)
+    const mYearSelect = document.getElementById("analyticsMonthYearSelect");
+    if (mYearSelect && mYearSelect.options.length === 0) {
+      for (let y = curYear; y >= curYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        mYearSelect.appendChild(opt);
+      }
+      mYearSelect.value = String(curYear);
     }
-
-    const sInput = document.getElementById("analyticsStartDate");
-    if (sInput && (!sInput.value || sInput.value === "2026-09-01")) {
-      sInput.value = `${curYear}-${curMonth}-01`;
-    }
-
-    const eInput = document.getElementById("analyticsEndDate");
-    if (eInput && (!eInput.value || eInput.value === "2026-10-31")) {
-      eInput.value = `${curYear}-${curMonth}-${curDay}`;
+    const mSelect = document.getElementById("analyticsMonthSelect");
+    if (mSelect && mSelect.options.length === 0) {
+      const allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = "Tất cả";
+      mSelect.appendChild(allOpt);
+      for (let m = 1; m <= 12; m++) {
+        const opt = document.createElement("option");
+        opt.value = String(m);
+        opt.textContent = `Tháng ${m}`;
+        mSelect.appendChild(opt);
+      }
+      mSelect.value = "all";
     }
 
     const ySelect = document.getElementById("analyticsYearSelect");
-    if (ySelect && !ySelect.value) {
-      ySelect.value = String(curYear);
+    if (ySelect && ySelect.options.length === 0) {
+      // Danh sách năm: 3 năm trước + năm hiện tại, sắp xếp giảm dần
+      const now = new Date();
+      const thisYear = now.getFullYear();
+      for (let y = thisYear; y >= thisYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        ySelect.appendChild(opt);
+      }
+      ySelect.value = String(thisYear);
     }
+
+    const yQuarterSelect = document.getElementById("analyticsQuarterYearSelect");
+    if (yQuarterSelect && yQuarterSelect.options.length === 0) {
+      for (let y = curYear; y >= curYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        yQuarterSelect.appendChild(opt);
+      }
+      yQuarterSelect.value = String(curYear);
+    }
+
+    // Input mặc định cho bộ lọc pill của 2 bảng báo cáo chính (tổng thu-chi-lợi nhuận & sản phẩm × quý)
+    ["sum", "prod"].forEach((pre) => {
+      const pMonthYear = document.getElementById(`${pre}MonthYearSelect`);
+      if (pMonthYear && pMonthYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pMonthYear.appendChild(opt);
+        }
+        pMonthYear.value = String(curYear);
+      }
+      const pMonthSel = document.getElementById(`${pre}MonthSelect`);
+      if (pMonthSel && pMonthSel.options.length === 0) {
+        const allOpt = document.createElement("option");
+        allOpt.value = "all";
+        allOpt.textContent = "Tất cả";
+        pMonthSel.appendChild(allOpt);
+        for (let m = 1; m <= 12; m++) {
+          const opt = document.createElement("option");
+          opt.value = String(m);
+          opt.textContent = `Tháng ${m}`;
+          pMonthSel.appendChild(opt);
+        }
+        pMonthSel.value = "all";
+      }
+      const pQuarterYear = document.getElementById(`${pre}QuarterYearSelect`);
+      if (pQuarterYear && pQuarterYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pQuarterYear.appendChild(opt);
+        }
+        pQuarterYear.value = String(curYear);
+      }
+      const pQuarterSel = document.getElementById(`${pre}QuarterSelect`);
+      if (pQuarterSel && pQuarterSel.options.length === 0) {
+        for (let q = 1; q <= 4; q++) {
+          const opt = document.createElement("option");
+          opt.value = String(q);
+          opt.textContent = `Quý ${q}`;
+          pQuarterSel.appendChild(opt);
+        }
+        pQuarterSel.value = String(Math.floor(new Date().getMonth() / 3) + 1);
+      }
+      const pQuarterMonth = document.getElementById(`${pre}QuarterMonthSelect`);
+      if (pQuarterMonth && pQuarterMonth.options.length === 0) {
+        buildQuarterMonthOptions(pQuarterMonth, pQuarterSel?.value, true);
+      }
+      const pYear = document.getElementById(`${pre}YearSelect`);
+      if (pYear && pYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pYear.appendChild(opt);
+        }
+        pYear.value = String(curYear);
+      }
+    });
+
+    initQuarterSelects();
+  }
+
+  // Tháng trong quý: chỉ cho chọn 1 trong 3 tháng của quý đang chọn
+  function buildQuarterMonthOptions(sel, quarter, includeAll = false) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (includeAll) {
+      const allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = "Tất cả";
+      sel.appendChild(allOpt);
+    }
+    const start = ((Number(quarter) || 1) - 1) * 3 + 1;
+    for (let m = start; m < start + 3; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `Tháng ${m}`;
+      sel.appendChild(opt);
+    }
+  }
+
+  function initQuarterSelects() {
+    const qNow = Math.floor(new Date().getMonth() / 3) + 1;
+    [
+      ["analyticsQuarterSelect", "analyticsQuarterMonthSelect"],
+    ].forEach(([qId, mId]) => {
+      const qSel = document.getElementById(qId);
+      const mSel = document.getElementById(mId);
+      if (qSel && qSel.options.length === 0) {
+        for (let q = 1; q <= 4; q++) {
+          const opt = document.createElement("option");
+          opt.value = String(q);
+          opt.textContent = `Quý ${q}`;
+          qSel.appendChild(opt);
+        }
+      }
+      if (qSel && !qSel.value) qSel.value = String(qNow);
+      if (mSel && (!mSel.options.length || qSel?.value)) {
+        buildQuarterMonthOptions(mSel, qSel?.value || qNow);
+      }
+    });
   }
 
   function renderDonutChart(statusCounts = {}) {
@@ -2422,7 +2555,7 @@
     const totProfit = Math.max(0, totRev - totCost);
     const totRate = totOrders > 0 ? Math.round((totDelivered / totOrders) * 100) : 0;
 
-    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ giao", "Doanh thu bán", "Chi phí nhập", "Lợi nhuận gộp"]) +
+    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ giao", "Doanh thu bán", "Chi phí nhập", "Lợi nhuận gộp"], "1.3fr 0.8fr 1fr 1fr 1.3fr 1.3fr 1.3fr") +
       displayRows.map((r) => {
         const isPeakRow = maxRowRev > 0 && r.revenue === maxRowRev;
         return `
@@ -2599,7 +2732,7 @@
 
     const MEDAL_ICONS = ["🥇", "🥈", "🥉", "4", "5"];
 
-    topProdBox.innerHTML = buildRowHeader(["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra", "Doanh thu tạo ra"]) +
+    topProdBox.innerHTML = buildRowHeader(["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra", "Doanh thu tạo ra"], "80px 2.2fr 1.2fr 1.3fr") +
       topProducts.map((p, idx) => `
         <div class="admin-row" style="grid-template-columns: 80px 2.2fr 1.2fr 1.3fr;">
           <strong style="font-size:15px;">${MEDAL_ICONS[idx] || (idx + 1)}</strong>
@@ -2618,16 +2751,25 @@
       currentAnalyticsPeriod = period;
 
       let q = `?period=${encodeURIComponent(period)}`;
-      if (period === "day") {
-        const s = filterParams.startDate || document.getElementById("analyticsStartDate")?.value || "2026-11-01";
-        const e = filterParams.endDate || document.getElementById("analyticsEndDate")?.value || "2026-11-06";
-        q += `&startDate=${encodeURIComponent(s)}&endDate=${encodeURIComponent(e)}`;
-      } else if (period === "year") {
+      // "Tất cả" tháng -> /analytics trả 12 tháng của năm; bộ lọc vẫn hiển thị "Theo tháng"
+      let renderPeriod = period;
+      if (period === "year") {
         const y = filterParams.year || document.getElementById("analyticsYearSelect")?.value || "2026";
         q += `&year=${encodeURIComponent(y)}`;
+      } else if (period === "quarter") {
+        // Chế độ quý: chọn 1 tháng trong quý -> gửi month=YYYY-MM cho /analytics
+        const yy = document.getElementById("analyticsQuarterYearSelect")?.value || String(new Date().getFullYear());
+        const mm = document.getElementById("analyticsQuarterMonthSelect")?.value || "01";
+        q = `?period=month&month=${encodeURIComponent(`${yy}-${mm}`)}`;
       } else {
-        const m = filterParams.month || document.getElementById("analyticsMonthInput")?.value || "2026-11";
-        q += `&month=${encodeURIComponent(m)}`;
+        const yy = document.getElementById("analyticsMonthYearSelect")?.value || String(new Date().getFullYear());
+        const mm = document.getElementById("analyticsMonthSelect")?.value || "all";
+        if (mm === "all") {
+          q = `?period=year&year=${encodeURIComponent(yy)}`;
+          renderPeriod = "year";
+        } else {
+          q += `&month=${encodeURIComponent(`${yy}-${String(mm).padStart(2, "0")}`)}`;
+        }
       }
 
       const noticeEl = document.getElementById("analyticsFilterNotice");
@@ -2661,13 +2803,13 @@
       }
 
       // Render biểu đồ cột doanh thu
-      renderRevenueBarChart(data.breakdown || data.revenueByPeriod || {}, period, sum.totalRevenue);
+      renderRevenueBarChart(data.breakdown || data.revenueByPeriod || {}, renderPeriod, sum.totalRevenue);
 
       // Render biểu đồ tròn tỷ lệ trạng thái đơn hàng
       renderDonutChart(data.statusCounts);
 
       // Render bảng số liệu chi tiết
-      renderBreakdownTable(data.breakdown, period);
+      renderBreakdownTable(data.breakdown, renderPeriod);
 
       // Render top sản phẩm bán chạy
       renderTopProducts(data.topProducts, data.topProductsType);
@@ -2907,8 +3049,6 @@
   window.exportAnalyticsToExcel = exportAnalyticsToExcel;
 
   // ---------- BÁO CÁO TỔNG HỢP (sản phẩm/quý, thu-chi/quý, nhân viên/năm, khách hàng/quý) ----------
-  const REPORT_QUARTER_COLS = ["", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
-
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   function sumCol(arr = []) {
@@ -2916,100 +3056,259 @@
   }
 
   function renderReportTable(containerId, columns, rows, totalRow = null) {
-    const box = document.getElementById(containerId);
-    if (!box) return;
-    if (!rows || rows.length === 0) {
-      box.innerHTML = '<div class="admin-empty">Chưa có dữ liệu trong khoảng thời gian này</div>';
-      return;
-    }
-    const gridCols = `1.8fr ${columns.slice(1).map(() => "minmax(0, 1fr)").join(" ")}`;
-    const rowHtml = (cells, isTotal) =>
-      `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="grid-template-columns: ${gridCols};">` +
-      cells.map((cell, idx) =>
-        idx === 0
-          ? `<strong>${esc(cell)}</strong>`
-          : `<strong${isTotal ? ' style="color: var(--admin-green);"' : ""}>${esc(cell)}</strong>`
-      ).join("") +
-      `</div>`;
-    box.innerHTML =
-      buildRowHeader(columns, gridCols) +
-      rows.map((r) => rowHtml(r, false)).join("") +
-      (totalRow ? rowHtml(totalRow, true) : "");
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  if (!rows || rows.length === 0) {
+    box.innerHTML = '<div class="admin-empty">Chưa có dữ liệu trong khoảng thời gian này</div>';
+    return;
   }
+
+  const numCols = columns.length - 1;
+  const firstW = 220;
+  const colW = numCols > 6 ? 130 : 110;
+  const gridCols = `minmax(${firstW}px, 2fr) repeat(${numCols}, minmax(${colW}px, 1fr))`;
+  const minW = firstW + numCols * colW + numCols * 12 + 28;
+  const rowStyle = `grid-template-columns: ${gridCols}; min-width: ${minW}px;`;
+
+  const firstStyle = "min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35;";
+  const numStyle = "min-width: 0; white-space: nowrap;";
+
+  const headerHtml = `
+    <div class="admin-row admin-row-header header-row" style="${rowStyle}">
+      ${columns.map((c, i) => `<strong style="${i === 0 ? firstStyle : numStyle}">${esc(c)}</strong>`).join("")}
+    </div>`;
+
+  const rowHtml = (cells, isTotal) =>
+    `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="${rowStyle}">` +
+    cells.map((cell, idx) =>
+      idx === 0
+        ? `<strong style="${firstStyle}" title="${esc(cell)}">${esc(cell)}</strong>`
+        : `<strong style="${numStyle}${isTotal ? " color: var(--admin-green);" : ""}">${esc(cell)}</strong>`
+    ).join("") +
+    `</div>`;
+
+  box.innerHTML =
+    headerHtml +
+    rows.map((r) => rowHtml(r, false)).join("") +
+    (totalRow ? rowHtml(totalRow, true) : "");
+}
 
   function renderReports() {
     const r = state.reports;
     if (!r) return;
 
-    // A. Tổng hóa đơn theo sản phẩm × quý
-    const pRows = (r.productQuarters.rows || []).map((row) => [
-      row.name,
-      ...[1, 2, 3, 4].map((i) => formatMoney(row[`q${i}`] || 0)),
-      formatMoney(row.total || 0),
-    ]);
-    const pTotal = [
-      "Tổng cộng",
-      ...[1, 2, 3, 4].map((i) => formatMoney(sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
-      formatMoney(sumCol((r.productQuarters.rows || []).map((row) => row.total || 0))),
-    ];
-    renderReportTable("reportProductQuarters", REPORT_QUARTER_COLS, pRows, pTotal);
-
-    // B. Tổng thu / tổng chi / lợi nhuận theo quý
-    const qs = r.quarterlySummary || { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+    // A. Tổng thu / tổng chi / lợi nhuận (bộ lọc pill riêng) - trục thời gian theo bộ lọc
+    const qs = r.filteredSummary || r.quarterlySummary || { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+    const qsBuckets = qs.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
+    const sumLabel = document.getElementById("sumFilterLabel");
+    if (sumLabel) sumLabel.textContent = qs.label ? `Kỳ lọc: ${qs.label}` : "";
     const qsRows = [
       ["Tổng thu", ...qs.revenue.map((v) => formatMoney(v)), formatMoney(sumCol(qs.revenue))],
       ["Tổng chi", ...qs.cost.map((v) => formatMoney(v)), formatMoney(sumCol(qs.cost))],
       ["Lợi nhuận", ...qs.profit.map((v) => formatMoney(v)), formatMoney(sumCol(qs.profit))],
     ];
-    renderReportTable("reportQuarterlySummary", REPORT_QUARTER_COLS, qsRows, null);
+    renderReportTable("reportQuarterlySummary", ["", ...qsBuckets, "Tổng cộng"], qsRows, null);
 
-    // C. Tổng hóa đơn theo nhân viên × năm
-    const ey = r.employeeYears || { years: [], rows: [] };
-    const eyCols = ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"];
-    const eyRows = (ey.rows || []).map((row) => [
+    // B. Tổng hóa đơn theo sản phẩm (bộ lọc pill riêng) - tối đa 5 dòng
+    const fp = r.filteredProducts || r.productQuarters || { rows: [] };
+    const fpBuckets = fp.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
+    const fpRowVals = (row) => (fp.buckets ? (row.values || []) : [1, 2, 3, 4].map((i) => row[`q${i}`] || 0));
+    const prodLabel = document.getElementById("prodFilterLabel");
+    if (prodLabel) prodLabel.textContent = fp.label ? `Kỳ lọc: ${fp.label}` : "";
+    const pRows = (fp.rows || []).slice(0, 5).map((row) => [
       row.name,
-      ...ey.years.map((y) => formatMoney(row.values?.[y] || 0)),
-      formatMoney(sumCol(ey.years.map((y) => row.values?.[y] || 0))),
-    ]);
-    const eyTotal = [
-      "Tổng cộng",
-      ...ey.years.map((y) =>
-        formatMoney(sumCol((ey.rows || []).map((row) => row.values?.[y] || 0)))
-      ),
-      formatMoney(sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => row.values?.[y] || 0)))),
-    ];
-    renderReportTable("reportEmployeeYears", eyCols, eyRows, eyTotal);
-
-    // D. Tổng hóa đơn theo khách hàng × quý
-    const cqRows = (r.customerQuarters.rows || []).map((row) => [
-      row.name,
-      ...[1, 2, 3, 4].map((i) => formatMoney(row[`q${i}`] || 0)),
+      ...fpRowVals(row).map((v) => formatMoney(v)),
       formatMoney(row.total || 0),
     ]);
-    const cqTotal = [
+    const pTotal = [
       "Tổng cộng",
-      ...[1, 2, 3, 4].map((i) => formatMoney(sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
-      formatMoney(sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0))),
+      ...fpBuckets.map((_, i) => formatMoney(sumCol((fp.rows || []).map((row) => fpRowVals(row)[i] || 0)))),
+      formatMoney(sumCol((fp.rows || []).map((row) => row.total || 0))),
     ];
-    renderReportTable("reportCustomerQuarters", REPORT_QUARTER_COLS, cqRows, cqTotal);
+    renderReportTable("reportProductQuarters", ["", ...fpBuckets, "Tổng cộng"], pRows, pTotal);
+
+    // C. Tổng hóa đơn theo nhân viên (bộ lọc chung) - tối đa 5 dòng
+    const fe = r.filteredEmployeeYears || { buckets: QUARTER_LABELS, rows: [] };
+    const feBuckets = fe.buckets || QUARTER_LABELS;
+    const bucketUnit = fe.mode === "year" ? "× năm" : "× tháng";
+    const empTitle = document.getElementById("reportEmployeeTitle");
+    if (empTitle) empTitle.textContent = `Tổng hóa đơn theo nhân viên ${bucketUnit}`;
+    const feRows = (fe.rows || []).slice(0, 5).map((row) => [
+      row.name,
+      ...(row.values || []).map((v) => formatMoney(v)),
+      formatMoney(row.total || 0),
+    ]);
+    const feTotal = [
+      "Tổng cộng",
+      ...feBuckets.map((_, i) => formatMoney(sumCol((fe.rows || []).map((row) => row.values?.[i] || 0)))),
+      formatMoney(sumCol((fe.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportEmployeeYears", ["", ...feBuckets, "Tổng cộng"], feRows, feTotal);
+
+    // D. Tổng hóa đơn theo khách hàng (bộ lọc chung) - tối đa 5 dòng
+    const fc = r.filteredCustomerQuarters || { buckets: QUARTER_LABELS, rows: [] };
+    const fcBuckets = fc.buckets || QUARTER_LABELS;
+    const custTitle = document.getElementById("reportCustomerTitle");
+    if (custTitle) custTitle.textContent = `Tổng hóa đơn theo khách hàng ${fc.mode === "year" ? "× năm" : "× tháng"}`;
+    const fcRows = (fc.rows || []).slice(0, 5).map((row) => [
+      row.name,
+      ...(row.values || []).map((v) => formatMoney(v)),
+      formatMoney(row.total || 0),
+    ]);
+    const fcTotal = [
+      "Tổng cộng",
+      ...fcBuckets.map((_, i) => formatMoney(sumCol((fc.rows || []).map((row) => row.values?.[i] || 0)))),
+      formatMoney(sumCol((fc.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportCustomerQuarters", ["", ...fcBuckets, "Tổng cộng"], fcRows, fcTotal);
+
+    // Hai biểu đồ cột cho 2 bảng trên (theo đúng dữ liệu bảng + bộ lọc đang chọn)
+    renderQuarterSummaryChart(qs);
+    renderQuarterProductsChart(fp);
   }
 
-  async function loadReports(filterParams = {}) {
-    try {
-      const year = filterParams.year || document.getElementById("reportYearSelect")?.value || "";
-      const data = await api(`/reports${year ? `?year=${encodeURIComponent(year)}` : ""}`);
-      state.reports = data;
+  const QUARTER_LABELS = ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
 
-      // Danh sách năm: 10 năm gần nhất (≤ năm hiện tại), luôn cho chọn các năm trước đó
-      const sel = document.getElementById("reportYearSelect");
-      if (sel) {
-        const currentYear = data.currentYear || new Date().getFullYear();
-        const years = [];
-        for (let y = currentYear; y > currentYear - 10; y--) years.push(y);
-        const chosen = sel.value;
-        sel.innerHTML = years.map((y) => `<option value="${y}">Năm ${y}</option>`).join("");
-        sel.value = years.includes(Number(chosen)) ? chosen : String(data.quarterlySummary?.year || currentYear);
-      }
+  // Trục dọc dùng chung cho 2 biểu đồ (3 mốc: đỉnh / giữa / 0)
+  function renderChartYAxis(yAxisId, maxVal) {
+    const yAxisEl = document.getElementById(yAxisId);
+    if (!yAxisEl) return 100;
+    if (maxVal <= 0) {
+      yAxisEl.innerHTML = `<span>10 tr</span><span>5 tr</span><span>0 ₫</span>`;
+    } else {
+      const topCeil = Math.ceil(maxVal * 1.15);
+      yAxisEl.innerHTML = `
+        <span>${formatCompactMoney(topCeil)}</span>
+        <span>${formatCompactMoney(Math.round(topCeil / 2))}</span>
+        <span>0 ₫</span>
+      `;
+    }
+    return maxVal > 0 ? maxVal * 1.15 : 100;
+  }
+
+  // Biểu đồ 1: mỗi mốc thời gian một nhóm 3 cột (tổng thu / tổng chi / lợi nhuận)
+  function renderQuarterSummaryChart(qs) {
+    const barsBox = document.getElementById("sumChartBars");
+    if (!barsBox) return;
+    const buckets = qs?.buckets || QUARTER_LABELS;
+    const revenue = qs?.revenue || buckets.map(() => 0);
+    const cost = qs?.cost || buckets.map(() => 0);
+    const profit = qs?.profit || buckets.map(() => 0);
+    const maxVal = Math.max(...revenue, ...cost, ...profit, 0);
+    const scaleMax = renderChartYAxis("sumChartYAxis", maxVal);
+
+    const series = [
+      { key: "g-rev", name: "Tổng thu", vals: revenue },
+      { key: "g-cost", name: "Tổng chi", vals: cost },
+      { key: "g-profit", name: "Lợi nhuận", vals: profit },
+    ];
+
+    barsBox.innerHTML = buckets.map((ql, i) => `
+      <div class="bar-col has-revenue">
+        <div class="chart-tooltip">
+          <div class="chart-tooltip-title">${ql}</div>
+          ${series.map((s) => `<div class="chart-tooltip-row"><span>${s.name}:</span> <strong>${formatMoney(s.vals[i])}</strong></div>`).join("")}
+        </div>
+        <div class="grp-bars">
+          ${series.map((s) => `<div class="grp-bar ${s.key}" style="height:${Math.max(2, Math.round((Number(s.vals[i]) / scaleMax) * 100))}%;" title="${s.name} ${ql}: ${formatMoney(s.vals[i])}"></div>`).join("")}
+        </div>
+      </div>
+    `).join("");
+
+    const xAxisEl = document.getElementById("sumChartXAxis");
+    if (xAxisEl) {
+      xAxisEl.innerHTML = buckets.map((ql) => `<div class="x-axis-item has-revenue">${ql}</div>`).join("");
+    }
+  }
+
+  // Biểu đồ 2: mỗi mốc thời gian một cột = tổng doanh thu top sản phẩm tại mốc đó
+  function renderQuarterProductsChart(fp) {
+    const barsBox = document.getElementById("prodChartBars");
+    if (!barsBox) return;
+    const buckets = fp?.buckets || QUARTER_LABELS;
+    const rows = (fp?.rows || []).slice(0, 5);
+    const fpRowVals = (r) => (fp?.buckets ? (r.values || []) : [1, 2, 3, 4].map((i) => r[`q${i}`] || 0));
+    const quarterTotals = buckets.map((_, i) => rows.reduce((a, r) => a + (Number(fpRowVals(r)[i]) || 0), 0));
+    const maxVal = Math.max(...quarterTotals, 0);
+    const scaleMax = renderChartYAxis("prodChartYAxis", maxVal);
+
+    barsBox.innerHTML = quarterTotals.map((num, i) => {
+      const hasRevenue = num > 0;
+      return `
+        <div class="bar-col ${hasRevenue ? "has-revenue" : "is-zero"}">
+          <div class="chart-tooltip">
+            <div class="chart-tooltip-title">Top sản phẩm - ${buckets[i]}</div>
+            ${rows.slice(0, 3).map((r) => `<div class="chart-tooltip-row"><span>${esc(r.name)}:</span> <strong>${formatMoney(fpRowVals(r)[i] || 0)}</strong></div>`).join("")}
+          </div>
+          <div class="bar-fill" style="height:${hasRevenue ? Math.max(10, Math.round((num / scaleMax) * 100)) : 0}%;"></div>
+        </div>
+      `;
+    }).join("");
+
+    const xAxisEl = document.getElementById("prodChartXAxis");
+    if (xAxisEl) {
+      xAxisEl.innerHTML = buckets.map((ql, i) => `<div class="x-axis-item ${quarterTotals[i] > 0 ? "has-revenue" : ""}">${ql}</div>`).join("");
+    }
+  }
+
+  // Năm dùng chung hiện tại của bộ lọc chung (dùng cho các bảng còn lại)
+  function sharedFilterYear() {
+    const ySel = document.getElementById("analyticsYearSelect")?.value || "";
+    if (currentAnalyticsPeriod === "quarter") {
+      return document.getElementById("analyticsQuarterYearSelect")?.value || ySel;
+    }
+    if (currentAnalyticsPeriod === "month") {
+      return document.getElementById("analyticsMonthYearSelect")?.value || ySel;
+    }
+    return ySel;
+  }
+
+  // Tham số bộ lọc pill cho 1 trong 2 bảng chính (key: "sum" | "prod")
+  function buildReportQParams(key) {
+    const st = reportFilterState[key];
+    const p = [];
+    const add = (k, v) => { if (v) p.push(`${k}=${encodeURIComponent(v)}`); };
+    add(`${key}Mode`, st.mode);
+    if (st.mode === "month") {
+      add(`${key}Month`, document.getElementById(`${key}MonthSelect`)?.value || "all");
+      add(`${key}Year`, document.getElementById(`${key}MonthYearSelect`)?.value);
+    } else if (st.mode === "quarter") {
+      // Chọn năm + quý + tháng trong quý -> 3 tháng của quý ("Tất cả") hoặc 1 tháng
+      add(`${key}Year`, document.getElementById(`${key}QuarterYearSelect`)?.value);
+      add(`${key}Quarter`, document.getElementById(`${key}QuarterSelect`)?.value);
+      add(`${key}Month`, document.getElementById(`${key}QuarterMonthSelect`)?.value || "all");
+    } else {
+      add(`${key}Year`, document.getElementById(`${key}YearSelect`)?.value);
+    }
+    return p.join("&");
+  }
+
+  // Tham số bộ lọc chung cho 2 bảng còn lại (nhân viên, khách hàng)
+  function buildSharedQParams() {
+    const p = [];
+    const add = (k, v) => { if (v) p.push(`${k}=${encodeURIComponent(v)}`); };
+    add("sharedMode", currentAnalyticsPeriod);
+    if (currentAnalyticsPeriod === "quarter") {
+      add("sharedYear", document.getElementById("analyticsQuarterYearSelect")?.value);
+      add("sharedQuarter", document.getElementById("analyticsQuarterSelect")?.value);
+      add("sharedMonth", document.getElementById("analyticsQuarterMonthSelect")?.value);
+    } else if (currentAnalyticsPeriod === "month") {
+      add("sharedYear", document.getElementById("analyticsMonthYearSelect")?.value);
+      add("sharedMonth", document.getElementById("analyticsMonthSelect")?.value || "all");
+    } else {
+      add("sharedYear", document.getElementById("analyticsYearSelect")?.value);
+    }
+    return p.join("&");
+  }
+
+  async function loadReports() {
+    try {
+      initAnalyticsInputs();
+      const params = [buildReportQParams("sum"), buildReportQParams("prod"), buildSharedQParams()];
+      const year = sharedFilterYear();
+      if (year) params.push(`year=${encodeURIComponent(year)}`);
+      const data = await api(`/reports?${params.filter(Boolean).join("&")}`);
+      state.reports = data;
 
       renderReports();
     } catch (err) {
@@ -3020,8 +3319,52 @@
 
   window.loadReports = loadReports;
 
-  document.getElementById("reportYearSelect")?.addEventListener("change", (e) => {
-    loadReports({ year: e.target.value });
+  // Trạng thái bộ lọc pill của 2 bảng chính (mặc định: theo tháng - tất cả 12 tháng của năm hiện tại)
+  const reportFilterState = {
+    sum: { mode: "month" },
+    prod: { mode: "month" },
+  };
+
+  // Đổi chế độ bộ lọc pill cho 1 bảng chính
+  function setReportFilterMode(key, mode) {
+    reportFilterState[key].mode = mode;
+    const box = document.getElementById(`${key}PillFilter`);
+    box?.querySelectorAll(".pill-seg-btn").forEach((b) =>
+      b.classList.toggle("active", b.getAttribute("data-qmode") === mode)
+    );
+    ["Month", "Quarter", "Year"].forEach((suf) => {
+      const g = document.getElementById(`${key}Group${suf}`);
+      if (g) g.style.display = mode === suf.toLowerCase() ? "flex" : "none";
+    });
+    loadReports();
+  }
+
+  [["sumPillFilter", "sum"], ["prodPillFilter", "prod"]].forEach(([id, key]) => {
+    document.getElementById(id)?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".pill-seg-btn");
+      if (!btn) return;
+      setReportFilterMode(key, btn.getAttribute("data-qmode"));
+    });
+  });
+
+  // Đổi quý -> chỉ cập nhật danh sách "Tất cả" + 3 tháng của quý (dữ liệu tải khi bấm "Lọc dữ liệu")
+  ["sum", "prod"].forEach((key) => {
+    document.getElementById(`${key}QuarterSelect`)?.addEventListener("change", (e) => {
+      buildQuarterMonthOptions(document.getElementById(`${key}QuarterMonthSelect`), e.target.value, true);
+    });
+  });
+
+  // Bộ lọc pill chỉ áp dụng khi bấm nút "Lọc dữ liệu" (không tự tải lại theo select)
+
+  // Năm trong bộ lọc Thống kê cũng điều khiển Báo cáo tổng hợp
+  document.getElementById("analyticsYearSelect")?.addEventListener("change", () => {
+    loadAnalytics({ period: currentAnalyticsPeriod });
+    loadReports();
+  });
+
+  // Nút "Lọc dữ liệu" riêng của 2 bảng chính -> tải lại báo cáo
+  ["sumApplyBtn", "prodApplyBtn"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", loadReports);
   });
 
   // In báo cáo tổng hợp ra cửa sổ riêng -> người dùng chọn "Save as PDF"
@@ -3538,7 +3881,7 @@
     });
   }
 
-  // Lắng nghe đổi tab bộ lọc Thống kê (Tháng / Ngày / Năm)
+  // Lắng nghe đổi tab bộ lọc chung (Tháng / Ngày / Quý / Năm)
   const periodTabBtns = document.querySelectorAll(".analytics-tab-btn");
   periodTabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3548,22 +3891,23 @@
       currentAnalyticsPeriod = period;
 
       const groupMonth = document.getElementById("filterGroupMonth");
-      const groupDay = document.getElementById("filterGroupDay");
+      const groupQuarter = document.getElementById("filterGroupQuarter");
       const groupYear = document.getElementById("filterGroupYear");
 
       if (groupMonth) groupMonth.style.display = period === "month" ? "flex" : "none";
-      if (groupDay) groupDay.style.display = period === "day" ? "flex" : "none";
+      if (groupQuarter) groupQuarter.style.display = period === "quarter" ? "flex" : "none";
       if (groupYear) groupYear.style.display = period === "year" ? "flex" : "none";
 
       loadAnalytics({ period });
     });
   });
 
-  // Lắng nghe nút "Lọc dữ liệu"
+  // Lắng nghe nút "Lọc dữ liệu" (bộ lọc chung -> cả bảng số liệu chi tiết, top sản phẩm và 2 bảng báo cáo còn lại)
   const analyticsApplyBtn = document.getElementById("analyticsApplyBtn");
   if (analyticsApplyBtn) {
     analyticsApplyBtn.addEventListener("click", () => {
       loadAnalytics({ period: currentAnalyticsPeriod });
+      loadReports();
     });
   }
 

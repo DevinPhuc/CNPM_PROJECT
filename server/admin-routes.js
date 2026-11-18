@@ -573,6 +573,158 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       rows: Object.values(prodMap).sort((a, b) => b.total - a.total),
     };
 
+    // ---------- Bộ lọc riêng cho 2 bảng chính (thu-chi-lợi nhuận & sản phẩm × quý) ----------
+    // Mỗi chế độ lọc quyết định "trục thời gian" của bảng + biểu đồ:
+    //  - Theo tháng: chọn tháng -> 1 cột tháng đó; chọn "Tất cả" -> 12 cột tháng của năm được chọn
+    //  - Theo quý:   chọn năm + quý + tháng trong quý; "Tất cả" -> 3 cột tháng của quý, chọn tháng -> 1 cột tháng đó
+    //  - Theo năm:   các cột năm từ năm được chọn đến năm hiện tại (chọn năm hiện tại = 1 cột)
+    const buildQuarterBuckets = (mode, { month, quarter, year: yParam } = {}) => {
+      let buckets = [];
+      let label = "";
+      let modeKey = "year";
+      let baseYear = currentYear;
+      let baseMonth = 0;
+      let baseQuarter = 0;
+      if (mode === "month") {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        const m = Number(month);
+        modeKey = "month";
+        if (m >= 1 && m <= 12) {
+          baseMonth = m;
+          buckets = [`Tháng ${m}`];
+          label = `Tháng ${m} năm ${baseYear}`;
+        } else {
+          buckets = Array.from({ length: 12 }, (_, i) => `Tháng ${i + 1}`);
+          label = `Các tháng năm ${baseYear}`;
+        }
+      } else if (mode === "quarter") {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        modeKey = "quarter";
+        baseQuarter = Math.min(Math.max(1, Math.round(Number(quarter) || 1)), 4);
+        const m = Number(month);
+        if (m >= 1 && m <= 12) {
+          baseMonth = m;
+          buckets = [`Tháng ${m}`];
+          label = `Tháng ${m} năm ${baseYear}`;
+        } else {
+          const start = (baseQuarter - 1) * 3 + 1;
+          buckets = [start, start + 1, start + 2].map((x) => `Tháng ${x}`);
+          label = `Quý ${baseQuarter} năm ${baseYear}`;
+        }
+      } else {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        modeKey = "year";
+        const last = Math.max(baseYear, currentYear);
+        for (let y = baseYear; y <= last; y++) buckets.push(`Năm ${y}`);
+        label = baseYear === currentYear ? `Năm ${currentYear}` : `Từ năm ${baseYear} đến năm ${currentYear}`;
+      }
+      const idxOf = (k) => {
+        if (!k) return -1;
+        const y = Number(k.slice(0, 4));
+        if (modeKey === "month") {
+          if (baseMonth) return y === baseYear && Number(k.slice(5, 7)) === baseMonth ? 0 : -1;
+          return y === baseYear ? Number(k.slice(5, 7)) - 1 : -1;
+        }
+        if (modeKey === "quarter") {
+          if (y !== baseYear) return -1;
+          const mo = Number(k.slice(5, 7));
+          if (baseMonth) return mo === baseMonth ? 0 : -1;
+          const start = (baseQuarter - 1) * 3 + 1;
+          return mo >= start && mo <= start + 2 ? mo - start : -1;
+        }
+        return y >= baseYear && y <= Math.max(baseYear, currentYear) ? y - baseYear : -1;
+      };
+      return { mode: modeKey, label, buckets, idxOf };
+    };
+
+    const sumBuckets = buildQuarterBuckets(String(req.query.sumMode || "").toLowerCase(), {
+      month: req.query.sumMonth, quarter: req.query.sumQuarter, year: req.query.sumYear,
+    });
+    const prodBuckets = buildQuarterBuckets(String(req.query.prodMode || "").toLowerCase(), {
+      month: req.query.prodMonth, quarter: req.query.prodQuarter, year: req.query.prodYear,
+    });
+
+    const aggBuckets = (win) => {
+      const revenue = win.buckets.map(() => 0);
+      const cost = win.buckets.map(() => 0);
+      validInvoices.forEach((i) => {
+        const bi = win.idxOf(toVnDateKey(i.invoice_date));
+        if (bi >= 0) revenue[bi] += Number(i.total_price) || 0;
+      });
+      (receipts || []).forEach((r) => {
+        const bi = win.idxOf(toVnDateKey(r.receipt_date));
+        if (bi >= 0) cost[bi] += Number(r.total_amount) || 0;
+      });
+      return {
+        mode: win.mode,
+        label: win.label,
+        buckets: win.buckets,
+        revenue,
+        cost,
+        profit: revenue.map((r, idx) => Math.max(0, r - cost[idx])),
+      };
+    };
+    const filteredSummary = aggBuckets(sumBuckets);
+
+    const prodMapW = {};
+    (invoiceDetails || []).forEach((d) => {
+      const inv = validById.get(d.invoice_id);
+      if (!inv) return;
+      const bi = prodBuckets.idxOf(toVnDateKey(inv.invoice_date));
+      if (bi < 0) return;
+      const name = String(d.product_name || "Khác").trim() || "Khác";
+      const row = prodMapW[name] || (prodMapW[name] = { name, values: prodBuckets.buckets.map(() => 0), total: 0 });
+      row.values[bi] += Number(d.subtotal) || 0;
+      row.total += Number(d.subtotal) || 0;
+    });
+    const filteredProducts = {
+      mode: prodBuckets.mode,
+      label: prodBuckets.label,
+      buckets: prodBuckets.buckets,
+      rows: Object.values(prodMapW).sort((a, b) => b.total - a.total),
+    };
+
+    // ---------- Bộ lọc chung cho 2 bảng còn lại (nhân viên × kỳ, khách hàng × kỳ) ----------
+    const sharedBuckets = buildQuarterBuckets(String(req.query.sharedMode || "").toLowerCase(), {
+      month: req.query.sharedMonth, quarter: req.query.sharedQuarter, year: req.query.sharedYear,
+    });
+    const aggInvoicesByBuckets = (keyOf, nameOf, include = () => true) => {
+      const map = {};
+      validInvoices.forEach((i) => {
+        const bi = sharedBuckets.idxOf(toVnDateKey(i.invoice_date));
+        if (bi < 0 || !include(i)) return;
+        const key = keyOf(i);
+        const row = map[key] || (map[key] = { name: nameOf(i), values: sharedBuckets.buckets.map(() => 0), total: 0 });
+        const val = Number(i.total_price) || 0;
+        row.values[bi] += val;
+        row.total += val;
+      });
+      return Object.values(map).sort((a, b) => b.total - a.total);
+    };
+    const filteredEmployeeYears = {
+      mode: sharedBuckets.mode,
+      label: sharedBuckets.label,
+      buckets: sharedBuckets.buckets,
+      rows: aggInvoicesByBuckets(
+        (i) => (i.employee_id ? `u${i.employee_id}` : "null"),
+        (i) => empName(i.employee_id)
+      ),
+    };
+    const filteredCustomerQuarters = {
+      mode: sharedBuckets.mode,
+      label: sharedBuckets.label,
+      buckets: sharedBuckets.buckets,
+      rows: aggInvoicesByBuckets(
+        (i) => {
+          const custId = custIdOf(i);
+          return custId ? `c${custId}` : `n${String(i.buyer_name || "").trim().toLowerCase()}`;
+        },
+        (i) => custName(custIdOf(i), i.buyer_name),
+        // Bỏ qua khách vãng lai (không có customer_id và không có tên) khỏi báo cáo
+        (i) => Boolean(custIdOf(i)) || Boolean(String(i.buyer_name || "").trim())
+      ),
+    };
+
     // Danh sách năm (từ dữ liệu hóa đơn, ≤ năm hiện tại)
     const yearSet = new Set([currentYear]);
     (invoices || []).forEach((i) => {
@@ -603,6 +755,8 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       const q = quarterOf(i.invoice_date);
       if (!q) return;
       const custId = custIdOf(i);
+      // Bỏ qua khách vãng lai (không có customer_id và không có tên) khỏi báo cáo
+      if (!custId && !String(i.buyer_name || "").trim()) return;
       const key = custId ? `c${custId}` : `n${String(i.buyer_name || "").trim().toLowerCase()}`;
       const row = custMap[key] || (custMap[key] = { name: custName(custId, i.buyer_name), q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
       row[`q${q}`] += Number(i.total_price) || 0;
@@ -620,6 +774,10 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       quarterlySummary: { year: targetYear, revenue: revenueQ, cost: costQ, profit: profitQ },
       employeeYears,
       customerQuarters,
+      filteredSummary,
+      filteredProducts,
+      filteredEmployeeYears,
+      filteredCustomerQuarters,
     });
   }));
 
