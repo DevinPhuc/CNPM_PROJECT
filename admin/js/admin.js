@@ -462,6 +462,7 @@
     selectedReceiptId: null,
     receiptSortDescending: false,
     suppliers: [],
+    selectedSupplierId: null,
     analytics: null,
     reports: null,
     unlockRequests: [],
@@ -2447,24 +2448,89 @@
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy nhà cung cấp nào</div>';
+      state.selectedSupplierId = null;
+      renderSupplierDetailPanel(null, true);
       return;
+    }
+
+    if (!rows.some((s) => s.id === state.selectedSupplierId)) {
+      state.selectedSupplierId = rows[0].id;
     }
 
     const grid = "minmax(140px, 1.5fr) minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(130px, 1.4fr) minmax(95px, 1fr) minmax(100px, 1fr)";
     table.innerHTML = buildRowHeader(["Tên đối tác", "Số điện thoại", "Email liên hệ", "Địa chỉ", "Trạng thái", "Thao tác"], grid) +
       rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
+        <div class="admin-row clickable-row ${state.selectedSupplierId === item.id ? "selected-row" : ""}"
+             id="supplier-row-${item.id}"
+             onclick="selectSupplierRow(${item.id})"
+             style="grid-template-columns: ${grid};">
           <strong>${item.name}</strong>
           <span>${item.phone || "--"}</span>
           <small style="color:#666;">${item.email || "--"}</small>
           <small>${item.address || "--"}</small>
           <span>${renderStatusBadge(item.status)}</span>
-          <div class="table-actions">
+          <div class="table-actions" onclick="event.stopPropagation()">
             <button type="button" class="mini-btn" onclick="editSupplier(${item.id})">Sửa</button>
             <button type="button" class="mini-btn danger" onclick="deleteSupplier(${item.id})">Xóa</button>
           </div>
         </div>
       `).join("");
+
+    renderSupplierDetailPanel(state.selectedSupplierId);
+  }
+
+  window.selectSupplierRow = (id) => {
+    state.selectedSupplierId = id;
+    document.querySelectorAll("#suppliersTable .admin-row.clickable-row").forEach((row) => {
+      row.classList.toggle("selected-row", row.id === `supplier-row-${id}`);
+    });
+    renderSupplierDetailPanel(id);
+  };
+
+  function renderSupplierDetailPanel(id, noResults = false) {
+    const panel = document.getElementById("supplierDetailPanel");
+    if (!panel) return;
+    const supplier = state.suppliers.find((s) => s.id === id);
+    if (!supplier) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">🏭</span>
+          <h4>${noResults ? "Không có nhà cung cấp" : "Chi tiết nhà cung cấp"}</h4>
+          <p>${noResults ? "Không tìm thấy nhà cung cấp phù hợp với điều kiện tìm kiếm." : "Nhấp vào một dòng trong bảng bên cạnh để xem toàn bộ thông tin chi tiết nhà cung cấp."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const isActive = Boolean(supplier.isActive || supplier.status === "Hoạt động" || supplier.status === "Đang hợp tác");
+    const email = String(supplier.email || "").trim();
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header" style="margin-bottom:14px;">
+          <div>
+            <p class="account-eyebrow" style="margin-bottom:5px;">CHI TIẾT NHÀ CUNG CẤP</p>
+            <h3 style="font-size:19px;">${escapeReceiptHtml(supplier.name)}</h3>
+            <small style="color:var(--admin-muted); font-size:12px;">Mã đối tác: #NCC-${supplier.id}</small>
+          </div>
+          ${renderStatusBadge(supplier.status)}
+        </div>
+
+        <div style="display:grid;gap:12px;padding:12px;background:var(--admin-paper);border-radius:8px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tên nhà cung cấp</small><strong>${escapeReceiptHtml(supplier.name)}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Số điện thoại</small><strong>${escapeReceiptHtml(supplier.phone || "--")}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Email liên hệ</small>${email
+            ? `<strong><a href="mailto:${escapeReceiptHtml(email)}" style="color:var(--admin-green);">${escapeReceiptHtml(email)}</a></strong>`
+            : "<strong>--</strong>"}</div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Địa chỉ</small><strong>${escapeReceiptHtml(supplier.address || "--")}</strong></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Ngày tạo</small><strong>${supplier.createdAt ? formatDateTime(supplier.createdAt) : "--"}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Trạng thái hợp tác</small><strong style="color:${isActive ? "#047857" : "#991b1b"};">${isActive ? "Đang hợp tác" : "Ngừng hợp tác"}</strong></div>
+        </div>
+      </div>
+    `;
   }
 
   window.editSupplier = (id) => {
