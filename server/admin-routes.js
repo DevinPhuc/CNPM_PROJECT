@@ -267,7 +267,12 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const validInvoices = (invoices || []).filter(isValidInvoice);
     const filteredInvoices = validInvoices.filter((i) => isInRange(i.invoice_date));
     const filteredOrders = (orders || []).filter((o) => isInRange(o.order_date));
-    const filteredReceipts = (receipts || []).filter((r) => isInRange(r.receipt_date));
+    const receiptWorkflows = must(await db.from("goods_receipt_workflow").select("gr_id,status"));
+    const receiptStatusById = new Map((receiptWorkflows || []).map((row) => [row.gr_id, row.status]));
+    const receivedReceipts = (receipts || []).filter((r) =>
+      (receiptStatusById.get(r.gr_id) || "received") === "received"
+    );
+    const filteredReceipts = receivedReceipts.filter((r) => isInRange(r.receipt_date));
 
     // Thống kê tổng quan trong kỳ lọc
     const totalRevenue = filteredInvoices.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
@@ -307,7 +312,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const mInvs = validInvoices.filter((i) => toVnMonthKey(i.invoice_date) === mKey);
         const mOrders = (orders || []).filter((o) => toVnMonthKey(o.order_date) === mKey);
-        const mRcps = (receipts || []).filter((r) => toVnMonthKey(r.receipt_date) === mKey);
+        const mRcps = receivedReceipts.filter((r) => toVnMonthKey(r.receipt_date) === mKey);
 
         const rev = mInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = mRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -338,7 +343,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
         const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
-        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
+        const dRcps = receivedReceipts.filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -378,7 +383,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
         const dInvs = validInvoices.filter((i) => toVnDateKey(i.invoice_date) === dKey);
         const dOrders = (orders || []).filter((o) => toVnDateKey(o.order_date) === dKey);
-        const dRcps = (receipts || []).filter((r) => toVnDateKey(r.receipt_date) === dKey);
+        const dRcps = receivedReceipts.filter((r) => toVnDateKey(r.receipt_date) === dKey);
 
         const rev = dInvs.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
         const cost = dRcps.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
@@ -464,6 +469,320 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         totalOrders,
         successRate,
       },
+    });
+  }));
+
+  // ---------- BÁO CÁO THỐNG KÊ (sản phẩm/quý, thu-chi-lợi nhuận/quý, nhân viên/năm, khách hàng/quý) ----------
+  router.get("/reports", wrap(async (req, res) => {
+    const { year } = req.query || {};
+
+    const [
+      { data: invoices },
+      { data: orders },
+      { data: receipts },
+      { data: invoiceDetails },
+      { data: users },
+    ] = await Promise.all([
+      safeQuery(db.from("invoices").select("invoice_id,order_id,total_price,invoice_date,employee_id,customer_id")),
+      safeQuery(db.from("orders").select("order_id,status,customer_id")),
+      safeQuery(db.from("goods_receipt").select("total_amount,receipt_date")),
+      safeQuery(db.from("invoice_detail").select("invoice_id,product_name,quantity,subtotal")),
+      safeQuery(db.from("users").select("id,first_name,last_name")),
+    ]);
+
+    // Chuyển đổi timestamp sang ngày theo múi giờ Việt Nam (UTC+7) - dùng lại kỹ thuật của /analytics
+    const toVnDateKey = (dStr) => {
+      if (!dStr) return "";
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return "";
+      const vnTime = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+      const y = vnTime.getUTCFullYear();
+      const m = String(vnTime.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(vnTime.getUTCDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    const now = new Date();
+    const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const currentYear = vnNow.getUTCFullYear();
+    let targetYear = Number(year) || currentYear;
+    if (!Number.isFinite(targetYear)) targetYear = currentYear;
+    targetYear = Math.min(Math.max(2000, Math.round(targetYear)), currentYear);
+
+    const quarterOf = (dStr) => {
+      const k = toVnDateKey(dStr);
+      if (!k) return 0;
+      const m = Number(k.slice(5, 7));
+      return Math.floor((m - 1) / 3) + 1;
+    };
+    const yearOf = (dStr) => {
+      const k = toVnDateKey(dStr);
+      return k ? Number(k.slice(0, 4)) : 0;
+    };
+
+    // Hóa đơn hợp lệ: loại bỏ hóa đơn thuộc đơn đã hủy / đã hoàn hàng (như /analytics)
+    const orderStatusMap = {};
+    (orders || []).forEach((o) => { orderStatusMap[o.order_id] = o.status; });
+    const isValidInvoice = (inv) => {
+      if (!inv) return false;
+      if (inv.order_id && orderStatusMap[inv.order_id]) {
+        return orderStatusMap[inv.order_id] !== "cancelled" && orderStatusMap[inv.order_id] !== "returned";
+      }
+      return true;
+    };
+    const validInvoices = (invoices || []).filter(isValidInvoice);
+    const validById = new Map(validInvoices.map((i) => [i.invoice_id, i]));
+
+    const userNameMap = {};
+    (users || []).forEach((u) => { userNameMap[u.id] = fullName(u); });
+    const empName = (id) => (id && userNameMap[id]) ? userNameMap[id] : (id ? `Nhân viên #${id}` : "Không rõ nhân viên");
+    // Khách hàng: Ưu tiên customer_id của hóa đơn / đơn hàng liên kết -> tên trong bảng users; nếu không có thì dùng buyer_name
+    const orderCustMap = {};
+    (orders || []).forEach((o) => { orderCustMap[o.order_id] = o.customer_id; });
+    const custIdOf = (inv) => inv.customer_id || orderCustMap[inv.order_id] || null;
+    const custName = (id, buyerName) => {
+      if (id) return userNameMap[id] || `Khách hàng #${id}`;
+      const name = String(buyerName || "").trim();
+      return name || "Khách lẻ";
+    };
+
+    // Tổng thu / tổng chi / lợi nhuận theo quý của năm được chọn
+    const revenueQ = [0, 0, 0, 0];
+    const costQ = [0, 0, 0, 0];
+    validInvoices.forEach((i) => {
+      if (yearOf(i.invoice_date) !== targetYear) return;
+      const q = quarterOf(i.invoice_date);
+      if (q) revenueQ[q - 1] += Number(i.total_price) || 0;
+    });
+    (receipts || []).forEach((r) => {
+      if (yearOf(r.receipt_date) !== targetYear) return;
+      const q = quarterOf(r.receipt_date);
+      if (q) costQ[q - 1] += Number(r.total_amount) || 0;
+    });
+    const profitQ = revenueQ.map((r, idx) => Math.max(0, r - costQ[idx]));
+
+    // Tổng hóa đơn theo sản phẩm × quý (từ chi tiết hóa đơn của hóa đơn hợp lệ)
+    const prodMap = {};
+    (invoiceDetails || []).forEach((d) => {
+      const inv = validById.get(d.invoice_id);
+      if (!inv || yearOf(inv.invoice_date) !== targetYear) return;
+      const q = quarterOf(inv.invoice_date);
+      if (!q) return;
+      const name = String(d.product_name || "Khác").trim() || "Khác";
+      const row = prodMap[name] || (prodMap[name] = { name, q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
+      row[`q${q}`] += Number(d.subtotal) || 0;
+      row.total += Number(d.subtotal) || 0;
+    });
+    const productQuarters = {
+      year: targetYear,
+      rows: Object.values(prodMap).sort((a, b) => b.total - a.total),
+    };
+
+    // ---------- Bộ lọc riêng cho 2 bảng chính (thu-chi-lợi nhuận & sản phẩm × quý) ----------
+    // Mỗi chế độ lọc quyết định "trục thời gian" của bảng + biểu đồ:
+    //  - Theo tháng: chọn tháng -> 1 cột tháng đó; chọn "Tất cả" -> 12 cột tháng của năm được chọn
+    //  - Theo quý:   chọn năm + quý + tháng trong quý; "Tất cả" -> 3 cột tháng của quý, chọn tháng -> 1 cột tháng đó
+    //  - Theo năm:   các cột năm từ năm được chọn đến năm hiện tại (chọn năm hiện tại = 1 cột)
+    const buildQuarterBuckets = (mode, { month, quarter, year: yParam } = {}) => {
+      let buckets = [];
+      let label = "";
+      let modeKey = "year";
+      let baseYear = currentYear;
+      let baseMonth = 0;
+      let baseQuarter = 0;
+      if (mode === "month") {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        const m = Number(month);
+        modeKey = "month";
+        if (m >= 1 && m <= 12) {
+          baseMonth = m;
+          buckets = [`Tháng ${m}`];
+          label = `Tháng ${m} năm ${baseYear}`;
+        } else {
+          buckets = Array.from({ length: 12 }, (_, i) => `Tháng ${i + 1}`);
+          label = `Các tháng năm ${baseYear}`;
+        }
+      } else if (mode === "quarter") {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        modeKey = "quarter";
+        baseQuarter = Math.min(Math.max(1, Math.round(Number(quarter) || 1)), 4);
+        const m = Number(month);
+        if (m >= 1 && m <= 12) {
+          baseMonth = m;
+          buckets = [`Tháng ${m}`];
+          label = `Tháng ${m} năm ${baseYear}`;
+        } else {
+          const start = (baseQuarter - 1) * 3 + 1;
+          buckets = [start, start + 1, start + 2].map((x) => `Tháng ${x}`);
+          label = `Quý ${baseQuarter} năm ${baseYear}`;
+        }
+      } else {
+        baseYear = Math.min(Math.max(2000, Math.round(Number(yParam) || currentYear)), currentYear);
+        modeKey = "year";
+        const last = Math.max(baseYear, currentYear);
+        for (let y = baseYear; y <= last; y++) buckets.push(`Năm ${y}`);
+        label = baseYear === currentYear ? `Năm ${currentYear}` : `Từ năm ${baseYear} đến năm ${currentYear}`;
+      }
+      const idxOf = (k) => {
+        if (!k) return -1;
+        const y = Number(k.slice(0, 4));
+        if (modeKey === "month") {
+          if (baseMonth) return y === baseYear && Number(k.slice(5, 7)) === baseMonth ? 0 : -1;
+          return y === baseYear ? Number(k.slice(5, 7)) - 1 : -1;
+        }
+        if (modeKey === "quarter") {
+          if (y !== baseYear) return -1;
+          const mo = Number(k.slice(5, 7));
+          if (baseMonth) return mo === baseMonth ? 0 : -1;
+          const start = (baseQuarter - 1) * 3 + 1;
+          return mo >= start && mo <= start + 2 ? mo - start : -1;
+        }
+        return y >= baseYear && y <= Math.max(baseYear, currentYear) ? y - baseYear : -1;
+      };
+      return { mode: modeKey, label, buckets, idxOf };
+    };
+
+    const sumBuckets = buildQuarterBuckets(String(req.query.sumMode || "").toLowerCase(), {
+      month: req.query.sumMonth, quarter: req.query.sumQuarter, year: req.query.sumYear,
+    });
+    const prodBuckets = buildQuarterBuckets(String(req.query.prodMode || "").toLowerCase(), {
+      month: req.query.prodMonth, quarter: req.query.prodQuarter, year: req.query.prodYear,
+    });
+
+    const aggBuckets = (win) => {
+      const revenue = win.buckets.map(() => 0);
+      const cost = win.buckets.map(() => 0);
+      validInvoices.forEach((i) => {
+        const bi = win.idxOf(toVnDateKey(i.invoice_date));
+        if (bi >= 0) revenue[bi] += Number(i.total_price) || 0;
+      });
+      (receipts || []).forEach((r) => {
+        const bi = win.idxOf(toVnDateKey(r.receipt_date));
+        if (bi >= 0) cost[bi] += Number(r.total_amount) || 0;
+      });
+      return {
+        mode: win.mode,
+        label: win.label,
+        buckets: win.buckets,
+        revenue,
+        cost,
+        profit: revenue.map((r, idx) => Math.max(0, r - cost[idx])),
+      };
+    };
+    const filteredSummary = aggBuckets(sumBuckets);
+
+    const prodMapW = {};
+    (invoiceDetails || []).forEach((d) => {
+      const inv = validById.get(d.invoice_id);
+      if (!inv) return;
+      const bi = prodBuckets.idxOf(toVnDateKey(inv.invoice_date));
+      if (bi < 0) return;
+      const name = String(d.product_name || "Khác").trim() || "Khác";
+      const row = prodMapW[name] || (prodMapW[name] = { name, values: prodBuckets.buckets.map(() => 0), total: 0 });
+      row.values[bi] += Number(d.subtotal) || 0;
+      row.total += Number(d.subtotal) || 0;
+    });
+    const filteredProducts = {
+      mode: prodBuckets.mode,
+      label: prodBuckets.label,
+      buckets: prodBuckets.buckets,
+      rows: Object.values(prodMapW).sort((a, b) => b.total - a.total),
+    };
+
+    // ---------- Bộ lọc chung cho 2 bảng còn lại (nhân viên × kỳ, khách hàng × kỳ) ----------
+    const sharedBuckets = buildQuarterBuckets(String(req.query.sharedMode || "").toLowerCase(), {
+      month: req.query.sharedMonth, quarter: req.query.sharedQuarter, year: req.query.sharedYear,
+    });
+    const aggInvoicesByBuckets = (keyOf, nameOf, include = () => true) => {
+      const map = {};
+      validInvoices.forEach((i) => {
+        const bi = sharedBuckets.idxOf(toVnDateKey(i.invoice_date));
+        if (bi < 0 || !include(i)) return;
+        const key = keyOf(i);
+        const row = map[key] || (map[key] = { name: nameOf(i), values: sharedBuckets.buckets.map(() => 0), total: 0 });
+        const val = Number(i.total_price) || 0;
+        row.values[bi] += val;
+        row.total += val;
+      });
+      return Object.values(map).sort((a, b) => b.total - a.total);
+    };
+    const filteredEmployeeYears = {
+      mode: sharedBuckets.mode,
+      label: sharedBuckets.label,
+      buckets: sharedBuckets.buckets,
+      rows: aggInvoicesByBuckets(
+        (i) => (i.employee_id ? `u${i.employee_id}` : "null"),
+        (i) => empName(i.employee_id)
+      ),
+    };
+    const filteredCustomerQuarters = {
+      mode: sharedBuckets.mode,
+      label: sharedBuckets.label,
+      buckets: sharedBuckets.buckets,
+      rows: aggInvoicesByBuckets(
+        (i) => {
+          const custId = custIdOf(i);
+          return custId ? `c${custId}` : `n${String(i.buyer_name || "").trim().toLowerCase()}`;
+        },
+        (i) => custName(custIdOf(i), i.buyer_name),
+        // Bỏ qua khách vãng lai (không có customer_id và không có tên) khỏi báo cáo
+        (i) => Boolean(custIdOf(i)) || Boolean(String(i.buyer_name || "").trim())
+      ),
+    };
+
+    // Danh sách năm (từ dữ liệu hóa đơn, ≤ năm hiện tại)
+    const yearSet = new Set([currentYear]);
+    (invoices || []).forEach((i) => {
+      const y = yearOf(i.invoice_date);
+      if (y && y <= currentYear) yearSet.add(y);
+    });
+    const years = [...yearSet].sort((a, b) => b - a);
+
+    // Tổng hóa đơn theo nhân viên × năm
+    const empMap = {};
+    validInvoices.forEach((i) => {
+      const y = yearOf(i.invoice_date);
+      if (!y || y > currentYear) return;
+      const key = i.employee_id ? `u${i.employee_id}` : "null";
+      const row = empMap[key] || (empMap[key] = { name: empName(i.employee_id), values: {} });
+      row.values[y] = (row.values[y] || 0) + (Number(i.total_price) || 0);
+    });
+    const empTotal = (row) => Object.values(row.values).reduce((a, v) => a + v, 0);
+    const employeeYears = {
+      years,
+      rows: Object.values(empMap).sort((a, b) => empTotal(b) - empTotal(a)),
+    };
+
+    // Tổng hóa đơn theo khách hàng × quý (năm được chọn)
+    const custMap = {};
+    validInvoices.forEach((i) => {
+      if (yearOf(i.invoice_date) !== targetYear) return;
+      const q = quarterOf(i.invoice_date);
+      if (!q) return;
+      const custId = custIdOf(i);
+      // Bỏ qua khách vãng lai (không có customer_id và không có tên) khỏi báo cáo
+      if (!custId && !String(i.buyer_name || "").trim()) return;
+      const key = custId ? `c${custId}` : `n${String(i.buyer_name || "").trim().toLowerCase()}`;
+      const row = custMap[key] || (custMap[key] = { name: custName(custId, i.buyer_name), q1: 0, q2: 0, q3: 0, q4: 0, total: 0 });
+      row[`q${q}`] += Number(i.total_price) || 0;
+      row.total += Number(i.total_price) || 0;
+    });
+    const customerQuarters = {
+      year: targetYear,
+      rows: Object.values(custMap).sort((a, b) => b.total - a.total),
+    };
+
+    res.json({
+      currentYear,
+      years,
+      productQuarters,
+      quarterlySummary: { year: targetYear, revenue: revenueQ, cost: costQ, profit: profitQ },
+      employeeYears,
+      customerQuarters,
+      filteredSummary,
+      filteredProducts,
+      filteredEmployeeYears,
+      filteredCustomerQuarters,
     });
   }));
 
@@ -1766,85 +2085,202 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const receipts = must(await db.from("goods_receipt")
       .select("gr_id,sup_id,receipt_date,total_amount,note,receipt_type,suppliers(name),gr_details(gr_detail_id,quantity,unit_cost,subtotal,variant_id,product_variants(pro_id,products(name)))")
       .order("receipt_date", { ascending: false }));
+    const workflowRows = receipts.length
+      ? must(await db.from("goods_receipt_workflow").select("gr_id,status").in("gr_id", receipts.map((r) => r.gr_id)))
+      : [];
+    const statusByReceiptId = new Map(workflowRows.map((row) => [row.gr_id, row.status]));
+
+    const receiptStatusLabels = {
+      pending: "Chờ nhập kho",
+      received: "Đã nhập kho",
+    };
 
     res.json(receipts.map((r) => {
-      const firstDetail = r.gr_details?.[0];
-      const prodName = firstDetail?.product_variants?.products?.name || "Sản phẩm";
-      const prodId = firstDetail?.product_variants?.pro_id || null;
-      const totalQty = (r.gr_details || []).reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
+      const details = r.gr_details || [];
+      const productNames = [...new Set(details
+        .map((d) => d.product_variants?.products?.name)
+        .filter(Boolean))];
+      const totalQty = details.reduce((sum, d) => sum + (Number(d.quantity) || 0), 0);
+      const productName = productNames.length > 0 ? productNames.join(", ") : "Sản phẩm";
+      const storedStatus = statusByReceiptId.get(r.gr_id) || "received";
+      const status = storedStatus === "approved" ? "pending" : storedStatus;
+
       return {
         id: r.gr_id,
         code: `PO-${String(r.gr_id).padStart(5, "0")}`,
         supplier: r.suppliers?.name || "Nhà cung cấp",
         supplierId: r.sup_id,
-        productName: prodName,
-        productId: prodId,
+        productName,
+        productId: details[0]?.product_variants?.pro_id || null,
         totalAmount: Number(r.total_amount || 0),
         quantity: totalQty || 1,
         date: r.receipt_date,
         note: r.note || "",
-        items: r.gr_details || [],
+        rawStatus: status,
+        status: receiptStatusLabels[status] || status,
+        items: details.map((detail) => ({
+          id: detail.gr_detail_id,
+          productId: detail.product_variants?.pro_id || null,
+          productName: detail.product_variants?.products?.name || "Sản phẩm",
+          quantity: Number(detail.quantity || 0),
+          unitCost: Number(detail.unit_cost || 0),
+          subtotal: Number(detail.subtotal || 0),
+          variantId: detail.variant_id,
+        })),
       };
     }));
   }));
 
   router.post("/receipts", wrap(async (req, res) => {
-    const { supplierId, supplierName, productId, quantity, amount, note, date } = req.body || {};
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+    const fallbackItem = req.body && (req.body.productId || req.body.quantity || req.body.amount)
+      ? [{ productId: req.body.productId, quantity: req.body.quantity, unitCost: Number(req.body.amount || 0) / Math.max(Number(req.body.quantity || 1), 1) }]
+      : [];
+    const itemList = rawItems.length ? rawItems : fallbackItem;
+    const { supplierId, supplierName, note, date } = req.body || {};
     let supId = supplierId ? Number(supplierId) : null;
 
-    if (!supId && supplierName) {
-      const sup = one(must(await db.from("suppliers").select("sup_id").ilike("name", `%${supplierName}%`).limit(1)));
-      supId = sup ? sup.sup_id : 1;
+    if (!itemList.length || itemList.some((it) => !it.productId || Number(it.quantity || 0) <= 0)) {
+      throw new HttpError(400, "Vui lòng chọn ít nhất một mặt hàng và nhập số lượng hợp lệ.");
     }
 
-    const totalAmt = Number(amount || 0);
-    const qty = Number(quantity || 1);
+    if (!supId && supplierName) {
+      const sup = one(must(await db.from("suppliers")
+        .select("sup_id")
+        .ilike("name", `%${String(supplierName).trim()}%`)
+        .eq("is_active", true)
+        .limit(1)));
+      supId = sup?.sup_id || null;
+    }
+    if (!Number.isInteger(supId) || supId <= 0) {
+      throw new HttpError(400, "Vui lòng chọn nhà cung cấp đang hợp tác.");
+    }
+
+    const activeSupplier = one(must(await db.from("suppliers")
+      .select("sup_id")
+      .eq("sup_id", supId)
+      .eq("is_active", true)
+      .limit(1)));
+    if (!activeSupplier) {
+      throw new HttpError(400, "Nhà cung cấp đã ngừng hợp tác hoặc không tồn tại. Vui lòng chọn nhà cung cấp khác.");
+    }
+
+    const normalizedItems = itemList.map((it) => ({
+      productId: Number(it.productId),
+      quantity: Number(it.quantity || 0),
+      unitCost: Number(it.unitCost ?? it.amount ?? 0),
+    }));
+
+    if (!normalizedItems.length || normalizedItems.some((it) =>
+      !Number.isInteger(it.productId) || it.productId <= 0 ||
+      !Number.isInteger(it.quantity) || it.quantity <= 0 ||
+      !Number.isFinite(it.unitCost) || it.unitCost < 0
+    )) {
+      throw new HttpError(400, "Dữ liệu mặt hàng nhập không hợp lệ.");
+    }
+
+    const itemsWithVariants = [];
+    for (const item of normalizedItems) {
+      const variants = must(await db.from("product_variants")
+        .select("variant_id,pro_id")
+        .eq("pro_id", item.productId)
+        .order("variant_id")
+        .limit(1));
+      const variant = one(variants);
+      if (!variant) {
+        throw new HttpError(400, `Sản phẩm #${item.productId} chưa có biến thể để nhập kho.`);
+      }
+      itemsWithVariants.push({ ...item, variantId: variant.variant_id });
+    }
+
+    const totalAmt = Math.round(normalizedItems.reduce((sum, it) => sum + (it.quantity * it.unitCost), 0));
 
     const gr = one(must(await db.from("goods_receipt").insert({
-      sup_id: supId || 1,
+      sup_id: supId,
       total_amount: totalAmt,
       note: note || `Nhập kho ngày ${date || new Date().toISOString().split("T")[0]}`,
       receipt_date: date ? new Date(date).toISOString() : new Date().toISOString(),
       receipt_type: "receipt",
     }).select("gr_id")));
 
-    // Tìm biến thể theo đúng sản phẩm productId được chọn
-    let variant = null;
-    if (productId) {
-      const vars = must(await db.from("product_variants").select("variant_id,stock_quantity,pro_id").eq("pro_id", Number(productId)).order("variant_id"));
-      if (vars.length > 0) {
-        variant = vars[0];
-      }
-    }
-    if (!variant) {
-      variant = one(must(await db.from("product_variants").select("variant_id,stock_quantity,pro_id").limit(1)));
-    }
+    must(await db.from("gr_details").insert(itemsWithVariants.map((item) => ({
+      gr_id: gr.gr_id,
+      variant_id: item.variantId,
+      quantity: item.quantity,
+      unit_cost: item.unitCost,
+      subtotal: Math.round(item.quantity * item.unitCost),
+    }))));
+    must(await db.from("goods_receipt_workflow").insert({ gr_id: gr.gr_id, status: "pending" }));
 
-    if (variant) {
-      must(await db.from("gr_details").insert({
-        gr_id: gr.gr_id,
-        variant_id: variant.variant_id,
-        quantity: qty,
-        unit_cost: qty > 0 ? Math.round(totalAmt / qty) : totalAmt,
-        subtotal: totalAmt,
-      }));
-
-      // Tăng số lượng tồn kho của chính sản phẩm đó
-      const currentStock = Number(variant.stock_quantity || 0);
-      const newStock = currentStock + qty;
-      must(await db.from("product_variants").update({
-        stock_quantity: newStock,
-        updated_at: new Date().toISOString(),
-      }).eq("variant_id", variant.variant_id));
-    }
-
-    broadcastRealtime("STOCK_CHANGED", {
-      receiptId: gr.gr_id,
-      productId: variant?.pro_id,
-      quantity: qty,
-      newStock: variant ? Number(variant.stock_quantity || 0) + qty : qty,
+    res.status(201).json({
+      id: gr.gr_id,
+      ok: true,
+      totalAmount: totalAmt,
+      itemCount: itemsWithVariants.length,
+      status: "pending",
     });
-    res.status(201).json({ id: gr.gr_id, ok: true, newStock: variant ? Number(variant.stock_quantity || 0) + qty : qty });
+  }));
+
+  router.patch("/receipts/:id/status", wrap(async (req, res) => {
+    const receiptId = Number(req.params.id);
+    const targetStatus = String(req.body?.status || "");
+    if (!Number.isInteger(receiptId) || receiptId <= 0) {
+      throw new HttpError(400, "Mã phiếu nhập không hợp lệ.");
+    }
+    if (targetStatus !== "received") {
+      throw new HttpError(400, "Trạng thái phiếu nhập không hợp lệ.");
+    }
+
+    const userRoles = req.adminUser?.roles || [];
+    if (!req.adminUser) {
+      throw new HttpError(401, "Vui lòng đăng nhập quản trị để cập nhật phiếu nhập.");
+    }
+    if (!userRoles.includes("ADMIN") && !userRoles.includes("SALES_STAFF")) {
+      throw new HttpError(403, "Bạn không có quyền xác nhận nhập kho.");
+    }
+
+    const receipt = one(must(await db.from("goods_receipt_workflow")
+      .select("gr_id,status")
+      .eq("gr_id", receiptId)
+      .limit(1)));
+    if (!receipt) throw new HttpError(404, "Không tìm thấy phiếu nhập.");
+
+    const transitions = {
+      pending: ["received"],
+      received: [],
+      cancelled: [],
+    };
+    if (!(transitions[receipt.status] || []).includes(targetStatus)) {
+      throw new HttpError(409, "Trạng thái phiếu đã thay đổi hoặc không thể chuyển tiếp.");
+    }
+
+    if (targetStatus === "received") {
+      const details = must(await db.from("gr_details")
+        .select("quantity,variant_id,product_variants(pro_id)")
+        .eq("gr_id", receiptId));
+      must(await db.rpc("transition_goods_receipt", {
+        p_gr_id: receiptId,
+        p_target_status: targetStatus,
+      }));
+      details.forEach((detail) => {
+        const variant = detail.product_variants;
+        if (variant) {
+          broadcastRealtime("STOCK_CHANGED", {
+            receiptId,
+            productId: variant.pro_id,
+            quantity: Number(detail.quantity || 0),
+          });
+        }
+      });
+    } else {
+      must(await db.rpc("transition_goods_receipt", {
+        p_gr_id: receiptId,
+        p_target_status: targetStatus,
+      }));
+    }
+
+    broadcastRealtime("RECEIPT_STATUS_CHANGED", { receiptId, status: targetStatus });
+    res.json({ ok: true, id: receiptId, status: targetStatus });
   }));
 
   // ---------- 9. QUẢN LÝ NHÀ CUNG CẤP ----------

@@ -459,8 +459,12 @@
     promotions: [],
     orders: [],
     stock: [],
+    selectedReceiptId: null,
+    receiptSortDescending: false,
     suppliers: [],
+    selectedSupplierId: null,
     analytics: null,
+    reports: null,
     unlockRequests: [],
   };
 
@@ -470,7 +474,7 @@
       const data = await api("/overview");
       state.overview = data;
 
-      // Cập nhật KPIs
+       // Cập nhật KPIs (banner chỉ có ở Tổng quan)
       const kpis = data.kpis || {};
       const elRev = document.getElementById("kpiRevenue");
       const elOrders = document.getElementById("kpiOrders");
@@ -2151,18 +2155,33 @@
       state.suppliers = suppliers;
       state.products = products;
 
-      // Đổ danh sách nhà cung cấp vào select
       const select = document.getElementById("stockSupplierSelect");
-      if (select && suppliers.length > 0) {
+      if (select) {
+        const activeSuppliers = suppliers.filter((supplier) =>
+          supplier.isActive === true ||
+          (supplier.isActive === undefined && ["Hoạt động", "Đang hợp tác"].includes(supplier.status))
+        );
         select.innerHTML = '<option value="">-- Chọn nhà cung cấp --</option>' +
-          suppliers.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+          activeSuppliers.map((supplier) =>
+            `<option value="${Number(supplier.id)}">${escapeReceiptHtml(supplier.name)}</option>`
+          ).join("");
+        select.disabled = activeSuppliers.length === 0;
+        if (activeSuppliers.length === 0) {
+          select.innerHTML = '<option value="">-- Không có nhà cung cấp đang hợp tác --</option>';
+        }
       }
 
-      // Đổ danh sách sản phẩm vào select nhập kho
       const prodSelect = document.getElementById("stockProductSelect");
       if (prodSelect && products.length > 0) {
-        prodSelect.innerHTML = '<option value="">-- Chọn sản phẩm cần nhập --</option>' +
+        prodSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>' +
           products.map((p) => `<option value="${p.id}">${p.name} (Tồn hiện tại: ${p.stock})</option>`).join("");
+      }
+
+      const receiptItemsContainer = document.getElementById("receiptItemsContainer");
+      if (receiptItemsContainer && !receiptItemsContainer.dataset.initialized) {
+        receiptItemsContainer.dataset.initialized = "1";
+        const firstRow = buildReceiptItemRow(0, products || []);
+        receiptItemsContainer.innerHTML = firstRow;
       }
 
       renderStockTable(keyword);
@@ -2171,35 +2190,232 @@
     }
   }
 
+  const RECEIPT_STATUS_ORDER = ["pending", "received"];
+  const RECEIPT_STATUS_LABELS = {
+    pending: "Chờ nhập kho",
+    received: "Đã nhập kho",
+  };
+
+  function getReceiptStatusKey(receipt) {
+    if (receipt.rawStatus === "approved") return "pending";
+    if (RECEIPT_STATUS_ORDER.includes(receipt.rawStatus)) return receipt.rawStatus;
+    return Object.keys(RECEIPT_STATUS_LABELS).find((key) => RECEIPT_STATUS_LABELS[key] === receipt.status) || "pending";
+  }
+
+  function escapeReceiptHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    })[character]);
+  }
+
+  function buildReceiptItemRow(index, productList = state.products || []) {
+    const productOptions = productList.length
+      ? productList.map((p) => `<option value="${p.id}">${p.name} (Tồn: ${p.stock})</option>`).join("")
+      : '<option value="">-- Chưa có sản phẩm --</option>';
+
+    return `
+      <div class="receipt-item-row" data-index="${index}" style="display:grid; grid-template-columns: minmax(160px, 1.8fr) minmax(90px, 0.7fr) minmax(130px, 1fr) 36px; gap:10px; align-items:end; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; background:#f9fafb;">
+        <strong class="receipt-item-heading" style="grid-column:1 / -1; font-size:12px; color:#1f2937;">Mặt hàng ${index + 1}</strong>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          Sản phẩm
+          <select name="itemProductId" class="receipt-product-select" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;">
+            <option value="">-- Chọn sản phẩm --</option>
+            ${productOptions}
+          </select>
+        </label>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          SL
+          <input name="itemQuantity" type="number" min="1" value="1" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;" />
+        </label>
+        <label style="font-size:12px; color:#374151; font-weight:600;">
+          Đơn giá nhập
+          <input name="itemUnitCost" type="number" min="0" step="1000" placeholder="500000" required style="width:100%; margin-top:6px; padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; font-size:13px;" />
+        </label>
+        <button type="button" class="receipt-remove-item" aria-label="Xóa hàng" title="Xóa hàng" style="height:40px; border:none; border-radius:8px; background:#fef2f2; color:#b91c1c; cursor:pointer; font-weight:700;">×</button>
+      </div>
+    `;
+  }
+
   function renderStockTable(keyword = "") {
     const table = document.getElementById("stockTable");
     if (!table) return;
     const filter = String(keyword || "").toLowerCase();
-    const rows = state.stock.filter((s) =>
-      s.code.toLowerCase().includes(filter) ||
-      s.supplier.toLowerCase().includes(filter) ||
-      (s.productName && s.productName.toLowerCase().includes(filter))
-    );
+    const rows = state.stock.filter((s) => {
+      if (s.rawStatus === "cancelled") return false;
+      const nameText = (s.productName || "").toLowerCase();
+      const supplierText = (s.supplier || "").toLowerCase();
+      const codeText = (s.code || "").toLowerCase();
+      const statusText = String(s.status || "").toLowerCase();
+      return codeText.includes(filter) || supplierText.includes(filter) || nameText.includes(filter) ||
+        statusText.includes(filter) || String(s.note || "").toLowerCase().includes(filter);
+    });
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy phiếu nhập nào</div>';
+      state.selectedReceiptId = null;
+      renderReceiptDetailPanel(null, true);
       return;
     }
 
-    const grid = "minmax(85px, 0.9fr) minmax(130px, 1.3fr) minmax(140px, 1.5fr) minmax(80px, 0.9fr) minmax(95px, 1fr) minmax(110px, 1.1fr) minmax(120px, 1.3fr)";
-    table.innerHTML = buildRowHeader(["Mã phiếu", "Nhà cung cấp", "Sản phẩm nhập", "Số lượng", "Ngày nhập", "Tổng tiền", "Ghi chú"], grid) +
-      rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
-          <strong>${item.code}</strong>
-          <span>${item.supplier}</span>
-          <strong style="color:var(--admin-green);">${item.productName || "Sản phẩm"}</strong>
-          <span style="font-weight:600; color:#10b981;">+${item.quantity}</span>
-          <small>${formatDate(item.date)}</small>
-          <strong style="color:var(--admin-gold);">${formatMoney(item.totalAmount)}</strong>
-          <small style="color:#666;">${item.note || "--"}</small>
-        </div>
-      `).join("");
+    rows.sort((a, b) => {
+      const rankA = RECEIPT_STATUS_ORDER.indexOf(getReceiptStatusKey(a));
+      const rankB = RECEIPT_STATUS_ORDER.indexOf(getReceiptStatusKey(b));
+      const statusOrder = state.receiptSortDescending ? rankB - rankA : rankA - rankB;
+      return statusOrder || new Date(b.date || 0) - new Date(a.date || 0);
+    });
+
+    const sortButton = document.getElementById("receiptSortBtn");
+    if (sortButton) {
+      sortButton.textContent = state.receiptSortDescending
+        ? "Sắp xếp: Đã nhập kho trước"
+        : "Sắp xếp: Chờ nhập kho trước";
+      sortButton.setAttribute("aria-pressed", String(state.receiptSortDescending));
+    }
+
+    if (!rows.some((receipt) => Number(receipt.id) === Number(state.selectedReceiptId))) {
+      state.selectedReceiptId = rows[0].id;
+    }
+
+    const receiptGrid = "90px 130px 110px 76px 98px 109px 110px";
+    table.innerHTML = buildRowHeader(["Mã phiếu", "Nhà cung cấp", "Mặt hàng", "Số lượng", "Ngày nhập", "Tổng tiền", "Trạng thái"], receiptGrid) +
+      rows.map((item) => {
+        const items = item.items || [];
+        const totalQuantity = items.reduce((sum, receiptItem) => sum + (Number(receiptItem.quantity) || 0), 0);
+        return `
+          <div class="admin-row clickable-row receipt-list-row receipt-status-${getReceiptStatusKey(item)} ${Number(state.selectedReceiptId) === Number(item.id) ? "selected-row" : ""}"
+               id="receipt-row-${Number(item.id)}"
+               role="button"
+               tabindex="0"
+               onclick="selectReceiptRow(${Number(item.id)})"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectReceiptRow(${Number(item.id)})}"
+               style="grid-template-columns: ${receiptGrid};">
+            <strong class="receipt-list-code">${escapeReceiptHtml(item.code)}</strong>
+            <span class="receipt-list-supplier">${escapeReceiptHtml(item.supplier || "--")}</span>
+            <strong class="receipt-list-item-count" style="color:var(--admin-green);">${items.length} loại hàng</strong>
+            <span class="receipt-list-quantity" style="font-weight:600; color:#10b981;">${totalQuantity}</span>
+            <small class="receipt-list-date">${formatDate(item.date)}</small>
+            <strong class="receipt-list-total" style="color:var(--admin-gold);">${formatMoney(item.totalAmount)}</strong>
+            <span class="receipt-list-status">${renderStatusBadge(item.status || RECEIPT_STATUS_LABELS.received)}</span>
+          </div>
+        `;
+      }).join("");
+
+    renderReceiptDetailPanel(state.selectedReceiptId);
   }
+
+  const receiptSortBtn = document.getElementById("receiptSortBtn");
+  if (receiptSortBtn) {
+    receiptSortBtn.addEventListener("click", () => {
+      state.receiptSortDescending = !state.receiptSortDescending;
+      renderStockTable(document.getElementById("stockSearch")?.value || "");
+    });
+  }
+
+  window.selectReceiptRow = (id) => {
+    state.selectedReceiptId = id;
+    document.querySelectorAll("#stockTable .admin-row.clickable-row").forEach((row) => {
+      row.classList.toggle("selected-row", row.id === `receipt-row-${Number(id)}`);
+    });
+    renderReceiptDetailPanel(id);
+  };
+
+  function renderReceiptDetailPanel(id, noResults = false) {
+    const panel = document.getElementById("receiptDetailPanel");
+    if (!panel) return;
+    const receipt = state.stock.find((item) => Number(item.id) === Number(id));
+    if (!receipt) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">📦</span>
+          <h4>${noResults ? "Không có phiếu nhập" : "Chi tiết phiếu nhập"}</h4>
+          <p>${noResults ? "Không tìm thấy phiếu nhập phù hợp với điều kiện tìm kiếm." : "Nhấp vào một phiếu trong danh sách để xem thông tin chi tiết tại đây."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const statusKey = getReceiptStatusKey(receipt);
+    const items = receipt.items || [];
+    const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const actions = statusKey === "pending"
+      ? `
+        <button type="button" class="admin-primary-btn" onclick="updateReceiptStatus(${Number(receipt.id)}, 'received')">Xác nhận đã nhập kho</button>
+      `
+      : "";
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header" style="margin-bottom:14px;">
+          <div>
+            <p class="account-eyebrow" style="margin-bottom:5px;">CHI TIẾT PHIẾU NHẬP</p>
+            <h3 style="font-size:19px;">${escapeReceiptHtml(receipt.code)}</h3>
+          </div>
+          ${renderStatusBadge(RECEIPT_STATUS_LABELS[statusKey])}
+        </div>
+
+        <div style="margin-top:8px;">
+          <strong style="display:block;margin-bottom:9px;">Danh sách mặt hàng (${items.length})</strong>
+          <div style="display:grid;gap:8px;">
+            ${items.length ? items.map((item) => `
+              <div style="display:grid;gap:5px;padding:10px 12px;border:1px solid var(--admin-line);border-radius:8px;font-size:12px;">
+                <strong>${escapeReceiptHtml(item.productName || "Sản phẩm")}</strong>
+                <div style="display:flex;justify-content:space-between;gap:8px;color:var(--admin-muted);">
+                  <span>SL: <strong>${Number(item.quantity) || 0}</strong></span>
+                  <span>Đơn giá: <strong>${formatMoney(item.unitCost)}</strong></span>
+                </div>
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                  <span style="color:var(--admin-muted);">Thành tiền</span>
+                  <strong>${formatMoney(item.subtotal)}</strong>
+                </div>
+              </div>
+            `).join("") : '<div class="admin-empty">Phiếu chưa có chi tiết mặt hàng.</div>'}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;background:var(--admin-paper);border-radius:8px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng số lượng</small><strong>${totalQuantity} sản phẩm</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng tiền</small><strong style="color:var(--admin-gold);">${formatMoney(receipt.totalAmount)}</strong></div>
+        </div>
+
+        <div style="display:grid;gap:12px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Nhà cung cấp</small><strong>${escapeReceiptHtml(receipt.supplier || "Nhà cung cấp")}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Ngày nhập</small><strong>${escapeReceiptHtml(formatDate(receipt.date))}</strong></div>
+        </div>
+
+        <div style="margin-top:14px;padding:10px 12px;background:var(--admin-paper);border-radius:8px;font-size:12px;">
+          <strong>Ghi chú:</strong> ${escapeReceiptHtml(receipt.note || "--")}
+        </div>
+
+        ${actions ? `<div style="margin-top:16px;">${actions}</div>` : ""}
+      </div>
+    `;
+  }
+
+  window.updateReceiptStatus = async (id, status) => {
+    const actionLabels = {
+      received: "xác nhận hàng đã nhập kho và cộng tồn kho",
+    };
+    const confirmation = {
+      received: "Xác nhận hàng đã thực tế nhập kho? Tồn kho sẽ được cộng theo các mặt hàng trong phiếu.",
+    };
+    if (!actionLabels[status]) return;
+    if (!confirm(confirmation[status])) return;
+
+    try {
+      await api(`/receipts/${id}/status`, { method: "PATCH", body: { status } });
+      toast(`Đã ${actionLabels[status]} thành công.`, "success");
+      await loadStock(document.getElementById("stockSearch")?.value || "");
+      if (status === "received") {
+        await Promise.all([loadProducts(), loadOverview()]);
+      }
+    } catch (err) {
+      toast("Không thể cập nhật phiếu nhập: " + err.message, "error");
+    }
+  };
 
   // ---------- 9. QUẢN LÝ NHÀ CUNG CẤP ----------
   async function loadSuppliers(keyword = "") {
@@ -2232,24 +2448,89 @@
 
     if (rows.length === 0) {
       table.innerHTML = '<div class="admin-empty">Không tìm thấy nhà cung cấp nào</div>';
+      state.selectedSupplierId = null;
+      renderSupplierDetailPanel(null, true);
       return;
+    }
+
+    if (!rows.some((s) => s.id === state.selectedSupplierId)) {
+      state.selectedSupplierId = rows[0].id;
     }
 
     const grid = "minmax(140px, 1.5fr) minmax(100px, 1fr) minmax(120px, 1.2fr) minmax(130px, 1.4fr) minmax(95px, 1fr) minmax(100px, 1fr)";
     table.innerHTML = buildRowHeader(["Tên đối tác", "Số điện thoại", "Email liên hệ", "Địa chỉ", "Trạng thái", "Thao tác"], grid) +
       rows.map((item) => `
-        <div class="admin-row" style="grid-template-columns: ${grid};">
+        <div class="admin-row clickable-row ${state.selectedSupplierId === item.id ? "selected-row" : ""}"
+             id="supplier-row-${item.id}"
+             onclick="selectSupplierRow(${item.id})"
+             style="grid-template-columns: ${grid};">
           <strong>${item.name}</strong>
           <span>${item.phone || "--"}</span>
           <small style="color:#666;">${item.email || "--"}</small>
           <small>${item.address || "--"}</small>
           <span>${renderStatusBadge(item.status)}</span>
-          <div class="table-actions">
+          <div class="table-actions" onclick="event.stopPropagation()">
             <button type="button" class="mini-btn" onclick="editSupplier(${item.id})">Sửa</button>
             <button type="button" class="mini-btn danger" onclick="deleteSupplier(${item.id})">Xóa</button>
           </div>
         </div>
       `).join("");
+
+    renderSupplierDetailPanel(state.selectedSupplierId);
+  }
+
+  window.selectSupplierRow = (id) => {
+    state.selectedSupplierId = id;
+    document.querySelectorAll("#suppliersTable .admin-row.clickable-row").forEach((row) => {
+      row.classList.toggle("selected-row", row.id === `supplier-row-${id}`);
+    });
+    renderSupplierDetailPanel(id);
+  };
+
+  function renderSupplierDetailPanel(id, noResults = false) {
+    const panel = document.getElementById("supplierDetailPanel");
+    if (!panel) return;
+    const supplier = state.suppliers.find((s) => s.id === id);
+    if (!supplier) {
+      panel.innerHTML = `
+        <div class="admin-detail-placeholder">
+          <span style="font-size:36px; display:block; margin-bottom:12px;">🏭</span>
+          <h4>${noResults ? "Không có nhà cung cấp" : "Chi tiết nhà cung cấp"}</h4>
+          <p>${noResults ? "Không tìm thấy nhà cung cấp phù hợp với điều kiện tìm kiếm." : "Nhấp vào một dòng trong bảng bên cạnh để xem toàn bộ thông tin chi tiết nhà cung cấp."}</p>
+        </div>
+      `;
+      return;
+    }
+
+    const isActive = Boolean(supplier.isActive || supplier.status === "Hoạt động" || supplier.status === "Đang hợp tác");
+    const email = String(supplier.email || "").trim();
+
+    panel.innerHTML = `
+      <div class="side-detail-content">
+        <div class="side-detail-header" style="margin-bottom:14px;">
+          <div>
+            <p class="account-eyebrow" style="margin-bottom:5px;">CHI TIẾT NHÀ CUNG CẤP</p>
+            <h3 style="font-size:19px;">${escapeReceiptHtml(supplier.name)}</h3>
+            <small style="color:var(--admin-muted); font-size:12px;">Mã đối tác: #NCC-${supplier.id}</small>
+          </div>
+          ${renderStatusBadge(supplier.status)}
+        </div>
+
+        <div style="display:grid;gap:12px;padding:12px;background:var(--admin-paper);border-radius:8px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tên nhà cung cấp</small><strong>${escapeReceiptHtml(supplier.name)}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Số điện thoại</small><strong>${escapeReceiptHtml(supplier.phone || "--")}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Email liên hệ</small>${email
+            ? `<strong><a href="mailto:${escapeReceiptHtml(email)}" style="color:var(--admin-green);">${escapeReceiptHtml(email)}</a></strong>`
+            : "<strong>--</strong>"}</div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Địa chỉ</small><strong>${escapeReceiptHtml(supplier.address || "--")}</strong></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Ngày tạo</small><strong>${supplier.createdAt ? formatDateTime(supplier.createdAt) : "--"}</strong></div>
+          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Trạng thái hợp tác</small><strong style="color:${isActive ? "#047857" : "#991b1b"};">${isActive ? "Đang hợp tác" : "Ngừng hợp tác"}</strong></div>
+        </div>
+      </div>
+    `;
   }
 
   window.editSupplier = (id) => {
@@ -2283,29 +2564,162 @@
   function initAnalyticsInputs() {
     const now = new Date();
     const curYear = now.getFullYear();
-    const curMonth = String(now.getMonth() + 1).padStart(2, "0");
-    const curDay = String(now.getDate()).padStart(2, "0");
-    const monthVal = `${curYear}-${curMonth}`;
 
-    const mInput = document.getElementById("analyticsMonthInput");
-    if (mInput && (!mInput.value || mInput.value === "2026-10")) {
-      mInput.value = monthVal;
+    // Bộ lọc tháng của khung lọc chung: năm + tháng (có "Tất cả" = cả 12 tháng)
+    const mYearSelect = document.getElementById("analyticsMonthYearSelect");
+    if (mYearSelect && mYearSelect.options.length === 0) {
+      for (let y = curYear; y >= curYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        mYearSelect.appendChild(opt);
+      }
+      mYearSelect.value = String(curYear);
     }
-
-    const sInput = document.getElementById("analyticsStartDate");
-    if (sInput && (!sInput.value || sInput.value === "2026-09-01")) {
-      sInput.value = `${curYear}-${curMonth}-01`;
-    }
-
-    const eInput = document.getElementById("analyticsEndDate");
-    if (eInput && (!eInput.value || eInput.value === "2026-10-31")) {
-      eInput.value = `${curYear}-${curMonth}-${curDay}`;
+    const mSelect = document.getElementById("analyticsMonthSelect");
+    if (mSelect && mSelect.options.length === 0) {
+      const allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = "Tất cả";
+      mSelect.appendChild(allOpt);
+      for (let m = 1; m <= 12; m++) {
+        const opt = document.createElement("option");
+        opt.value = String(m);
+        opt.textContent = `Tháng ${m}`;
+        mSelect.appendChild(opt);
+      }
+      mSelect.value = "all";
     }
 
     const ySelect = document.getElementById("analyticsYearSelect");
-    if (ySelect && !ySelect.value) {
-      ySelect.value = String(curYear);
+    if (ySelect && ySelect.options.length === 0) {
+      // Danh sách năm: 3 năm trước + năm hiện tại, sắp xếp giảm dần
+      const now = new Date();
+      const thisYear = now.getFullYear();
+      for (let y = thisYear; y >= thisYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        ySelect.appendChild(opt);
+      }
+      ySelect.value = String(thisYear);
     }
+
+    const yQuarterSelect = document.getElementById("analyticsQuarterYearSelect");
+    if (yQuarterSelect && yQuarterSelect.options.length === 0) {
+      for (let y = curYear; y >= curYear - 3; y--) {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = `Năm ${y}`;
+        yQuarterSelect.appendChild(opt);
+      }
+      yQuarterSelect.value = String(curYear);
+    }
+
+    // Input mặc định cho bộ lọc pill của 2 bảng báo cáo chính (tổng thu-chi-lợi nhuận & sản phẩm × quý)
+    ["sum", "prod"].forEach((pre) => {
+      const pMonthYear = document.getElementById(`${pre}MonthYearSelect`);
+      if (pMonthYear && pMonthYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pMonthYear.appendChild(opt);
+        }
+        pMonthYear.value = String(curYear);
+      }
+      const pMonthSel = document.getElementById(`${pre}MonthSelect`);
+      if (pMonthSel && pMonthSel.options.length === 0) {
+        const allOpt = document.createElement("option");
+        allOpt.value = "all";
+        allOpt.textContent = "Tất cả";
+        pMonthSel.appendChild(allOpt);
+        for (let m = 1; m <= 12; m++) {
+          const opt = document.createElement("option");
+          opt.value = String(m);
+          opt.textContent = `Tháng ${m}`;
+          pMonthSel.appendChild(opt);
+        }
+        pMonthSel.value = "all";
+      }
+      const pQuarterYear = document.getElementById(`${pre}QuarterYearSelect`);
+      if (pQuarterYear && pQuarterYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pQuarterYear.appendChild(opt);
+        }
+        pQuarterYear.value = String(curYear);
+      }
+      const pQuarterSel = document.getElementById(`${pre}QuarterSelect`);
+      if (pQuarterSel && pQuarterSel.options.length === 0) {
+        for (let q = 1; q <= 4; q++) {
+          const opt = document.createElement("option");
+          opt.value = String(q);
+          opt.textContent = `Quý ${q}`;
+          pQuarterSel.appendChild(opt);
+        }
+        pQuarterSel.value = String(Math.floor(new Date().getMonth() / 3) + 1);
+      }
+      const pQuarterMonth = document.getElementById(`${pre}QuarterMonthSelect`);
+      if (pQuarterMonth && pQuarterMonth.options.length === 0) {
+        buildQuarterMonthOptions(pQuarterMonth, pQuarterSel?.value, true);
+      }
+      const pYear = document.getElementById(`${pre}YearSelect`);
+      if (pYear && pYear.options.length === 0) {
+        for (let y = curYear; y >= curYear - 3; y--) {
+          const opt = document.createElement("option");
+          opt.value = String(y);
+          opt.textContent = `Năm ${y}`;
+          pYear.appendChild(opt);
+        }
+        pYear.value = String(curYear);
+      }
+    });
+
+    initQuarterSelects();
+  }
+
+  // Tháng trong quý: chỉ cho chọn 1 trong 3 tháng của quý đang chọn
+  function buildQuarterMonthOptions(sel, quarter, includeAll = false) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    if (includeAll) {
+      const allOpt = document.createElement("option");
+      allOpt.value = "all";
+      allOpt.textContent = "Tất cả";
+      sel.appendChild(allOpt);
+    }
+    const start = ((Number(quarter) || 1) - 1) * 3 + 1;
+    for (let m = start; m < start + 3; m++) {
+      const opt = document.createElement("option");
+      opt.value = String(m).padStart(2, "0");
+      opt.textContent = `Tháng ${m}`;
+      sel.appendChild(opt);
+    }
+  }
+
+  function initQuarterSelects() {
+    const qNow = Math.floor(new Date().getMonth() / 3) + 1;
+    [
+      ["analyticsQuarterSelect", "analyticsQuarterMonthSelect"],
+    ].forEach(([qId, mId]) => {
+      const qSel = document.getElementById(qId);
+      const mSel = document.getElementById(mId);
+      if (qSel && qSel.options.length === 0) {
+        for (let q = 1; q <= 4; q++) {
+          const opt = document.createElement("option");
+          opt.value = String(q);
+          opt.textContent = `Quý ${q}`;
+          qSel.appendChild(opt);
+        }
+      }
+      if (qSel && !qSel.value) qSel.value = String(qNow);
+      if (mSel && (!mSel.options.length || qSel?.value)) {
+        buildQuarterMonthOptions(mSel, qSel?.value || qNow);
+      }
+    });
   }
 
   function renderDonutChart(statusCounts = {}) {
@@ -2421,7 +2835,7 @@
     const totProfit = Math.max(0, totRev - totCost);
     const totRate = totOrders > 0 ? Math.round((totDelivered / totOrders) * 100) : 0;
 
-    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ giao", "Doanh thu bán", "Chi phí nhập", "Lợi nhuận gộp"]) +
+    table.innerHTML = buildRowHeader(["Thời gian", "Tổng đơn", "Đơn hoàn thành", "Tỷ lệ giao", "Doanh thu bán", "Chi phí nhập", "Lợi nhuận gộp"], "1.3fr 0.8fr 1fr 1fr 1.3fr 1.3fr 1.3fr") +
       displayRows.map((r) => {
         const isPeakRow = maxRowRev > 0 && r.revenue === maxRowRev;
         return `
@@ -2598,7 +3012,7 @@
 
     const MEDAL_ICONS = ["🥇", "🥈", "🥉", "4", "5"];
 
-    topProdBox.innerHTML = buildRowHeader(["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra", "Doanh thu tạo ra"]) +
+    topProdBox.innerHTML = buildRowHeader(["Xếp hạng", "Tên trang sức / sản phẩm", "Số lượng bán ra", "Doanh thu tạo ra"], "80px 2.2fr 1.2fr 1.3fr") +
       topProducts.map((p, idx) => `
         <div class="admin-row" style="grid-template-columns: 80px 2.2fr 1.2fr 1.3fr;">
           <strong style="font-size:15px;">${MEDAL_ICONS[idx] || (idx + 1)}</strong>
@@ -2617,16 +3031,25 @@
       currentAnalyticsPeriod = period;
 
       let q = `?period=${encodeURIComponent(period)}`;
-      if (period === "day") {
-        const s = filterParams.startDate || document.getElementById("analyticsStartDate")?.value || "2026-11-01";
-        const e = filterParams.endDate || document.getElementById("analyticsEndDate")?.value || "2026-11-06";
-        q += `&startDate=${encodeURIComponent(s)}&endDate=${encodeURIComponent(e)}`;
-      } else if (period === "year") {
+      // "Tất cả" tháng -> /analytics trả 12 tháng của năm; bộ lọc vẫn hiển thị "Theo tháng"
+      let renderPeriod = period;
+      if (period === "year") {
         const y = filterParams.year || document.getElementById("analyticsYearSelect")?.value || "2026";
         q += `&year=${encodeURIComponent(y)}`;
+      } else if (period === "quarter") {
+        // Chế độ quý: chọn 1 tháng trong quý -> gửi month=YYYY-MM cho /analytics
+        const yy = document.getElementById("analyticsQuarterYearSelect")?.value || String(new Date().getFullYear());
+        const mm = document.getElementById("analyticsQuarterMonthSelect")?.value || "01";
+        q = `?period=month&month=${encodeURIComponent(`${yy}-${mm}`)}`;
       } else {
-        const m = filterParams.month || document.getElementById("analyticsMonthInput")?.value || "2026-11";
-        q += `&month=${encodeURIComponent(m)}`;
+        const yy = document.getElementById("analyticsMonthYearSelect")?.value || String(new Date().getFullYear());
+        const mm = document.getElementById("analyticsMonthSelect")?.value || "all";
+        if (mm === "all") {
+          q = `?period=year&year=${encodeURIComponent(yy)}`;
+          renderPeriod = "year";
+        } else {
+          q += `&month=${encodeURIComponent(`${yy}-${String(mm).padStart(2, "0")}`)}`;
+        }
       }
 
       const noticeEl = document.getElementById("analyticsFilterNotice");
@@ -2660,13 +3083,13 @@
       }
 
       // Render biểu đồ cột doanh thu
-      renderRevenueBarChart(data.breakdown || data.revenueByPeriod || {}, period, sum.totalRevenue);
+      renderRevenueBarChart(data.breakdown || data.revenueByPeriod || {}, renderPeriod, sum.totalRevenue);
 
       // Render biểu đồ tròn tỷ lệ trạng thái đơn hàng
       renderDonutChart(data.statusCounts);
 
       // Render bảng số liệu chi tiết
-      renderBreakdownTable(data.breakdown, period);
+      renderBreakdownTable(data.breakdown, renderPeriod);
 
       // Render top sản phẩm bán chạy
       renderTopProducts(data.topProducts, data.topProductsType);
@@ -2812,6 +3235,86 @@
     wsStatus["!cols"] = [{ wch: 16 }, { wch: 25 }, { wch: 16 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, wsStatus, "TrangThai_DonHang");
 
+    // 5-8. SHEETS BÁO CÁO TỔNG HỢP (từ /admin/reports, tải sẵn khi mở tab Thống kê)
+    if (state.reports) {
+      const r = state.reports;
+      const qCols = ["Hạng mục", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
+      const sumCol = (arr = []) => arr.reduce((a, v) => a + (Number(v) || 0), 0);
+
+      // 5. SẢN PHẨM × QUÝ
+      const pRows = [
+        ["TỔNG HÓA ĐƠN THEO SẢN PHẨM × QUÝ"],
+        [`Năm: ${r.productQuarters?.year || r.currentYear}`],
+        [],
+        qCols,
+      ];
+      (r.productQuarters.rows || []).forEach((row) => {
+        pRows.push([row.name, ...[1, 2, 3, 4].map((i) => Number(row[`q${i}`] || 0)), Number(row.total || 0)]);
+      });
+      pRows.push([
+        "Tổng cộng",
+        ...[1, 2, 3, 4].map((i) => sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0))),
+        sumCol((r.productQuarters.rows || []).map((row) => row.total || 0)),
+      ]);
+      const wsProdQ = XLSX.utils.aoa_to_sheet(pRows);
+      wsProdQ["!cols"] = [{ wch: 40 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsProdQ, "SanPham_Quy");
+
+      // 6. THU / CHI / LỢI NHUẬN × QUÝ
+      const qs = r.quarterlySummary || { year: r.currentYear, revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+      const qsRows = [
+        ["TỔNG THU / TỔNG CHI / LỢI NHUẬN THEO QUÝ"],
+        [`Năm: ${qs.year || r.currentYear}`],
+        [],
+        qCols,
+        ["Tổng thu", ...qs.revenue.map(Number), sumCol(qs.revenue)],
+        ["Tổng chi", ...qs.cost.map(Number), sumCol(qs.cost)],
+        ["Lợi nhuận", ...qs.profit.map(Number), sumCol(qs.profit)],
+      ];
+      const wsQS = XLSX.utils.aoa_to_sheet(qsRows);
+      wsQS["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsQS, "Thu_Chi_LoiNhuan_Quy");
+
+      // 7. NHÂN VIÊN × NĂM
+      const ey = r.employeeYears || { years: [], rows: [] };
+      const eyRows = [
+        ["TỔNG HÓA ĐƠN THEO NHÂN VIÊN × NĂM"],
+        [],
+        ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"],
+      ];
+      (ey.rows || []).forEach((row) => {
+        const vals = ey.years.map((y) => Number(row.values?.[y] || 0));
+        eyRows.push([row.name, ...vals, sumCol(vals)]);
+      });
+      eyRows.push([
+        "Tổng cộng",
+        ...ey.years.map((y) => sumCol((ey.rows || []).map((row) => row.values?.[y] || 0))),
+        sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => Number(row.values?.[y] || 0)))),
+      ]);
+      const wsEmpY = XLSX.utils.aoa_to_sheet(eyRows);
+      wsEmpY["!cols"] = [{ wch: 30 }, ...ey.years.map(() => ({ wch: 16 })), { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsEmpY, "NhanVien_Nam");
+
+      // 8. KHÁCH HÀNG × QUÝ
+      const cqRows = [
+        ["TỔNG HÓA ĐƠN THEO KHÁCH HÀNG × QUÝ"],
+        [`Năm: ${r.customerQuarters?.year || r.currentYear}`],
+        [],
+        qCols,
+      ];
+      (r.customerQuarters.rows || []).forEach((row) => {
+        cqRows.push([row.name, ...[1, 2, 3, 4].map((i) => Number(row[`q${i}`] || 0)), Number(row.total || 0)]);
+      });
+      cqRows.push([
+        "Tổng cộng",
+        ...[1, 2, 3, 4].map((i) => sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0))),
+        sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0)),
+      ]);
+      const wsCustQ = XLSX.utils.aoa_to_sheet(cqRows);
+      wsCustQ["!cols"] = [{ wch: 30 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsCustQ, "KhachHang_Quy");
+    }
+
     // Đặt tên file xuất
     const now = new Date();
     const dateStamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
@@ -2824,6 +3327,439 @@
   }
 
   window.exportAnalyticsToExcel = exportAnalyticsToExcel;
+
+  // ---------- BÁO CÁO TỔNG HỢP (sản phẩm/quý, thu-chi/quý, nhân viên/năm, khách hàng/quý) ----------
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function sumCol(arr = []) {
+    return arr.reduce((a, v) => a + (Number(v) || 0), 0);
+  }
+
+  function renderReportTable(containerId, columns, rows, totalRow = null) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  if (!rows || rows.length === 0) {
+    box.innerHTML = '<div class="admin-empty">Chưa có dữ liệu trong khoảng thời gian này</div>';
+    return;
+  }
+
+  const numCols = columns.length - 1;
+  const firstW = 220;
+  const colW = numCols > 6 ? 130 : 110;
+  const gridCols = `minmax(${firstW}px, 2fr) repeat(${numCols}, minmax(${colW}px, 1fr))`;
+  const minW = firstW + numCols * colW + numCols * 12 + 28;
+  const rowStyle = `grid-template-columns: ${gridCols}; min-width: ${minW}px;`;
+
+  const firstStyle = "min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35;";
+  const numStyle = "min-width: 0; white-space: nowrap;";
+
+  const headerHtml = `
+    <div class="admin-row admin-row-header header-row" style="${rowStyle}">
+      ${columns.map((c, i) => `<strong style="${i === 0 ? firstStyle : numStyle}">${esc(c)}</strong>`).join("")}
+    </div>`;
+
+  const rowHtml = (cells, isTotal) =>
+    `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="${rowStyle}">` +
+    cells.map((cell, idx) =>
+      idx === 0
+        ? `<strong style="${firstStyle}" title="${esc(cell)}">${esc(cell)}</strong>`
+        : `<strong style="${numStyle}${isTotal ? " color: var(--admin-green);" : ""}">${esc(cell)}</strong>`
+    ).join("") +
+    `</div>`;
+
+  box.innerHTML =
+    headerHtml +
+    rows.map((r) => rowHtml(r, false)).join("") +
+    (totalRow ? rowHtml(totalRow, true) : "");
+}
+
+  function renderReports() {
+    const r = state.reports;
+    if (!r) return;
+
+    // A. Tổng thu / tổng chi / lợi nhuận (bộ lọc pill riêng) - trục thời gian theo bộ lọc
+    const qs = r.filteredSummary || r.quarterlySummary || { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+    const qsBuckets = qs.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
+    const sumLabel = document.getElementById("sumFilterLabel");
+    if (sumLabel) sumLabel.textContent = qs.label ? `Kỳ lọc: ${qs.label}` : "";
+    const qsRows = [
+      ["Tổng thu", ...qs.revenue.map((v) => formatMoney(v)), formatMoney(sumCol(qs.revenue))],
+      ["Tổng chi", ...qs.cost.map((v) => formatMoney(v)), formatMoney(sumCol(qs.cost))],
+      ["Lợi nhuận", ...qs.profit.map((v) => formatMoney(v)), formatMoney(sumCol(qs.profit))],
+    ];
+    renderReportTable("reportQuarterlySummary", ["", ...qsBuckets, "Tổng cộng"], qsRows, null);
+
+    // B. Tổng hóa đơn theo sản phẩm (bộ lọc pill riêng) - tối đa 5 dòng
+    const fp = r.filteredProducts || r.productQuarters || { rows: [] };
+    const fpBuckets = fp.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
+    const fpRowVals = (row) => (fp.buckets ? (row.values || []) : [1, 2, 3, 4].map((i) => row[`q${i}`] || 0));
+    const prodLabel = document.getElementById("prodFilterLabel");
+    if (prodLabel) prodLabel.textContent = fp.label ? `Kỳ lọc: ${fp.label}` : "";
+    const pRows = (fp.rows || []).slice(0, 5).map((row) => [
+      row.name,
+      ...fpRowVals(row).map((v) => formatMoney(v)),
+      formatMoney(row.total || 0),
+    ]);
+    const pTotal = [
+      "Tổng cộng",
+      ...fpBuckets.map((_, i) => formatMoney(sumCol((fp.rows || []).map((row) => fpRowVals(row)[i] || 0)))),
+      formatMoney(sumCol((fp.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportProductQuarters", ["", ...fpBuckets, "Tổng cộng"], pRows, pTotal);
+
+    // C. Tổng hóa đơn theo nhân viên (bộ lọc chung) - tối đa 5 dòng
+    const fe = r.filteredEmployeeYears || { buckets: QUARTER_LABELS, rows: [] };
+    const feBuckets = fe.buckets || QUARTER_LABELS;
+    const bucketUnit = fe.mode === "year" ? "× năm" : "× tháng";
+    const empTitle = document.getElementById("reportEmployeeTitle");
+    if (empTitle) empTitle.textContent = `Tổng hóa đơn theo nhân viên ${bucketUnit}`;
+    const feRows = (fe.rows || []).slice(0, 5).map((row) => [
+      row.name,
+      ...(row.values || []).map((v) => formatMoney(v)),
+      formatMoney(row.total || 0),
+    ]);
+    const feTotal = [
+      "Tổng cộng",
+      ...feBuckets.map((_, i) => formatMoney(sumCol((fe.rows || []).map((row) => row.values?.[i] || 0)))),
+      formatMoney(sumCol((fe.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportEmployeeYears", ["", ...feBuckets, "Tổng cộng"], feRows, feTotal);
+
+    // D. Tổng hóa đơn theo khách hàng (bộ lọc chung) - tối đa 5 dòng
+    const fc = r.filteredCustomerQuarters || { buckets: QUARTER_LABELS, rows: [] };
+    const fcBuckets = fc.buckets || QUARTER_LABELS;
+    const custTitle = document.getElementById("reportCustomerTitle");
+    if (custTitle) custTitle.textContent = `Tổng hóa đơn theo khách hàng ${fc.mode === "year" ? "× năm" : "× tháng"}`;
+    const fcRows = (fc.rows || []).slice(0, 5).map((row) => [
+      row.name,
+      ...(row.values || []).map((v) => formatMoney(v)),
+      formatMoney(row.total || 0),
+    ]);
+    const fcTotal = [
+      "Tổng cộng",
+      ...fcBuckets.map((_, i) => formatMoney(sumCol((fc.rows || []).map((row) => row.values?.[i] || 0)))),
+      formatMoney(sumCol((fc.rows || []).map((row) => row.total || 0))),
+    ];
+    renderReportTable("reportCustomerQuarters", ["", ...fcBuckets, "Tổng cộng"], fcRows, fcTotal);
+
+    // Hai biểu đồ cột cho 2 bảng trên (theo đúng dữ liệu bảng + bộ lọc đang chọn)
+    renderQuarterSummaryChart(qs);
+    renderQuarterProductsChart(fp);
+  }
+
+  const QUARTER_LABELS = ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
+
+  // Trục dọc dùng chung cho 2 biểu đồ (3 mốc: đỉnh / giữa / 0)
+  function renderChartYAxis(yAxisId, maxVal) {
+    const yAxisEl = document.getElementById(yAxisId);
+    if (!yAxisEl) return 100;
+    if (maxVal <= 0) {
+      yAxisEl.innerHTML = `<span>10 tr</span><span>5 tr</span><span>0 ₫</span>`;
+    } else {
+      const topCeil = Math.ceil(maxVal * 1.15);
+      yAxisEl.innerHTML = `
+        <span>${formatCompactMoney(topCeil)}</span>
+        <span>${formatCompactMoney(Math.round(topCeil / 2))}</span>
+        <span>0 ₫</span>
+      `;
+    }
+    return maxVal > 0 ? maxVal * 1.15 : 100;
+  }
+
+  // Biểu đồ 1: mỗi mốc thời gian một nhóm 3 cột (tổng thu / tổng chi / lợi nhuận)
+  function renderQuarterSummaryChart(qs) {
+    const barsBox = document.getElementById("sumChartBars");
+    if (!barsBox) return;
+    const buckets = qs?.buckets || QUARTER_LABELS;
+    const revenue = qs?.revenue || buckets.map(() => 0);
+    const cost = qs?.cost || buckets.map(() => 0);
+    const profit = qs?.profit || buckets.map(() => 0);
+    const maxVal = Math.max(...revenue, ...cost, ...profit, 0);
+    const scaleMax = renderChartYAxis("sumChartYAxis", maxVal);
+
+    const series = [
+      { key: "g-rev", name: "Tổng thu", vals: revenue },
+      { key: "g-cost", name: "Tổng chi", vals: cost },
+      { key: "g-profit", name: "Lợi nhuận", vals: profit },
+    ];
+
+    barsBox.innerHTML = buckets.map((ql, i) => `
+      <div class="bar-col has-revenue">
+        <div class="chart-tooltip">
+          <div class="chart-tooltip-title">${ql}</div>
+          ${series.map((s) => `<div class="chart-tooltip-row"><span>${s.name}:</span> <strong>${formatMoney(s.vals[i])}</strong></div>`).join("")}
+        </div>
+        <div class="grp-bars">
+          ${series.map((s) => `<div class="grp-bar ${s.key}" style="height:${Math.max(2, Math.round((Number(s.vals[i]) / scaleMax) * 100))}%;" title="${s.name} ${ql}: ${formatMoney(s.vals[i])}"></div>`).join("")}
+        </div>
+      </div>
+    `).join("");
+
+    const xAxisEl = document.getElementById("sumChartXAxis");
+    if (xAxisEl) {
+      xAxisEl.innerHTML = buckets.map((ql) => `<div class="x-axis-item has-revenue">${ql}</div>`).join("");
+    }
+  }
+
+  // Biểu đồ 2: mỗi mốc thời gian một cột = tổng doanh thu top sản phẩm tại mốc đó
+  function renderQuarterProductsChart(fp) {
+    const barsBox = document.getElementById("prodChartBars");
+    if (!barsBox) return;
+    const buckets = fp?.buckets || QUARTER_LABELS;
+    const rows = (fp?.rows || []).slice(0, 5);
+    const fpRowVals = (r) => (fp?.buckets ? (r.values || []) : [1, 2, 3, 4].map((i) => r[`q${i}`] || 0));
+    const quarterTotals = buckets.map((_, i) => rows.reduce((a, r) => a + (Number(fpRowVals(r)[i]) || 0), 0));
+    const maxVal = Math.max(...quarterTotals, 0);
+    const scaleMax = renderChartYAxis("prodChartYAxis", maxVal);
+
+    barsBox.innerHTML = quarterTotals.map((num, i) => {
+      const hasRevenue = num > 0;
+      return `
+        <div class="bar-col ${hasRevenue ? "has-revenue" : "is-zero"}">
+          <div class="chart-tooltip">
+            <div class="chart-tooltip-title">Top sản phẩm - ${buckets[i]}</div>
+            ${rows.slice(0, 3).map((r) => `<div class="chart-tooltip-row"><span>${esc(r.name)}:</span> <strong>${formatMoney(fpRowVals(r)[i] || 0)}</strong></div>`).join("")}
+          </div>
+          <div class="bar-fill" style="height:${hasRevenue ? Math.max(10, Math.round((num / scaleMax) * 100)) : 0}%;"></div>
+        </div>
+      `;
+    }).join("");
+
+    const xAxisEl = document.getElementById("prodChartXAxis");
+    if (xAxisEl) {
+      xAxisEl.innerHTML = buckets.map((ql, i) => `<div class="x-axis-item ${quarterTotals[i] > 0 ? "has-revenue" : ""}">${ql}</div>`).join("");
+    }
+  }
+
+  // Năm dùng chung hiện tại của bộ lọc chung (dùng cho các bảng còn lại)
+  function sharedFilterYear() {
+    const ySel = document.getElementById("analyticsYearSelect")?.value || "";
+    if (currentAnalyticsPeriod === "quarter") {
+      return document.getElementById("analyticsQuarterYearSelect")?.value || ySel;
+    }
+    if (currentAnalyticsPeriod === "month") {
+      return document.getElementById("analyticsMonthYearSelect")?.value || ySel;
+    }
+    return ySel;
+  }
+
+  // Tham số bộ lọc pill cho 1 trong 2 bảng chính (key: "sum" | "prod")
+  function buildReportQParams(key) {
+    const st = reportFilterState[key];
+    const p = [];
+    const add = (k, v) => { if (v) p.push(`${k}=${encodeURIComponent(v)}`); };
+    add(`${key}Mode`, st.mode);
+    if (st.mode === "month") {
+      add(`${key}Month`, document.getElementById(`${key}MonthSelect`)?.value || "all");
+      add(`${key}Year`, document.getElementById(`${key}MonthYearSelect`)?.value);
+    } else if (st.mode === "quarter") {
+      // Chọn năm + quý + tháng trong quý -> 3 tháng của quý ("Tất cả") hoặc 1 tháng
+      add(`${key}Year`, document.getElementById(`${key}QuarterYearSelect`)?.value);
+      add(`${key}Quarter`, document.getElementById(`${key}QuarterSelect`)?.value);
+      add(`${key}Month`, document.getElementById(`${key}QuarterMonthSelect`)?.value || "all");
+    } else {
+      add(`${key}Year`, document.getElementById(`${key}YearSelect`)?.value);
+    }
+    return p.join("&");
+  }
+
+  // Tham số bộ lọc chung cho 2 bảng còn lại (nhân viên, khách hàng)
+  function buildSharedQParams() {
+    const p = [];
+    const add = (k, v) => { if (v) p.push(`${k}=${encodeURIComponent(v)}`); };
+    add("sharedMode", currentAnalyticsPeriod);
+    if (currentAnalyticsPeriod === "quarter") {
+      add("sharedYear", document.getElementById("analyticsQuarterYearSelect")?.value);
+      add("sharedQuarter", document.getElementById("analyticsQuarterSelect")?.value);
+      add("sharedMonth", document.getElementById("analyticsQuarterMonthSelect")?.value);
+    } else if (currentAnalyticsPeriod === "month") {
+      add("sharedYear", document.getElementById("analyticsMonthYearSelect")?.value);
+      add("sharedMonth", document.getElementById("analyticsMonthSelect")?.value || "all");
+    } else {
+      add("sharedYear", document.getElementById("analyticsYearSelect")?.value);
+    }
+    return p.join("&");
+  }
+
+  async function loadReports() {
+    try {
+      initAnalyticsInputs();
+      const params = [buildReportQParams("sum"), buildReportQParams("prod"), buildSharedQParams()];
+      const year = sharedFilterYear();
+      if (year) params.push(`year=${encodeURIComponent(year)}`);
+      const data = await api(`/reports?${params.filter(Boolean).join("&")}`);
+      state.reports = data;
+
+      renderReports();
+    } catch (err) {
+      console.error("Lỗi tải báo cáo tổng hợp:", err);
+      toast("Lỗi tải báo cáo tổng hợp: " + err.message, "error");
+    }
+  }
+
+  window.loadReports = loadReports;
+
+  // Trạng thái bộ lọc pill của 2 bảng chính (mặc định: theo tháng - tất cả 12 tháng của năm hiện tại)
+  const reportFilterState = {
+    sum: { mode: "month" },
+    prod: { mode: "month" },
+  };
+
+  // Đổi chế độ bộ lọc pill cho 1 bảng chính
+  function setReportFilterMode(key, mode) {
+    reportFilterState[key].mode = mode;
+    const box = document.getElementById(`${key}PillFilter`);
+    box?.querySelectorAll(".pill-seg-btn").forEach((b) =>
+      b.classList.toggle("active", b.getAttribute("data-qmode") === mode)
+    );
+    ["Month", "Quarter", "Year"].forEach((suf) => {
+      const g = document.getElementById(`${key}Group${suf}`);
+      if (g) g.style.display = mode === suf.toLowerCase() ? "flex" : "none";
+    });
+    loadReports();
+  }
+
+  [["sumPillFilter", "sum"], ["prodPillFilter", "prod"]].forEach(([id, key]) => {
+    document.getElementById(id)?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".pill-seg-btn");
+      if (!btn) return;
+      setReportFilterMode(key, btn.getAttribute("data-qmode"));
+    });
+  });
+
+  // Đổi quý -> chỉ cập nhật danh sách "Tất cả" + 3 tháng của quý (dữ liệu tải khi bấm "Lọc dữ liệu")
+  ["sum", "prod"].forEach((key) => {
+    document.getElementById(`${key}QuarterSelect`)?.addEventListener("change", (e) => {
+      buildQuarterMonthOptions(document.getElementById(`${key}QuarterMonthSelect`), e.target.value, true);
+    });
+  });
+
+  // Bộ lọc pill chỉ áp dụng khi bấm nút "Lọc dữ liệu" (không tự tải lại theo select)
+
+  // Năm trong bộ lọc Thống kê cũng điều khiển Báo cáo tổng hợp
+  document.getElementById("analyticsYearSelect")?.addEventListener("change", () => {
+    loadAnalytics({ period: currentAnalyticsPeriod });
+    loadReports();
+  });
+
+  // Nút "Lọc dữ liệu" riêng của 2 bảng chính -> tải lại báo cáo
+  ["sumApplyBtn", "prodApplyBtn"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", loadReports);
+  });
+
+  // In báo cáo tổng hợp ra cửa sổ riêng -> người dùng chọn "Save as PDF"
+  window.printReportsWindow = () => {
+    const r = state.reports;
+    if (!r) {
+      toast("Chưa có dữ liệu báo cáo để in. Vui lòng thử lại!", "error");
+      return;
+    }
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      alert("Trình duyệt đã chặn cửa sổ in. Vui lòng cho phép popup.");
+      return;
+    }
+
+    const qCols = ["Hạng mục", "Quý 1", "Quý 2", "Quý 3", "Quý 4", "Tổng cộng"];
+    const money = (n) => formatMoney(n || 0);
+    const sumCol = (arr = []) => arr.reduce((a, v) => a + (Number(v) || 0), 0);
+
+    const table = (title, headers, rows, footRow = null) => {
+      if (!rows.length && !footRow) return "";
+      return `
+        <h3>${esc(title)}</h3>
+        <table>
+          <thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${rows.map((cells) => `<tr>${cells.map((c, i) => `<td class="${i === 0 ? "name" : "text-right"}">${esc(c)}</td>`).join("")}</tr>`).join("")}
+            ${footRow ? `<tr class="total-row">${footRow.map((c, i) => `<td class="${i === 0 ? "name" : "text-right"}">${esc(c)}</td>`).join("")}</tr>` : ""}
+          </tbody>
+        </table>`;
+    };
+
+    const pRows = (r.productQuarters.rows || []).map((row) => [
+      row.name, ...[1, 2, 3, 4].map((i) => money(row[`q${i}`])), money(row.total),
+    ]);
+    const pFoot = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => money(sumCol((r.productQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      money(sumCol((r.productQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+
+    const qs = r.quarterlySummary || { year: r.currentYear, revenue: [], cost: [], profit: [] };
+    const qsRows = [
+      ["Tổng thu", ...qs.revenue.map(money), money(sumCol(qs.revenue))],
+      ["Tổng chi", ...qs.cost.map(money), money(sumCol(qs.cost))],
+      ["Lợi nhuận", ...qs.profit.map(money), money(sumCol(qs.profit))],
+    ];
+
+    const ey = r.employeeYears || { years: [], rows: [] };
+    const eyHeaders = ["Nhân viên", ...ey.years.map((y) => `Năm ${y}`), "Tổng cộng"];
+    const eyRows = (ey.rows || []).map((row) => [
+      row.name,
+      ...ey.years.map((y) => money(row.values?.[y])),
+      money(sumCol(ey.years.map((y) => row.values?.[y] || 0))),
+    ]);
+    const eyFoot = [
+      "Tổng cộng",
+      ...ey.years.map((y) => money(sumCol((ey.rows || []).map((row) => row.values?.[y] || 0)))),
+      money(sumCol((ey.rows || []).flatMap((row) => ey.years.map((y) => row.values?.[y] || 0)))),
+    ];
+
+    const cqRows = (r.customerQuarters.rows || []).map((row) => [
+      row.name, ...[1, 2, 3, 4].map((i) => money(row[`q${i}`])), money(row.total),
+    ]);
+    const cqFoot = [
+      "Tổng cộng",
+      ...[1, 2, 3, 4].map((i) => money(sumCol((r.customerQuarters.rows || []).map((row) => row[`q${i}`] || 0)))),
+      money(sumCol((r.customerQuarters.rows || []).map((row) => row.total || 0))),
+    ];
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Báo cáo tổng hợp - Năm ${r.quarterlySummary?.year || r.currentYear}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; color: #222; }
+          .rep-header { display: flex; justify-content: space-between; border-bottom: 2px solid #b98a3e; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo { font-size: 22px; font-weight: 700; color: #1b382b; }
+          h3 { margin: 22px 0 8px; font-size: 15px; color: #1b382b; }
+          table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; }
+          th, td { border: 1px solid #ddd; padding: 7px 9px; font-size: 12px; }
+          th { background: #f8f6f0; text-align: right; }
+          th:first-child, td.name { text-align: left; }
+          td.text-right { text-align: right; }
+          .total-row td { font-weight: 700; background: #f0f7f1; }
+          @media print {
+            button { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="rep-header">
+          <div>
+            <div class="logo">SAIGON JEWELRY</div>
+            <p style="margin: 4px 0; font-size: 12px; color: #666;">Trụ sở chính: TP. Hồ Chí Minh | MST: 0312345678</p>
+          </div>
+          <div style="text-align: right;">
+            <h2 style="margin: 0; font-size: 18px; color: #b98a3e;">BÁO CÁO TỔNG HỢP</h2>
+            <p style="margin: 4px 0; font-weight: 600;">Năm ${r.quarterlySummary?.year || r.currentYear}</p>
+            <p style="margin: 0; font-size: 12px; color: #666;">Xuất lúc: ${new Date().toLocaleString("vi-VN")}</p>
+          </div>
+        </div>
+        ${table(`Tổng hóa đơn theo sản phẩm × quý (năm ${r.productQuarters?.year || r.currentYear})`, qCols, pRows, pFoot)}
+        ${table(`Tổng thu / tổng chi / lợi nhuận theo quý (năm ${qs.year || r.currentYear})`, qCols, qsRows)}
+        ${table("Tổng hóa đơn theo nhân viên × năm", eyHeaders, eyRows, eyFoot)}
+        ${table(`Tổng hóa đơn theo khách hàng × quý (năm ${r.customerQuarters?.year || r.currentYear})`, qCols, cqRows, cqFoot)}
+        <div style="padding-top: 30px; text-align: center; color: #777; font-size: 12px;">
+          <button onclick="window.print()" style="margin-top: 10px; padding: 8px 18px; cursor: pointer; background: #1b382b; color: #fff; border: none; border-radius: 4px;">In ngay / Lưu PDF</button>
+        </div>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // ---------- MODAL POPUP TIỆN ÍCH ----------
   // Đưa toàn bộ modal backdrop ra trực tiếp thẻ body để tránh bị giới hạn khung bởi transform của panel/module
@@ -2926,7 +3862,7 @@
       case "orders": loadOrders(); break;
       case "stock": loadStock(); break;
       case "suppliers": loadSuppliers(); break;
-      case "analytics": loadAnalytics(); break;
+      case "analytics": loadAnalytics(); loadReports(); break;
     }
   };
 
@@ -3200,23 +4136,85 @@
 
     // 8. Stock Form (Tạo phiếu nhập)
   const stockForm = document.getElementById("stockForm");
+  const addReceiptItemBtn = document.getElementById("addReceiptItemBtn");
+  const receiptItemsContainer = document.getElementById("receiptItemsContainer");
+
+  function updateReceiptItemLabels() {
+    if (!receiptItemsContainer) return;
+    receiptItemsContainer.querySelectorAll(".receipt-item-row").forEach((row, index) => {
+      row.dataset.index = String(index);
+      const heading = row.querySelector(".receipt-item-heading");
+      if (heading) heading.textContent = `Mặt hàng ${index + 1}`;
+    });
+  }
+
+  function setupReceiptItemsForm() {
+    if (!receiptItemsContainer) return;
+    receiptItemsContainer.innerHTML = "";
+    receiptItemsContainer.appendChild(document.createRange().createContextualFragment(buildReceiptItemRow(0, state.products || [])));
+    updateReceiptItemLabels();
+  }
+
+  if (addReceiptItemBtn && receiptItemsContainer) {
+    addReceiptItemBtn.addEventListener("click", () => {
+      const rows = receiptItemsContainer.querySelectorAll(".receipt-item-row");
+      receiptItemsContainer.insertAdjacentHTML("beforeend", buildReceiptItemRow(rows.length, state.products || []));
+      updateReceiptItemLabels();
+      const newRow = receiptItemsContainer.lastElementChild;
+      newRow?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      newRow?.querySelector('[name="itemProductId"]')?.focus();
+    });
+
+    receiptItemsContainer.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const removeButton = target.closest(".receipt-remove-item");
+      if (!removeButton) return;
+
+      const row = removeButton.closest(".receipt-item-row");
+      if (!row) return;
+      const rows = receiptItemsContainer.querySelectorAll(".receipt-item-row");
+      if (rows.length <= 1) {
+        row.querySelector('[name="itemProductId"]').value = "";
+        row.querySelector('[name="itemQuantity"]').value = 1;
+        row.querySelector('[name="itemUnitCost"]').value = "";
+      } else {
+        row.remove();
+      }
+      updateReceiptItemLabels();
+    });
+  }
+
   if (stockForm) {
     stockForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(stockForm);
+      const rows = [...receiptItemsContainer.querySelectorAll(".receipt-item-row")];
+      const items = rows.map((row) => {
+        const productId = row.querySelector('[name="itemProductId"]').value;
+        const quantity = Number(row.querySelector('[name="itemQuantity"]').value || 0);
+        const unitCost = Number(row.querySelector('[name="itemUnitCost"]').value || 0);
+        return { productId, quantity, unitCost };
+      }).filter((item) => item.productId && item.quantity > 0 && item.unitCost >= 0);
+
+      if (items.length === 0) {
+        toast("Vui lòng chọn ít nhất một mặt hàng nhập kho.", "error");
+        return;
+      }
+
       const body = {
         supplierId: fd.get("supplierId"),
-        productId: fd.get("productId"),
-        quantity: Number(fd.get("quantity")),
-        amount: Number(fd.get("amount")),
         date: fd.get("date") || null,
         note: fd.get("note"),
+        items,
       };
+
       try {
         await api("/receipts", { method: "POST", body });
-        toast("Đã tạo phiếu nhập & tự động cộng tồn kho thành công!");
+        toast("Đã tạo phiếu nhập chờ nhập kho. Tồn kho sẽ được cộng sau khi xác nhận hàng đã nhập.", "success");
         stockForm.reset();
         closeFormModal("stockModal");
+        setupReceiptItemsForm();
         loadStock();
         loadProducts();
       } catch (err) {
@@ -3225,7 +4223,7 @@
     });
   }
 
-  // Lắng nghe đổi tab bộ lọc Thống kê (Tháng / Ngày / Năm)
+  // Lắng nghe đổi tab bộ lọc chung (Tháng / Ngày / Quý / Năm)
   const periodTabBtns = document.querySelectorAll(".analytics-tab-btn");
   periodTabBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3235,22 +4233,23 @@
       currentAnalyticsPeriod = period;
 
       const groupMonth = document.getElementById("filterGroupMonth");
-      const groupDay = document.getElementById("filterGroupDay");
+      const groupQuarter = document.getElementById("filterGroupQuarter");
       const groupYear = document.getElementById("filterGroupYear");
 
       if (groupMonth) groupMonth.style.display = period === "month" ? "flex" : "none";
-      if (groupDay) groupDay.style.display = period === "day" ? "flex" : "none";
+      if (groupQuarter) groupQuarter.style.display = period === "quarter" ? "flex" : "none";
       if (groupYear) groupYear.style.display = period === "year" ? "flex" : "none";
 
       loadAnalytics({ period });
     });
   });
 
-  // Lắng nghe nút "Lọc dữ liệu"
+  // Lắng nghe nút "Lọc dữ liệu" (bộ lọc chung -> cả bảng số liệu chi tiết, top sản phẩm và 2 bảng báo cáo còn lại)
   const analyticsApplyBtn = document.getElementById("analyticsApplyBtn");
   if (analyticsApplyBtn) {
     analyticsApplyBtn.addEventListener("click", () => {
       loadAnalytics({ period: currentAnalyticsPeriod });
+      loadReports();
     });
   }
 
@@ -3451,6 +4450,10 @@
         loadStock();
         loadProducts();
         loadOverview();
+        break;
+      }
+      case "RECEIPT_STATUS_CHANGED": {
+        loadStock();
         break;
       }
       case "PROMOTION_CHANGED": {

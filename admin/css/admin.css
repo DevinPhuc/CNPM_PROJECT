@@ -720,10 +720,72 @@ h6 {
   gap: 24px;
   align-items: start;
 }
+
+#stockTable > .header-row,
+#stockTable > .receipt-list-row {
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
 @media (max-width: 1280px) {
   .admin-management-layout.split-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  #stockTable > .header-row {
+    display: none !important;
+  }
+
+  #stockTable > .receipt-list-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas:
+      "code status"
+      "supplier supplier"
+      "items quantity"
+      "date total";
+    gap: 8px 12px;
+    min-width: 0;
+    width: 100%;
+    padding: 13px 15px;
+    border-bottom: 1px solid var(--admin-line);
+    box-sizing: border-box;
+  }
+
+  #stockTable > .receipt-list-row.selected-row {
+    background: #f8fafc !important;
+    border-left: 4px solid #94a3b8 !important;
+    padding-left: 11px;
+  }
+
+  #stockTable > .receipt-list-row.selected-row.receipt-status-pending {
+    background: #fffbeb !important;
+    border-left-color: #f59e0b !important;
+  }
+
+  #stockTable > .receipt-list-row.selected-row.receipt-status-received {
+    background: #ecfdf5 !important;
+    border-left-color: #10b981 !important;
+  }
+
+  .receipt-list-code { grid-area: code; }
+  .receipt-list-status { grid-area: status; justify-self: end; }
+  .receipt-list-supplier { grid-area: supplier; }
+  .receipt-list-item-count { grid-area: items; }
+  .receipt-list-quantity { grid-area: quantity; justify-self: end; }
+  .receipt-list-date { grid-area: date; }
+  .receipt-list-total { grid-area: total; justify-self: end; }
+}
+
+#stockTable > .receipt-list-row.selected-row.receipt-status-pending {
+  background: #fffbeb !important;
+  border-left-color: #f59e0b !important;
+}
+
+#stockTable > .receipt-list-row.selected-row.receipt-status-received {
+  background: #ecfdf5 !important;
+  border-left-color: #10b981 !important;
 }
 
 .admin-side-detail {
@@ -1419,6 +1481,114 @@ h6 {
   color: #5d7061;
   font-style: italic;
   margin-left: auto;
+}
+
+/* KHU BÁO CÁO CHÍNH: BẢNG TRÁI + BIỂU ĐỒ PHẢI */
+.report-duo-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.report-duo-card {
+  border: 1px solid var(--admin-line);
+  background: #fbfcfa;
+  padding: 17px;
+  min-width: 0;
+}
+
+.report-duo-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.report-duo-head h3 {
+  font-family: var(--heading-font);
+  font-size: 16px;
+  margin: 0;
+}
+
+.report-filter-label {
+  font-size: 12px;
+  color: var(--admin-muted);
+  font-style: italic;
+}
+
+/* BỘ LỌC PILL (SEGMENTED CONTROL) CHO 2 BẢNG BÁO CÁO CHÍNH */
+.pill-filter {
+  display: inline-flex;
+  gap: 4px;
+  background: #eef3ee;
+  border: 1px solid #dbe5dc;
+  border-radius: 999px;
+  padding: 4px;
+  margin-top: 10px;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.pill-seg-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--admin-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.pill-seg-btn:hover {
+  color: var(--admin-green);
+}
+
+.pill-seg-btn.active {
+  background: var(--admin-green);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(34, 76, 48, 0.25);
+}
+
+/* BIỂU ĐỒ CỘT NHÓM (thu / chi / lợi nhuận theo quý) */
+.grp-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+  width: 100%;
+}
+
+.grp-bar {
+  width: 15px;
+  max-width: 20px;
+  min-width: 3px;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.grp-bar.g-rev {
+  background: linear-gradient(180deg, #528c64, var(--admin-green));
+}
+
+.grp-bar.g-cost {
+  background: linear-gradient(180deg, #e08a8a, #c0392b);
+}
+
+.grp-bar.g-profit {
+  background: linear-gradient(180deg, #d8b46a, #b18a4b);
+}
+
+@media (max-width: 1100px) {
+  .report-duo-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* BIỂU ĐỒ TRÒN (DONUT CHART) */
@@ -2992,3 +3162,91 @@ html[data-theme="dark"] .admin-modal-close:hover {
   color: var(--ignara-ink);
 }
 
+/* ==========================================================================
+   FIX DARK MODE: 2 bảng báo cáo (.report-duo-card) + dòng TỔNG CỘNG
+   ========================================================================== */
+
+/* Khung bảng: nền trắng, chữ đen (đồng bộ .chart-card bên cạnh) */
+html[data-theme="dark"] .report-duo-card {
+  background: #ffffff !important;
+  border-color: #dce2da !important;
+  color: #111827 !important;
+}
+
+html[data-theme="dark"] .report-duo-card .report-duo-head h3 {
+  color: #111827 !important;
+}
+
+html[data-theme="dark"] .report-duo-card .report-filter-label {
+  color: #4b5563 !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-table-wrap,
+html[data-theme="dark"] .report-duo-card .admin-list {
+  background: #ffffff !important;
+  border-color: #dce2da !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-empty {
+  background: #ffffff !important;
+  color: #4b5563 !important;
+  border-color: #dce2da !important;
+}
+
+/* Dòng dữ liệu */
+html[data-theme="dark"] .report-duo-card .admin-row:not(.header-row):not(.admin-row-header) {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-bottom-color: #edf0eb !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-row:not(.header-row):not(.admin-row-header):hover {
+  background: #f4f6f3 !important;
+  color: #111827 !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-row:not(.header-row):not(.admin-row-header) strong {
+  color: #111827 !important;
+}
+
+/* Dòng tiêu đề cột */
+html[data-theme="dark"] .report-duo-card .admin-row.header-row {
+  background: #f4f6f3 !important;
+  color: #4b5563 !important;
+  border-bottom-color: #dce2da !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-row.header-row strong {
+  color: #4b5563 !important;
+}
+
+/* Dòng "Tổng cộng" trong bảng báo cáo */
+html[data-theme="dark"] .report-duo-card .admin-row.admin-row-header:not(.header-row) {
+  background: #eaf3ec !important;
+  border-top: 2px solid #345b4a !important;
+}
+
+html[data-theme="dark"] .report-duo-card .admin-row.admin-row-header:not(.header-row) strong {
+  color: #1b4d2e !important;
+}
+
+/* Dòng "TỔNG CỘNG" của "Bảng số liệu chi tiết doanh thu & chi phí" (nằm trên panel tối) */
+html[data-theme="dark"] .admin-row.breakdown-row-total {
+  background: var(--ignara-card-2) !important;
+  border-top: 2px solid #e0b36a !important;
+  color: var(--ignara-ink) !important;
+}
+
+html[data-theme="dark"] .admin-row.breakdown-row-total strong {
+  color: var(--ignara-ink) !important;
+}
+
+/* Tiêu đề topbar: cỡ chữ co giãn, luôn một dòng */
+.admin-topbar h1 {
+  font-size: clamp(26px, 2.6vw, 38px);
+  white-space: nowrap;
+}
+
+.admin-topbar > div:first-child {
+  min-width: 0;
+}

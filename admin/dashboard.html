@@ -14,7 +14,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="css/admin.css?v=20261112_4" />
+  <link rel="stylesheet" href="css/admin.css?v=20261118_5" />
   <script>
     (function () {
       try {
@@ -262,32 +262,30 @@
         </div>
       </header>
 
-      <!-- KPI BANNER -->
-      <div class="admin-kpis">
-        <article class="admin-kpi">
-          <span>Tổng doanh thu</span>
-          <strong id="kpiRevenue">0 đ</strong>
-          <small id="kpiInvoicesCount">Từ hóa đơn Supabase</small>
-        </article>
-        <article class="admin-kpi">
-          <span>Đơn đặt hàng</span>
-          <strong id="kpiOrders">0</strong>
-          <small id="kpiOrdersSub">Toàn thời gian</small>
-        </article>
-        <article class="admin-kpi">
-          <span>Khách hàng</span>
-          <strong id="kpiCustomers">0</strong>
-          <small id="kpiCustomersSub">Đã đăng ký</small>
-        </article>
-        <article class="admin-kpi">
-          <span>Tổng tồn kho</span>
-          <strong id="kpiStock">0</strong>
-          <small id="kpiProductsSub">Sản phẩm trong kho</small>
-        </article>
-      </div>
-
       <!-- MODULE 0: TỔNG QUAN -->
       <div class="admin-module active" data-module="overview">
+        <div class="admin-kpis">
+          <article class="admin-kpi">
+            <span>Tổng doanh thu</span>
+            <strong id="kpiRevenue">0 đ</strong>
+            <small id="kpiInvoicesCount">Từ hóa đơn Supabase</small>
+          </article>
+          <article class="admin-kpi">
+            <span>Đơn đặt hàng</span>
+            <strong id="kpiOrders">0</strong>
+            <small id="kpiOrdersSub">Toàn thời gian</small>
+          </article>
+          <article class="admin-kpi">
+            <span>Khách hàng</span>
+            <strong id="kpiCustomers">0</strong>
+            <small id="kpiCustomersSub">Đã đăng ký</small>
+          </article>
+          <article class="admin-kpi">
+            <span>Tổng tồn kho</span>
+            <strong id="kpiStock">0</strong>
+            <small id="kpiProductsSub">Sản phẩm trong kho</small>
+          </article>
+        </div>
         <div class="admin-content-grid">
           <section class="admin-panel admin-panel-wide">
             <div class="panel-heading">
@@ -951,15 +949,25 @@
             <div class="admin-module-actions">
               <input id="stockSearch" class="admin-search" type="search"
                 placeholder="Tìm phiếu nhập, nhà cung cấp..." />
+              <button type="button" class="admin-secondary-btn" id="receiptSortBtn" aria-pressed="false">
+                Sắp xếp: Chờ nhập kho trước
+              </button>
               <button type="button" class="admin-primary-btn" data-add="stock">
                 + Tạo phiếu nhập kho
               </button>
             </div>
           </div>
-          <div class="admin-management-layout">
+          <div class="admin-management-layout split-layout">
             <div class="admin-table-wrap">
               <div class="admin-list" id="stockTable"></div>
             </div>
+            <aside class="admin-side-detail" id="receiptDetailPanel">
+              <div class="admin-detail-placeholder">
+                <span style="font-size:36px; display:block; margin-bottom:12px;">📦</span>
+                <h4>Chi tiết phiếu nhập</h4>
+                <p>Nhấp vào một phiếu trong danh sách để xem thông tin chi tiết tại đây.</p>
+              </div>
+            </aside>
           </div>
 
           <!-- MODAL TẠO PHIẾU NHẬP KHO -->
@@ -976,15 +984,14 @@
                     <option value="">-- Chọn nhà cung cấp --</option>
                   </select>
                 </label>
-                <label>Sản phẩm cần nhập kho
-                  <select name="productId" id="stockProductSelect" required>
-                    <option value="">-- Chọn sản phẩm --</option>
-                  </select>
-                </label>
-                <label>Số lượng sản phẩm nhập<input name="quantity" type="number" min="1" placeholder="20"
-                    required /></label>
-                <label>Tổng giá trị nhập (VNĐ)<input name="amount" type="number" min="0" placeholder="50000000"
-                    required /></label>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin: 8px 0 6px;">
+                  <strong style="font-size: 13px; color: #1f2937;">Danh sách mặt hàng nhập</strong>
+                  <button type="button" id="addReceiptItemBtn" class="admin-secondary-btn" style="padding: 8px 12px; font-size: 12px; min-width: auto;">+ Thêm loại sản phẩm</button>
+                </div>
+
+                <div id="receiptItemsContainer" style="display:flex; flex-direction:column; gap:12px; margin-bottom: 12px;"></div>
+
                 <label>Ngày nhập hàng<input name="date" type="date" /></label>
                 <label>Ghi chú nhập kho<textarea name="note" rows="2" style="
                         width: 100%;
@@ -998,7 +1005,7 @@
                     Hủy
                   </button>
                   <button type="submit" class="admin-primary-btn">
-                    Lưu phiếu & Cộng tồn kho
+                    Tạo phiếu chờ nhập kho
                   </button>
                 </div>
               </form>
@@ -1023,10 +1030,17 @@
               </button>
             </div>
           </div>
-          <div class="admin-management-layout">
+          <div class="admin-management-layout split-layout">
             <div class="admin-table-wrap">
               <div class="admin-list" id="suppliersTable"></div>
             </div>
+            <aside class="admin-side-detail" id="supplierDetailPanel">
+              <div class="admin-detail-placeholder">
+                <span style="font-size:36px; display:block; margin-bottom:12px;">🏭</span>
+                <h4>Chi tiết nhà cung cấp</h4>
+                <p>Nhấp vào một dòng trong bảng bên cạnh để xem toàn bộ thông tin chi tiết nhà cung cấp.</p>
+              </div>
+            </aside>
           </div>
 
           <!-- MODAL THÊM / CẬP NHẬT NHÀ CUNG CẤP -->
@@ -1055,7 +1069,7 @@
                     Hủy
                   </button>
                   <button type="submit" class="admin-primary-btn">
-                    Lưu nhà cung cấp
+                    Lưu
                   </button>
                 </div>
               </form>
@@ -1083,7 +1097,7 @@
                 </svg>
                 Xuất file Excel (.xlsx)
               </button>
-              <button type="button" class="admin-secondary-btn" onclick="window.print()" style="display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d5ded4; color: #224c30; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+              <button type="button" class="admin-secondary-btn" onclick="printReportsWindow()" style="display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d5ded4; color: #224c30; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="6 9 6 2 18 2 18 9"></polyline>
                   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -1094,14 +1108,129 @@
             </div>
           </div>
 
-          <!-- BỘ LỌC DOANH THU THEO THỜI GIAN -->
+          <!-- KHU BÁO CÁO CHÍNH: 2 BẢNG + 2 BIỂU ĐỒ (mỗi bảng một bộ lọc pill riêng) -->
+          <div class="report-duo-grid">
+            <!-- Bảng 1: Tổng thu / tổng chi / lợi nhuận theo quý -->
+            <div class="report-duo-card">
+              <div class="report-duo-head">
+                <h3>Tổng thu / tổng chi / lợi nhuận</h3>
+                <span class="report-filter-label" id="sumFilterLabel"></span>
+              </div>
+              <div class="pill-filter" id="sumPillFilter">
+                <button type="button" class="pill-seg-btn active" data-qmode="month">Theo tháng</button>
+                <button type="button" class="pill-seg-btn" data-qmode="quarter">Theo quý</button>
+                <button type="button" class="pill-seg-btn" data-qmode="year">Theo năm</button>
+              </div>
+              <div class="analytics-filter-controls" style="margin: 10px 0 4px">
+                <div class="filter-group" id="sumGroupMonth">
+                  <select id="sumMonthYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                  <select id="sumMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <div class="filter-group" id="sumGroupQuarter" style="display: none">
+                  <select id="sumQuarterYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                  <select id="sumQuarterSelect" class="admin-search" style="padding: 6px 12px; min-width: 100px"></select>
+                  <select id="sumQuarterMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <div class="filter-group" id="sumGroupYear" style="display: none">
+                  <select id="sumYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <button type="button" class="admin-primary-btn" id="sumApplyBtn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 4px; vertical-align: -1px">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  Lọc dữ liệu
+                </button>
+              </div>
+              <div class="admin-table-wrap">
+                <div class="admin-list" id="reportQuarterlySummary"></div>
+              </div>
+            </div>
+
+            <!-- Biểu đồ 1: cột nhóm thu / chi / lợi nhuận theo quý -->
+            <div class="chart-card">
+              <h3 style="font-size: 15px">Biểu đồ thu – chi – lợi nhuận theo quý</h3>
+              <div class="bar-chart-container" id="sumChartContainer">
+                <div class="y-axis" id="sumChartYAxis"></div>
+                <div class="bars-area-wrap">
+                  <div class="grid-lines">
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                  </div>
+                  <div class="bars" id="sumChartBars" aria-label="Biểu đồ tổng thu tổng chi lợi nhuận theo quý"></div>
+                  <div class="x-axis" id="sumChartXAxis"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-duo-grid">
+            <!-- Bảng 2: Tổng hóa đơn theo sản phẩm × quý -->
+            <div class="report-duo-card">
+              <div class="report-duo-head">
+                <h3>Tổng hóa đơn theo sản phẩm</h3>
+                <span class="report-filter-label" id="prodFilterLabel"></span>
+              </div>
+              <div class="pill-filter" id="prodPillFilter">
+                <button type="button" class="pill-seg-btn active" data-qmode="month">Theo tháng</button>
+                <button type="button" class="pill-seg-btn" data-qmode="quarter">Theo quý</button>
+                <button type="button" class="pill-seg-btn" data-qmode="year">Theo năm</button>
+              </div>
+              <div class="analytics-filter-controls" style="margin: 10px 0 4px">
+                <div class="filter-group" id="prodGroupMonth">
+                  <select id="prodMonthYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                  <select id="prodMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <div class="filter-group" id="prodGroupQuarter" style="display: none">
+                  <select id="prodQuarterYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                  <select id="prodQuarterSelect" class="admin-search" style="padding: 6px 12px; min-width: 100px"></select>
+                  <select id="prodQuarterMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <div class="filter-group" id="prodGroupYear" style="display: none">
+                  <select id="prodYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                </div>
+                <button type="button" class="admin-primary-btn" id="prodApplyBtn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 4px; vertical-align: -1px">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                  Lọc dữ liệu
+                </button>
+              </div>
+              <div class="admin-table-wrap">
+                <div class="admin-list" id="reportProductQuarters"></div>
+              </div>
+            </div>
+
+            <!-- Biểu đồ 2: cột theo quý (top sản phẩm) -->
+            <div class="chart-card">
+              <h3 style="font-size: 15px">Biểu đồ hóa đơn theo sản phẩm × quý</h3>
+              <div class="bar-chart-container" id="prodChartContainer">
+                <div class="y-axis" id="prodChartYAxis"></div>
+                <div class="bars-area-wrap">
+                  <div class="grid-lines">
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                  </div>
+                  <div class="bars" id="prodChartBars" aria-label="Biểu đồ hóa đơn theo sản phẩm theo quý"></div>
+                  <div class="x-axis" id="prodChartXAxis"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BỘ LỌC DÙNG CHUNG CHO CÁC BẢNG CÒN LẠI (không dùng pill) -->
           <div class="analytics-filter-container">
             <div class="analytics-filter-tabs" role="tablist">
               <button type="button" class="analytics-tab-btn active" data-period="month">
                 Theo tháng
               </button>
-              <button type="button" class="analytics-tab-btn" data-period="day">
-                Theo ngày
+              <button type="button" class="analytics-tab-btn" data-period="quarter">
+                Theo quý
               </button>
               <button type="button" class="analytics-tab-btn" data-period="year">
                 Theo năm
@@ -1111,26 +1240,26 @@
             <div class="analytics-filter-controls">
               <!-- Mode Tháng -->
               <div class="filter-group" id="filterGroupMonth">
-                <label for="analyticsMonthInput">Chọn tháng:</label>
-                <input type="month" id="analyticsMonthInput" class="admin-search" value="2026-11" />
+                <label for="analyticsMonthYearSelect">Chọn năm:</label>
+                <select id="analyticsMonthYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                <label for="analyticsMonthSelect">Chọn tháng:</label>
+                <select id="analyticsMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
               </div>
 
-              <!-- Mode Ngày -->
-              <div class="filter-group" id="filterGroupDay" style="display: none">
-                <label for="analyticsStartDate">Từ ngày:</label>
-                <input type="date" id="analyticsStartDate" class="admin-search" value="2026-11-01" />
-                <label for="analyticsEndDate">Đến ngày:</label>
-                <input type="date" id="analyticsEndDate" class="admin-search" value="2026-11-06" />
+              <!-- Mode Quý -->
+              <div class="filter-group" id="filterGroupQuarter" style="display: none">
+                <label for="analyticsQuarterYearSelect">Chọn năm:</label>
+                <select id="analyticsQuarterYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
+                <label for="analyticsQuarterSelect">Chọn quý:</label>
+                <select id="analyticsQuarterSelect" class="admin-search" style="padding: 6px 12px; min-width: 100px"></select>
+                <label for="analyticsQuarterMonthSelect">Chọn tháng trong quý:</label>
+                <select id="analyticsQuarterMonthSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
               </div>
 
               <!-- Mode Năm -->
               <div class="filter-group" id="filterGroupYear" style="display: none">
                 <label for="analyticsYearSelect">Chọn năm:</label>
-                <select id="analyticsYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px">
-                  <option value="2026" selected>Năm 2026</option>
-                  <option value="2025">Năm 2025</option>
-                  <option value="2027">Năm 2027</option>
-                </select>
+                <select id="analyticsYearSelect" class="admin-search" style="padding: 6px 12px; min-width: 110px"></select>
               </div>
 
               <button type="button" class="admin-primary-btn" id="analyticsApplyBtn">
@@ -1142,90 +1271,6 @@
                 Lọc dữ liệu
               </button>
               <span id="analyticsFilterNotice" class="filter-notice"></span>
-            </div>
-          </div>
-
-          <div class="admin-stat-grid" style="margin-bottom: 24px">
-            <div class="stat-box">
-              <span>Doanh thu trong kỳ</span>
-              <strong id="analyticsTotalRevenue">0 đ</strong>
-            </div>
-            <div class="stat-box">
-              <span>Chi phí nhập kho trong kỳ</span>
-              <strong id="analyticsTotalCost">0 đ</strong>
-            </div>
-            <div class="stat-box">
-              <span>Lợi nhuận gộp ước tính</span>
-              <strong id="analyticsEstimatedProfit">0 đ</strong>
-            </div>
-            <div class="stat-box">
-              <span>Đơn giao thành công</span>
-              <strong id="analyticsCompletedOrders">0</strong>
-            </div>
-          </div>
-
-          <div class="analytics-grid">
-            <div class="chart-card revenue-chart-card">
-              <div class="chart-header">
-                <div>
-                  <h3 id="analyticsBarChartTitle" style="margin-bottom: 2px">
-                    Doanh thu các ngày trong tháng
-                  </h3>
-                  <p class="chart-caption" id="analyticsChartCaption">
-                    Trục dọc: Doanh thu (VNĐ) • Trục ngang: Ngày trong tháng
-                  </p>
-                </div>
-                <div class="chart-header-stat">
-                  <span id="analyticsBarSubtitle" style="
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: var(--admin-green);
-                      "></span>
-                  <small id="analyticsPeakDayBadge" class="peak-day-badge"></small>
-                </div>
-              </div>
-              <div class="bar-chart-container" id="barChartContainer">
-                <div class="y-axis" id="analyticsYAxis">
-                  <!-- Y-axis ticks like 20 tr, 10 tr, 0 đ -->
-                </div>
-                <div class="bars-area-wrap">
-                  <div class="grid-lines" id="analyticsGridLines">
-                    <div class="grid-line"></div>
-                    <div class="grid-line"></div>
-                    <div class="grid-line"></div>
-                  </div>
-                  <div class="bars" id="analyticsBars" aria-label="Biểu đồ cột doanh thu"></div>
-                  <div class="x-axis" id="analyticsXAxis"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="chart-card">
-              <div style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  ">
-                <h3>Tỷ lệ trạng thái đơn hàng</h3>
-                <span id="donutOrderCount" style="
-                      font-size: 12px;
-                      color: var(--admin-muted);
-                      font-weight: 600;
-                    "></span>
-              </div>
-              <div class="donut-chart-layout">
-                <div class="donut-wrap">
-                  <svg id="analyticsDonutSvg" viewBox="0 0 42 42" class="donut-svg"
-                    aria-label="Biểu đồ tròn tỷ lệ trạng thái đơn hàng">
-                    <!-- Dynamic SVG Donut Segments -->
-                  </svg>
-                  <div class="donut-center-info">
-                    <span id="donutCenterValue">0</span>
-                    <small>Đơn hàng</small>
-                  </div>
-                </div>
-                <div class="ring-list" id="analyticsStatusRing"></div>
-              </div>
             </div>
           </div>
 
@@ -1246,15 +1291,6 @@
               </h3>
               <div style="display:flex; align-items:center; gap:10px;">
                 <span style="font-size: 12px; color: var(--admin-muted)">Kèm tỷ lệ hoàn tất & lợi nhuận</span>
-                <button type="button" class="admin-primary-btn" onclick="exportAnalyticsToExcel()" style="background: #107c41; border-color: #107c41; font-size: 12px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 5px;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="8" y1="13" x2="16" y2="13"></line>
-                    <line x1="8" y1="17" x2="16" y2="17"></line>
-                  </svg>
-                  Xuất Excel (.xlsx)
-                </button>
               </div>
             </div>
             <div class="admin-table-wrap">
@@ -1271,6 +1307,19 @@
               Top sản phẩm bán chạy nhất
             </h3>
             <div class="admin-list" id="analyticsTopProducts"></div>
+          </div>
+
+          <!-- BÁO CÁO NHÂN VIÊN × NĂM, KHÁCH HÀNG × QUÝ -->
+          <div style="margin-top: 28px">
+            <h4 id="reportEmployeeTitle" style="font-family: var(--heading-font); font-size: 16px; margin: 0 0 8px;">Tổng hóa đơn theo nhân viên</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportEmployeeYears"></div>
+            </div>
+
+            <h4 id="reportCustomerTitle" style="font-family: var(--heading-font); font-size: 16px; margin: 20px 0 8px;">Tổng hóa đơn theo khách hàng</h4>
+            <div class="admin-table-wrap">
+              <div class="admin-list" id="reportCustomerQuarters"></div>
+            </div>
           </div>
         </section>
       </div>
@@ -1295,7 +1344,7 @@
 
   <script src="../shared/js/vendor/bootstrap.bundle.min.js"></script>
   <script src="../shared/js/vendor/xlsx.full.min.js"></script>
-  <script src="js/admin.js?v=20261112_4"></script>
+  <script src="js/admin.js?v=20261116_7"></script>
 </body>
 
 </html>
