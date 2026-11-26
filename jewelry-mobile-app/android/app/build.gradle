@@ -4,12 +4,13 @@ plugins {
 
 android {
     namespace 'com.huongjewelry.app'
-    compileSdk 34
+    compileSdk 35
+    buildToolsVersion '36.0.0'
 
     defaultConfig {
         applicationId "com.huongjewelry.app"
         minSdk 24
-        targetSdk 34
+        targetSdk 35
         versionCode 1
         versionName "1.0"
     }

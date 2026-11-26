@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.huongjewelry.app-mergeDebugResources-19:/values-v18/values-v18.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\Comet\\.gradle\\caches\\8.10.2\\transforms\\e6b90d9473e099143e66326e18e4d50b\\transformed\\appcompat-1.6.1\\res\\values-v18\\values-v18.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "48",
+                        "endOffsets": "99"
+                    }
+                }
+            ]
+        }
+    ]
+}

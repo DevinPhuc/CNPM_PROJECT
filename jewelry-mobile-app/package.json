@@ -7,6 +7,9 @@
     "dev": "vite --port 5173 --open",
     "build": "vite build && node bundle-standalone.mjs",
     "sync:android": "vite build && node bundle-standalone.mjs",
+    "build:apk": "npm run sync:android && cd android && .\\gradlew assembleDebug",
+    "install:phone": "\"C:\\Program Files (x86)\\Android\\android-sdk\\platform-tools\\adb.exe\" install -r android/app/build/outputs/apk/debug/app-debug.apk && \"C:\\Program Files (x86)\\Android\\android-sdk\\platform-tools\\adb.exe\" shell am start -n com.huongjewelry.app/.MainActivity",
+    "deploy:phone": "node deploy-phone.mjs",
     "preview": "vite preview --port 4173"
   },
   "dependencies": {

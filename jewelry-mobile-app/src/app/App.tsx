@@ -21,6 +21,7 @@ import {
   Mail,
   MapPin,
   Minus,
+  Package,
   Pencil,
   Phone,
   Plus,
@@ -28,6 +29,7 @@ import {
   Settings,
   Shield,
   ShoppingBag,
+  ShoppingCart,
   Sparkles,
   Star,
   Tag,
@@ -36,17 +38,23 @@ import {
   User,
   Venus,
   X,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from "lucide-react";
 import {
   addCartItemToDb,
+  cancelCustomerOrderInDb,
   createOrderInDb,
   CustomerProfile,
   DbCartItem,
   DbCategory,
   DbNotification,
+  DbOrder,
   DbProduct,
   fetchCustomerCart,
   fetchCustomerNotifications,
+  fetchCustomerOrders,
   fetchCustomerProfileById,
   fetchSampleCustomerAccounts,
   fetchStoreCatalog,
@@ -86,10 +94,11 @@ export type CartItem = DbCartItem;
 export type ProductItem = DbProduct;
 
 const fallbackCategories: DbCategory[] = [
-  { id: 1, icon: "💍", name: "Nhẫn" },
-  { id: 2, icon: "📿", name: "Dây chuyền" },
-  { id: 4, icon: "✨", name: "Lắc tay" },
-  { id: 3, icon: "💎", name: "Bông tai" },
+  { id: 1, icon: "💍", name: "Nhẫn", parentCatId: null },
+  { id: 5, icon: "💍", name: "Nhẫn cưới", parentCatId: 1 },
+  { id: 2, icon: "📿", name: "Dây chuyền", parentCatId: null },
+  { id: 3, icon: "💎", name: "Bông tai", parentCatId: null },
+  { id: 4, icon: "✨", name: "Lắc tay", parentCatId: null },
 ];
 
 const fallbackProducts: ProductItem[] = [
@@ -118,6 +127,32 @@ const fallbackProducts: ProductItem[] = [
     stock: 29,
     img: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=600&h=600&fit=crop&auto=format",
     desc: "Nhẫn vàng 18K đính kim cương tự nhiên 0.3ct, thiết kế solitaire.",
+  },
+  {
+    id: 3,
+    name: "Dây Chuyền Bạc 925 Mặt Trái Tim",
+    price: "1.450.000đ",
+    numericPrice: 1450000,
+    tag: "BÁN CHẠY NHẤT",
+    category: "Dây chuyền",
+    catId: 2,
+    variant: "Bạc 925 · Đá CZ",
+    variants: ["Bạc 925 · Đá CZ"],
+    variantObjects: [
+      {
+        id: 4,
+        label: "Bạc 925 · Đá CZ",
+        material: "Bạc 925",
+        gemstone: "Đá CZ",
+        size: 42,
+        price: 1450000,
+        stock: 40,
+      },
+    ],
+    defaultVariantId: 4,
+    stock: 40,
+    img: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&h=600&fit=crop&auto=format",
+    desc: "Dây chuyền bạc Ý 925 mặt trái tim đính đá CZ lấp lánh.",
   },
   {
     id: 7,
@@ -171,6 +206,32 @@ const fallbackProducts: ProductItem[] = [
     img: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?w=600&h=600&fit=crop&auto=format",
     desc: "Bông tai ngọc trai Akoya gắn vàng 14K.",
   },
+  {
+    id: 5,
+    name: "Lắc Tay Vàng 24K Hoa Mai",
+    price: "18.900.000đ",
+    numericPrice: 18900000,
+    tag: "CAO CẤP",
+    category: "Lắc tay",
+    catId: 4,
+    variant: "Vàng 24K · Chế tác thủ công",
+    variants: ["Vàng 24K · Chế tác thủ công"],
+    variantObjects: [
+      {
+        id: 6,
+        label: "Vàng 24K · Chế tác thủ công",
+        material: "Vàng 24K",
+        gemstone: null,
+        size: 16,
+        price: 18900000,
+        stock: 11,
+      },
+    ],
+    defaultVariantId: 6,
+    stock: 11,
+    img: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=600&h=600&fit=crop&auto=format",
+    desc: "Lắc tay vàng 24K họa tiết hoa mai phú quý sang trọng.",
+  },
 ];
 
 const legalItems = [
@@ -178,19 +239,19 @@ const legalItems = [
     icon: FileText,
     label: "Điều khoản dịch vụ",
     content:
-      "Chào mừng quý khách đến với Hương Jewelry. Mọi sản phẩm trang sức đều đi kèm giấy kiểm định chất lượng kim cương và vàng 18K chính hãng, hỗ trợ bảo hành làm sáng trọn đời.",
+      "Chào mừng quý khách đến với SaiGon Jewelry. Mọi sản phẩm trang sức đều đi kèm giấy kiểm định chất lượng kim cương và vàng 18K chính hãng, hỗ trợ bảo hành làm sáng trọn đời.",
   },
   {
     icon: Shield,
     label: "Chính sách bảo mật",
     content:
-      "Thông tin cá nhân, số điện thoại và lịch sử giao dịch của quý khách tại Hương Jewelry được mã hóa và bảo mật tuyệt đối trên cơ sở dữ liệu Supabase chuẩn an toàn dữ liệu.",
+      "Thông tin cá nhân, số điện thoại và lịch sử giao dịch của quý khách tại SaiGon Jewelry được mã hóa và bảo mật tuyệt đối trên cơ sở dữ liệu Supabase chuẩn an toàn dữ liệu.",
   },
   {
     icon: FileText,
     label: "Quy định sử dụng",
     content:
-      "Khách hàng thành viên Vàng được hưởng ưu đãi tích điểm trên mọi đơn hàng, miễn phí vận chuyển cho đơn từ 10.000.000đ và đổi trả trong vòng 7 ngày.",
+      "Khách hàng mua sắm tại SaiGon Jewelry được hưởng ưu đãi miễn phí vận chuyển cho đơn từ 10.000.000đ và hỗ trợ đổi trả trong vòng 7 ngày.",
   },
 ];
 
@@ -313,7 +374,7 @@ function AuthScreen({
           style={{ color: "rgba(255, 245, 230, 0.8)" }}
         >
           {mode === "login"
-            ? "Chào mừng quý khách quay lại với không gian mua sắm thượng lưu của Hương Jewelry (Đồng bộ Supabase)."
+            ? "Chào mừng quý khách quay lại với không gian mua sắm thượng lưu của SaiGon Jewelry (Đồng bộ Supabase)."
             : "Gia nhập hội viên VIP nhận ngay ưu đãi 10% và tích điểm trọn đời."}
         </p>
 
@@ -969,7 +1030,7 @@ function CartScreen({
 }
 
 // ==========================================
-// 3B. PRODUCT DETAIL SCREEN (D1)
+// 3B. PRODUCT DETAIL SCREEN (D1) - GIAO DIỆN HÌNH 5 + ZOOM HÌNH ẢNH
 // ==========================================
 function ProductDetailScreen({
   product,
@@ -995,6 +1056,59 @@ function ProductDetailScreen({
   );
   const [qty, setQty] = useState<number>(1);
 
+  // Danh sách hình ảnh góc chụp của sản phẩm
+  const galleryImages = React.useMemo(() => {
+    const base =
+      product.images && product.images.length > 0
+        ? product.images
+        : [product.img];
+    const extras = [
+      "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800&h=800&fit=crop&auto=format",
+      "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800&h=800&fit=crop&auto=format",
+      "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&h=800&fit=crop&auto=format",
+    ];
+    const combined = Array.from(new Set([...base, ...extras])).slice(0, 4);
+    return combined;
+  }, [product]);
+
+  const [activeImgIdx, setActiveImgIdx] = useState<number>(0);
+
+  // State phóng to / thu nhỏ hình ảnh khi bấm vào hình
+  const [isZoomOpen, setIsZoomOpen] = useState<boolean>(false);
+  const [zoomScale, setZoomScale] = useState<number>(1);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+
+  const openZoomModal = () => {
+    setZoomScale(1.5);
+    setPanOffset({ x: 0, y: 0 });
+    setIsZoomOpen(true);
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => Math.min(3.5, Number((prev + 0.5).toFixed(1))));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => {
+      const next = Math.max(0.5, Number((prev - 0.5).toFixed(1)));
+      if (next <= 1) setPanOffset({ x: 0, y: 0 });
+      return next;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
   const matchedVarObj = product.variantObjects?.find(
     (v) => v.label === selectedVariant
   );
@@ -1003,68 +1117,135 @@ function ProductDetailScreen({
     : product.price;
   const stockCount = matchedVarObj ? matchedVarObj.stock : (product.stock ?? 5);
 
+  const currentImage = galleryImages[activeImgIdx] || product.img;
+
   return (
     <div
       className="flex flex-col h-full overflow-y-auto relative"
       style={{ background: "#faf8f5", scrollbarWidth: "none" }}
     >
-      {/* Top Navigation Bar */}
-      <div
-        className="flex items-center justify-between px-4 pt-10 pb-3 sticky top-0 z-20"
-        style={{
-          background: "rgba(250, 248, 245, 0.92)",
-          backdropFilter: "blur(10px)",
-          borderBottom: `1px solid ${BORDER_GOLD_LIGHT}`,
-        }}
-      >
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-['Inter'] font-medium cursor-pointer active:scale-95 transition-transform"
+      {/* KHUNG HÌNH SẢN PHẨM TRÀN VIỀN TRÊN CÙNG + NÚT QUAY LẠI & GIỎ HÀNG NẰM CHUNG TRÊN HÌNH (GIỐNG HÌNH 5) */}
+      <div className="relative w-full aspect-square bg-secondary shrink-0 overflow-hidden select-none">
+        {/* Hình sản phẩm chính - bấm vào để phóng to/thu nhỏ */}
+        <img
+          src={currentImage}
+          alt={product.name}
+          onClick={openZoomModal}
+          className="w-full h-full object-cover cursor-zoom-in transition-transform duration-300"
+        />
+
+        {/* Lớp phủ mờ nhẹ ở mép trên để nút Quay lại & Giỏ hàng luôn nổi bật rõ nét */}
+        <div
+          className="absolute inset-x-0 top-0 h-20 pointer-events-none"
           style={{
-            background: "#ffffff",
-            border: `1px solid ${BORDER_GOLD_LIGHT}`,
-            color: "#1c1917",
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 100%)",
           }}
-        >
-          <ArrowLeft size={15} color="#1c1917" />
-          <span>Quay lại</span>
-        </button>
+        />
 
-        <span className="text-xs font-['Playfair_Display'] font-semibold text-foreground truncate max-w-[160px]">
-          Chi tiết sản phẩm
-        </span>
+        {/* Nút Quay lại (chỉ để icon) & Nút Giỏ hàng nằm đè trực tiếp trên hình sản phẩm giống Hình 5 */}
+        <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between">
+          {/* Nút Quay lại chỉ để icon mũi tên trắng trong vòng tròn nền tối mờ */}
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Quay lại"
+            className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
+            style={{
+              background: "rgba(0, 0, 0, 0.42)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <ArrowLeft size={20} color="#ffffff" strokeWidth={2.2} />
+          </button>
 
-        <button
-          onClick={onOpenCart}
-          className="w-9 h-9 rounded-full bg-white flex items-center justify-center relative cursor-pointer active:scale-95 transition-transform"
-          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
-        >
-          <ShoppingBag size={16} color="#9a6b24" />
-          {cartCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+          {/* Nút Giỏ hàng nằm chung trên hình sản phẩm góc phải kèm badge đỏ cam giống Hình 5 */}
+          <button
+            type="button"
+            onClick={onOpenCart}
+            aria-label="Giỏ hàng"
+            className="w-10 h-10 rounded-full flex items-center justify-center relative cursor-pointer active:scale-90 transition-transform"
+            style={{
+              background: "rgba(0, 0, 0, 0.42)",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            <ShoppingCart size={19} color="#ffffff" strokeWidth={2} />
+            <span
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-['Inter'] font-bold flex items-center justify-center shadow-xs"
+              style={{ background: "#ee4d2d" }}
+            >
               {cartCount}
             </span>
-          )}
+          </button>
+        </div>
+
+        {/* Nút gợi ý chạm để phóng to ở góc dưới trái & Chỉ số trang ảnh (1/4) ở góc dưới phải giống Hình 5 */}
+        <button
+          type="button"
+          onClick={openZoomModal}
+          className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-['Inter'] font-medium text-white cursor-pointer active:scale-95"
+          style={{
+            background: "rgba(0, 0, 0, 0.45)",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <ZoomIn size={13} color="#ffffff" />
+          <span>Chạm để phóng to</span>
         </button>
+
+        <div
+          className="absolute bottom-3 right-3 z-10 px-3 py-1 rounded-full text-xs font-['Inter'] font-semibold"
+          style={{
+            background: "rgba(255, 255, 255, 0.88)",
+            color: "#1c1917",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+          }}
+        >
+          {activeImgIdx + 1}/{galleryImages.length}
+        </div>
+      </div>
+
+      {/* Hàng ảnh thu nhỏ (Thumbnails) giống Hình 5 */}
+      <div
+        className="px-4 pt-3 pb-2 bg-white"
+        style={{ borderBottom: `1px solid ${BORDER_GOLD_LIGHT}` }}
+      >
+        <p className="text-xs font-['Inter'] text-[#6b6358] mb-2">
+          {galleryImages.length} hình ảnh chi tiết có sẵn (Chạm vào ảnh trên để phóng to/thu nhỏ)
+        </p>
+        <div className="flex gap-2.5 overflow-x-auto pb-1">
+          {galleryImages.map((imgUrl, idx) => {
+            const isSelected = idx === activeImgIdx;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActiveImgIdx(idx)}
+                className="w-16 h-16 rounded-lg overflow-hidden shrink-0 cursor-pointer transition-all"
+                style={{
+                  border: isSelected
+                    ? `2px solid ${PRIMARY_GOLD}`
+                    : `1px solid ${BORDER_GOLD_LIGHT}`,
+                  opacity: isSelected ? 1 : 0.72,
+                }}
+              >
+                <img
+                  src={imgUrl}
+                  alt={`${product.name} ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Main Content */}
       <div className="px-4 pt-4 pb-8 flex flex-col">
-        {/* Large Rounded Product Image */}
-        <div
-          className="w-full aspect-square rounded-2xl overflow-hidden shadow-md bg-secondary relative"
-          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
-        >
-          <img
-            src={product.img}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        </div>
-
         {/* Category Eyebrow: — NHẪN */}
         <p
-          className="text-[11px] font-['Inter'] font-semibold uppercase tracking-[0.16em] mt-5"
+          className="text-[11px] font-['Inter'] font-semibold uppercase tracking-[0.16em]"
           style={{ color: "#9a6b24" }}
         >
           — {product.category}
@@ -1229,12 +1410,709 @@ function ProductDetailScreen({
           </p>
         </div>
       </div>
+
+      {/* MODAL XEM PHÓNG TO / THU NHỎ HÌNH ẢNH SẢN PHẨM */}
+      {isZoomOpen && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/95 flex flex-col justify-between select-none"
+          onClick={() => setIsZoomOpen(false)}
+        >
+          {/* Thanh điều khiển phía trên */}
+          <div
+            className="flex items-center justify-between px-4 pt-8 pb-3 z-20"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-xs font-['Inter'] font-semibold text-white/90">
+              Ảnh {activeImgIdx + 1}/{galleryImages.length} · Mức phóng:{" "}
+              {Math.round(zoomScale * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsZoomOpen(false)}
+              className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center text-white cursor-pointer active:scale-90"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Vùng hiển thị ảnh có thể phóng to / thu nhỏ và kéo xem chi tiết */}
+          <div
+            className="flex-1 flex items-center justify-center overflow-hidden relative px-2"
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={() => {
+              if (zoomScale > 1) {
+                handleResetZoom();
+              } else {
+                setZoomScale(2.2);
+              }
+            }}
+            onMouseDown={(e) => {
+              if (zoomScale > 1) {
+                setIsDragging(true);
+                setDragStart({
+                  x: e.clientX - panOffset.x,
+                  y: e.clientY - panOffset.y,
+                });
+              }
+            }}
+            onMouseMove={(e) => {
+              if (isDragging && zoomScale > 1) {
+                setPanOffset({
+                  x: e.clientX - dragStart.x,
+                  y: e.clientY - dragStart.y,
+                });
+              }
+            }}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseLeave={() => setIsDragging(false)}
+            onTouchStart={(e) => {
+              if (zoomScale > 1 && e.touches.length === 1) {
+                setIsDragging(true);
+                setDragStart({
+                  x: e.touches[0].clientX - panOffset.x,
+                  y: e.touches[0].clientY - panOffset.y,
+                });
+              }
+            }}
+            onTouchMove={(e) => {
+              if (isDragging && zoomScale > 1 && e.touches.length === 1) {
+                setPanOffset({
+                  x: e.touches[0].clientX - dragStart.x,
+                  y: e.touches[0].clientY - dragStart.y,
+                });
+              }
+            }}
+            onTouchEnd={() => setIsDragging(false)}
+          >
+            <img
+              src={currentImage}
+              alt={product.name}
+              draggable={false}
+              className="max-w-full max-h-[70vh] object-contain transition-transform duration-150"
+              style={{
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                cursor: zoomScale > 1 ? "grab" : "zoom-in",
+              }}
+            />
+          </div>
+
+          {/* Thanh công cụ Phóng to / Thu nhỏ / Chọn ảnh ở dưới */}
+          <div
+            className="px-4 pb-8 pt-3 flex flex-col items-center gap-3 z-20 bg-gradient-to-t from-black/90 to-transparent"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Bộ nút Thu nhỏ (-), Đặt lại (100%), Phóng to (+) */}
+            <div className="flex items-center gap-3 bg-white/15 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white text-xs font-['Inter'] font-semibold cursor-pointer active:scale-90"
+              >
+                <ZoomOut size={15} />
+                <span>Thu nhỏ</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-amber-300 text-xs font-['Inter'] font-bold cursor-pointer active:scale-90"
+              >
+                <RotateCcw size={13} />
+                <span>{Math.round(zoomScale * 100)}%</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-600 text-white text-xs font-['Inter'] font-semibold cursor-pointer active:scale-90"
+              >
+                <ZoomIn size={15} />
+                <span>Phóng to</span>
+              </button>
+            </div>
+
+            {/* Thumbnails trong chế độ Zoom */}
+            <div className="flex gap-2">
+              {galleryImages.map((imgUrl, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => {
+                    setActiveImgIdx(idx);
+                    handleResetZoom();
+                  }}
+                  className="w-12 h-12 rounded-lg overflow-hidden cursor-pointer"
+                  style={{
+                    border:
+                      idx === activeImgIdx
+                        ? `2px solid ${PRIMARY_GOLD}`
+                        : "1px solid rgba(255,255,255,0.3)",
+                    opacity: idx === activeImgIdx ? 1 : 0.55,
+                  }}
+                >
+                  <img
+                    src={imgUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ==========================================
-// 4. HOME SCREEN (I1) - LẤY SẢN PHẨM & DANH MỤC TỪ SUPABASE
+// 3C. SHOP / ALL PRODUCTS SCREEN (HÌNH 3 - TRANG SẢN PHẨM / TOÀN BỘ SẢN PHẨM)
+// ==========================================
+function ShopScreen({
+  categoriesList,
+  productsList,
+  initialCategoryId,
+  cartCount,
+  onBack,
+  onOpenCart,
+  onSelectProduct,
+  onAddToCart,
+}: {
+  categoriesList: DbCategory[];
+  productsList: ProductItem[];
+  initialCategoryId: number | null;
+  cartCount: number;
+  onBack: () => void;
+  onOpenCart: () => void;
+  onSelectProduct: (product: ProductItem) => void;
+  onAddToCart: (product: ProductItem, qty: number, variant?: string) => void;
+}) {
+  const [selectedCats, setSelectedCats] = useState<number[]>(
+    initialCategoryId ? [initialCategoryId] : []
+  );
+  const [selectedPrices, setSelectedPrices] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<
+    "new" | "price-asc" | "price-desc" | "name"
+  >("new");
+  const [cardQtys, setCardQtys] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    setSelectedCats(initialCategoryId ? [initialCategoryId] : []);
+  }, [initialCategoryId]);
+
+  // Xây dựng cây danh mục giống Hình 3 (Tất cả, Nhẫn, - Nhẫn cưới, Dây chuyền, Bông tai, Lắc tay)
+  const orderedCategories = React.useMemo(() => {
+    const hasWeddingRing = categoriesList.some((c) =>
+      c.name.toLowerCase().includes("nhẫn cưới")
+    );
+    const fullList: DbCategory[] = hasWeddingRing
+      ? categoriesList
+      : [
+          ...categoriesList,
+          { id: 5, name: "Nhẫn cưới", icon: "💍", parentCatId: 1 },
+        ];
+    const roots = fullList.filter((c) => !c.parentCatId);
+    const result: { cat: DbCategory; isSub: boolean }[] = [];
+    roots.forEach((r) => {
+      result.push({ cat: r, isSub: false });
+      fullList
+        .filter((c) => c.parentCatId === r.id)
+        .forEach((sub) => result.push({ cat: sub, isSub: true }));
+    });
+    return result;
+  }, [categoriesList]);
+
+  const priceRanges = [
+    { key: "0-2000000", label: "Dưới 2 triệu" },
+    { key: "2000000-10000000", label: "2 – 10 triệu" },
+    { key: "10000000-", label: "Trên 10 triệu" },
+  ];
+
+  const toggleCategory = (catId: number | null) => {
+    if (catId === null) {
+      setSelectedCats([]);
+      return;
+    }
+    setSelectedCats((prev) => {
+      const exists = prev.includes(catId);
+      const next = exists ? prev.filter((id) => id !== catId) : [...prev, catId];
+      if (next.length >= orderedCategories.length) return [];
+      return next;
+    });
+  };
+
+  const togglePriceRange = (rangeKey: string | null) => {
+    if (rangeKey === null) {
+      setSelectedPrices([]);
+      return;
+    }
+    setSelectedPrices((prev) => {
+      const exists = prev.includes(rangeKey);
+      const next = exists
+        ? prev.filter((k) => k !== rangeKey)
+        : [...prev, rangeKey];
+      if (next.length >= priceRanges.length) return [];
+      return next;
+    });
+  };
+
+  // Lọc và sắp xếp sản phẩm
+  const filteredProducts = React.useMemo(() => {
+    return productsList
+      .filter((p) => {
+        // Lọc theo danh mục
+        if (selectedCats.length > 0) {
+          const catMatch = selectedCats.some((selId) => {
+            if (p.catId === selId) return true;
+            const selObj = orderedCategories.find(
+              (x) => x.cat.id === selId
+            )?.cat;
+            if (!selObj) return false;
+            // Nếu chọn Nhẫn (id=1) thì bao gồm cả Nhẫn cưới
+            if (
+              selObj.name.toLowerCase() === "nhẫn" &&
+              p.category.toLowerCase().includes("nhẫn")
+            ) {
+              return true;
+            }
+            return (
+              p.category.toLowerCase() === selObj.name.toLowerCase() ||
+              p.category.toLowerCase().includes(selObj.name.toLowerCase())
+            );
+          });
+          if (!catMatch) return false;
+        }
+
+        // Lọc theo khoảng giá
+        if (selectedPrices.length > 0) {
+          const priceMatch = selectedPrices.some((rk) => {
+            const [minStr, maxStr] = rk.split("-");
+            const min = minStr ? Number(minStr) : 0;
+            const max = maxStr ? Number(maxStr) : Infinity;
+            return p.numericPrice >= min && p.numericPrice <= max;
+          });
+          if (!priceMatch) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === "price-asc") return a.numericPrice - b.numericPrice;
+        if (sortBy === "price-desc") return b.numericPrice - a.numericPrice;
+        if (sortBy === "name") return a.name.localeCompare(b.name, "vi");
+        return b.id - a.id;
+      });
+  }, [productsList, selectedCats, selectedPrices, sortBy, orderedCategories]);
+
+  const getCardQty = (proId: number) => cardQtys[proId] || 1;
+  const setCardQty = (proId: number, next: number, maxStock: number) => {
+    const clamped = Math.max(1, Math.min(Math.max(1, maxStock), next));
+    setCardQtys((prev) => ({ ...prev, [proId]: clamped }));
+  };
+
+  const getProductBadge = (p: ProductItem) => {
+    if (p.stock <= 0) return "HẾT HÀNG";
+    if (p.id === 3 || p.tag?.includes("BÁN CHẠY")) return "🔥 BÁN CHẠY NHẤT";
+    if (p.id === 1) return "✨ TUYỆT TÁC 2026";
+    if (p.numericPrice >= 15000000) return "💎 KIM CƯƠNG CAO CẤP";
+    return `✦ ${p.tag || "VÀNG 18K Ý"}`;
+  };
+
+  return (
+    <div
+      className="flex flex-col h-full overflow-y-auto relative"
+      style={{ background: "#faf8f5", scrollbarWidth: "none" }}
+    >
+      {/* Top Header */}
+      <div
+        className="flex items-center justify-between px-4 pt-10 pb-3 sticky top-0 z-20"
+        style={{
+          background: "rgba(250, 248, 245, 0.95)",
+          backdropFilter: "blur(8px)",
+          borderBottom: `1px solid ${BORDER_GOLD_LIGHT}`,
+        }}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-9 h-9 rounded-full bg-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+        >
+          <ArrowLeft size={17} color="#1c1917" />
+        </button>
+
+        <div className="text-center">
+          <h1 className="text-base font-['Playfair_Display'] font-bold text-[#141210]">
+            {selectedCats.length === 1
+              ? orderedCategories.find((x) => x.cat.id === selectedCats[0])?.cat
+                  .name || "Cửa hàng"
+              : "Toàn bộ sản phẩm"}
+          </h1>
+          <p className="text-[11px] font-['Inter'] text-[#6b6358]">
+            Trang sức chọn lọc cho mọi khoảnh khắc
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenCart}
+          className="w-9 h-9 rounded-full bg-white flex items-center justify-center relative cursor-pointer active:scale-90 transition-transform"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+        >
+          <ShoppingBag size={16} color={PRIMARY_GOLD} />
+          {cartCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+              {cartCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Main Shop Layout giống Hình 3 */}
+      <div className="p-3.5 flex flex-col gap-3.5 pb-10">
+        {/* Khung Bộ lọc Danh mục & Khoảng giá giống Hình 3 */}
+        <div
+          className="bg-white rounded-2xl p-3.5 shadow-xs grid grid-cols-2 gap-3"
+          style={{ border: "1px solid #ece4d4" }}
+        >
+          {/* Cột 1: Danh mục */}
+          <div>
+            <h4 className="font-['Playfair_Display'] text-sm font-bold text-[#141210] mb-2">
+              Danh mục
+            </h4>
+            <div className="flex flex-col gap-1">
+              {/* Nút Tất cả danh mục */}
+              <button
+                type="button"
+                onClick={() => toggleCategory(null)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-['Inter'] text-left transition-all cursor-pointer"
+                style={
+                  selectedCats.length === 0
+                    ? {
+                        background: "#8c5e1a",
+                        color: "#ffffff",
+                        fontWeight: 600,
+                      }
+                    : {
+                        background: "transparent",
+                        color: "#3f3a34",
+                      }
+                }
+              >
+                <span
+                  className="w-3.5 h-3.5 rounded-[4px] flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={
+                    selectedCats.length === 0
+                      ? { background: "#ffffff", color: "#8c5e1a" }
+                      : { border: "1px solid #c9c0b1", background: "#ffffff" }
+                  }
+                >
+                  {selectedCats.length === 0 ? "✓" : ""}
+                </span>
+                <span>Tất cả</span>
+              </button>
+
+              {orderedCategories.map(({ cat, isSub }) => {
+                const isSel = selectedCats.includes(cat.id);
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => toggleCategory(cat.id)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-['Inter'] text-left transition-all cursor-pointer ${
+                      isSub ? "ml-3 text-[11px]" : ""
+                    }`}
+                    style={
+                      isSel
+                        ? {
+                            background: "#8c5e1a",
+                            color: "#ffffff",
+                            fontWeight: 600,
+                          }
+                        : {
+                            background: "transparent",
+                            color: "#3f3a34",
+                          }
+                    }
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-[4px] flex items-center justify-center text-[10px] font-bold shrink-0"
+                      style={
+                        isSel
+                          ? { background: "#ffffff", color: "#8c5e1a" }
+                          : {
+                              border: "1px solid #c9c0b1",
+                              background: "#ffffff",
+                            }
+                      }
+                    >
+                      {isSel ? "✓" : ""}
+                    </span>
+                    <span className="truncate">
+                      {isSub ? `– ${cat.name}` : cat.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cột 2: Khoảng giá */}
+          <div>
+            <h4 className="font-['Playfair_Display'] text-sm font-bold text-[#141210] mb-2">
+              Khoảng giá
+            </h4>
+            <div className="flex flex-col gap-1">
+              {/* Nút Tất cả khoảng giá */}
+              <button
+                type="button"
+                onClick={() => togglePriceRange(null)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-['Inter'] text-left transition-all cursor-pointer"
+                style={
+                  selectedPrices.length === 0
+                    ? {
+                        background: "#8c5e1a",
+                        color: "#ffffff",
+                        fontWeight: 600,
+                      }
+                    : {
+                        background: "transparent",
+                        color: "#3f3a34",
+                      }
+                }
+              >
+                <span
+                  className="w-3.5 h-3.5 rounded-[4px] flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={
+                    selectedPrices.length === 0
+                      ? { background: "#ffffff", color: "#8c5e1a" }
+                      : { border: "1px solid #c9c0b1", background: "#ffffff" }
+                  }
+                >
+                  {selectedPrices.length === 0 ? "✓" : ""}
+                </span>
+                <span>Tất cả</span>
+              </button>
+
+              {priceRanges.map((pr) => {
+                const isSel = selectedPrices.includes(pr.key);
+                return (
+                  <button
+                    key={pr.key}
+                    type="button"
+                    onClick={() => togglePriceRange(pr.key)}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-['Inter'] text-left transition-all cursor-pointer"
+                    style={
+                      isSel
+                        ? {
+                            background: "#8c5e1a",
+                            color: "#ffffff",
+                            fontWeight: 600,
+                          }
+                        : {
+                            background: "transparent",
+                            color: "#3f3a34",
+                          }
+                    }
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-[4px] flex items-center justify-center text-[10px] font-bold shrink-0"
+                      style={
+                        isSel
+                          ? { background: "#ffffff", color: "#8c5e1a" }
+                          : {
+                              border: "1px solid #c9c0b1",
+                              background: "#ffffff",
+                            }
+                      }
+                    >
+                      {isSel ? "✓" : ""}
+                    </span>
+                    <span className="truncate">{pr.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Thanh số lượng sản phẩm & Sắp xếp giống Hình 3 */}
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-['Inter'] text-[#6b6358]">
+            {filteredProducts.length} sản phẩm
+          </span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            aria-label="Sắp xếp"
+            className="px-3.5 py-1.5 rounded-full bg-white text-xs font-['Inter'] font-medium text-[#141210] outline-none cursor-pointer shadow-2xs"
+            style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+          >
+            <option value="new">Mới nhất</option>
+            <option value="price-asc">Giá tăng dần</option>
+            <option value="price-desc">Giá giảm dần</option>
+            <option value="name">Tên A–Z</option>
+          </select>
+        </div>
+
+        {/* Danh sách Thẻ sản phẩm giống Hình 3 */}
+        {filteredProducts.length === 0 ? (
+          <div
+            className="bg-white rounded-2xl p-8 text-center"
+            style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+          >
+            <p className="font-['Playfair_Display'] text-base font-semibold text-[#141210]">
+              Không tìm thấy sản phẩm phù hợp
+            </p>
+            <p className="text-xs font-['Inter'] text-[#6b6358] mt-1">
+              Thử chọn danh mục hoặc khoảng giá khác.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCats([]);
+                setSelectedPrices([]);
+              }}
+              className="mt-3 px-4 py-2 rounded-full text-xs font-['Inter'] font-semibold text-white cursor-pointer"
+              style={{ background: "#8c5e1a" }}
+            >
+              Xem tất cả sản phẩm
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {filteredProducts.map((p) => {
+              const cQty = getCardQty(p.id);
+              return (
+                <div
+                  key={p.id}
+                  className="bg-white rounded-2xl overflow-hidden transition-all"
+                  style={{
+                    border: "1.5px solid #c99a3e",
+                    boxShadow: "0 8px 24px rgba(184, 146, 42, 0.12)",
+                  }}
+                >
+                  {/* Ảnh sản phẩm + Badge góc trái trên giống Hình 3 */}
+                  <div
+                    onClick={() => onSelectProduct(p)}
+                    className="relative w-full aspect-square bg-secondary overflow-hidden cursor-pointer"
+                  >
+                    <span
+                      className="absolute top-3 left-3 z-10 px-3 py-1 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wider text-white shadow-sm"
+                      style={{ background: "rgba(24, 20, 16, 0.86)" }}
+                    >
+                      {getProductBadge(p)}
+                    </span>
+                    <img
+                      src={p.img}
+                      alt={p.name}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+
+                  {/* Nội dung thẻ sản phẩm giống Hình 3 */}
+                  <div className="p-4">
+                    <div
+                      onClick={() => onSelectProduct(p)}
+                      className="cursor-pointer"
+                    >
+                      <p
+                        className="text-[10px] font-['Inter'] font-bold uppercase tracking-[0.14em]"
+                        style={{ color: "#9a6b24" }}
+                      >
+                        {p.category}
+                      </p>
+                      <h3 className="text-lg font-['Playfair_Display'] font-semibold text-[#141210] mt-1 leading-snug">
+                        {p.name}
+                      </h3>
+
+                      <div className="flex items-center justify-between mt-2">
+                        <span
+                          className="text-base font-['Inter'] font-bold"
+                          style={{ color: "#8c5e1a" }}
+                        >
+                          {p.price}
+                        </span>
+                        <span
+                          className="text-xs font-['Inter'] font-semibold"
+                          style={{ color: "#9a6b24" }}
+                        >
+                          Khám phá →
+                        </span>
+                      </div>
+
+                      {/* Dòng trạng thái tồn kho có chấm xanh giống Hình 3 */}
+                      <div className="flex items-center gap-1.5 mt-2 text-xs font-['Inter'] text-[#3d5a45]">
+                        <span
+                          className="w-2 h-2 rounded-full inline-block"
+                          style={{ background: "#2ecc71" }}
+                        />
+                        <span>
+                          Hiện đang có sẵn:{" "}
+                          <strong className="text-[#1e7e34]">{p.stock}</strong>{" "}
+                          sản phẩm
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Hàng chọn số lượng [- 1 +] & Nút [Thêm giỏ] giống Hình 3 */}
+                    <div
+                      className="flex items-center gap-2.5 mt-3.5 pt-3"
+                      style={{ borderTop: "1px solid #f1eadc" }}
+                    >
+                      <div
+                        className="flex items-center justify-between rounded-xl px-2.5 py-1.5 bg-[#faf7f0]"
+                        style={{
+                          border: "1px solid #e4d8c3",
+                          minWidth: "90px",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setCardQty(p.id, cQty - 1, p.stock)}
+                          className="w-6 h-6 flex items-center justify-center text-sm font-bold text-[#6b5327] cursor-pointer active:scale-90"
+                        >
+                          −
+                        </button>
+                        <span className="text-xs font-['Inter'] font-bold text-[#141210] px-2">
+                          {cQty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCardQty(p.id, cQty + 1, p.stock)}
+                          className="w-6 h-6 flex items-center justify-center text-sm font-bold text-[#6b5327] cursor-pointer active:scale-90"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onAddToCart(p, cQty, p.variant)}
+                        className="flex-1 py-2.5 px-3 rounded-xl text-xs font-['Inter'] font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+                        style={{
+                          background: "#f5efe2",
+                          border: "1px solid #e2d3b5",
+                          color: "#7c5215",
+                        }}
+                      >
+                        <ShoppingCart size={13} color="#8c5e1a" />
+                        <span>Thêm giỏ</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 4. HOME SCREEN (I1) - BANNER TỰ ĐỘNG CHUYỂN ĐỔI (HÌNH 1) & DANH MỤC DẪN TỚI TRANG SẢN PHẨM (HÌNH 2 -> HÌNH 3)
 // ==========================================
 function HomeScreen({
   categoriesList,
@@ -1244,6 +2122,7 @@ function HomeScreen({
   cartCount,
   onOpenCart,
   onSelectProduct,
+  onOpenShopCategory,
 }: {
   categoriesList: DbCategory[];
   productsList: ProductItem[];
@@ -1252,23 +2131,95 @@ function HomeScreen({
   cartCount: number;
   onOpenCart: () => void;
   onSelectProduct: (product: ProductItem) => void;
+  onOpenShopCategory: (categoryId: number | null) => void;
 }) {
-  const [activeSlide, setActiveSlide] = useState(0);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [enableTransition, setEnableTransition] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Danh sách 4 slide banner quảng bá sản phẩm tự động chuyển đổi lặp lại (Hình 5)
+  const promoSlides = React.useMemo(
+    () => [
+      {
+        eyebrow: "BỘ SƯU TẬP MỚI",
+        title: "Vẻ đẹp vĩnh\ncửu",
+        img: "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800&h=400&fit=crop&auto=format",
+        productIndex: 0,
+      },
+      {
+        eyebrow: "TUYỆT TÁC KIM CƯƠNG",
+        title: "Tỏa sáng\nkhí chất",
+        img: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800&h=400&fit=crop&auto=format",
+        productIndex: 1,
+      },
+      {
+        eyebrow: "QUÀ TẶNG TÌNH YÊU",
+        title: "Dây chuyền\nMặt Trái Tim",
+        img: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&h=400&fit=crop&auto=format",
+        productIndex: 2,
+      },
+      {
+        eyebrow: "CHẾ TÁC THƯỢNG LƯU",
+        title: "Bông tai\nNgọc Trai Akoya",
+        img: "https://images.unsplash.com/photo-1629224316810-9d8805b95e76?w=800&h=400&fit=crop&auto=format",
+        productIndex: 3,
+      },
+    ],
+    []
+  );
+
+  // Nhân bản slide đầu tiên ở cuối mảng để khi từ hình cuối trượt sang hình đầu sẽ tiếp tục trượt từ phải sang trái mượt mà, không bị tua ngược lại
+  const extendedSlides = React.useMemo(
+    () => [...promoSlides, promoSlides[0]],
+    [promoSlides]
+  );
+
+  // Tự động trượt tiến liên tục từ phải sang trái
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setEnableTransition(true);
+      setSlideIdx((prev) => prev + 1);
+    }, 3200);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Khi trượt tới bản sao của hình đầu tiên (index === promoSlides.length), đợi hiệu ứng trượt kết thúc rồi đặt lại về index 0 không cần animation
+  useEffect(() => {
+    if (slideIdx === promoSlides.length) {
+      const resetTimer = setTimeout(() => {
+        setEnableTransition(false);
+        setSlideIdx(0);
+      }, 700);
+      return () => clearTimeout(resetTimer);
+    }
+  }, [slideIdx, promoSlides.length]);
+
+  const activeDot = slideIdx % promoSlides.length;
+
+  // 4 danh mục gốc hiển thị ở Trang chủ (Nhẫn, Dây chuyền, Bông tai, Lắc tay) giống Hình 2
+  const homeCategories = React.useMemo(() => {
+    const roots = categoriesList.filter((c) => !c.parentCatId);
+    const desiredOrder = ["nhẫn", "dây chuyền", "bông tai", "lắc tay"];
+    return [...roots]
+      .sort((a, b) => {
+        const ia = desiredOrder.findIndex((k) =>
+          a.name.toLowerCase().includes(k)
+        );
+        const ib = desiredOrder.findIndex((k) =>
+          b.name.toLowerCase().includes(k)
+        );
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      })
+      .slice(0, 4);
+  }, [categoriesList]);
 
   const matchProduct = (p: ProductItem) => {
-    const matchCat =
-      !selectedCategory ||
-      p.category.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-      (selectedCategory === "Nhẫn" &&
-        p.category.toLowerCase().includes("nhẫn"));
     const matchQ =
       !searchQuery.trim() ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.category.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchQ;
+    return matchQ;
   };
 
   const filteredAll = productsList.filter(matchProduct);
@@ -1288,7 +2239,7 @@ function HomeScreen({
             Chào mừng trở lại
           </p>
           <h1 className="text-lg font-['Playfair_Display'] font-semibold text-foreground">
-            Hương Jewelry
+            SaiGon Jewelry
           </h1>
         </div>
         <div className="flex gap-2 items-center">
@@ -1340,99 +2291,116 @@ function HomeScreen({
         </div>
       )}
 
-      {/* Hero Promo Banner */}
-      <div className="mx-4 rounded-2xl overflow-hidden relative h-44 shrink-0">
-        <img
-          src="https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800&h=400&fit=crop&auto=format"
-          alt="Bộ sưu tập trang sức cao cấp"
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-transparent flex flex-col justify-center px-5">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300 font-['Inter'] font-medium mb-1">
-            Bộ sưu tập mới
-          </p>
-          <h2 className="text-xl font-['Playfair_Display'] text-white font-bold leading-tight">
-            Vẻ đẹp vĩnh
-            <br />
-            cửu
-          </h2>
-          <button
-            onClick={() =>
-              productsList[0] && onSelectProduct(productsList[0])
-            }
-            className="mt-3 px-4 py-1.5 rounded-full text-xs font-medium text-white border border-white/60 w-fit font-['Inter'] hover:bg-white/20 transition-colors cursor-pointer"
-          >
-            Khám phá ngay
-          </button>
+      {/* Hero Promo Banner - Hiệu ứng trượt liên tục một chiều từ phải sang trái (không trượt ngược lại khi hết hình cuối) */}
+      <div className="mx-4 rounded-2xl overflow-hidden relative h-44 shrink-0 shadow-sm">
+        <div
+          className={`flex h-full w-full ${
+            enableTransition
+              ? "transition-transform duration-700 ease-in-out"
+              : ""
+          }`}
+          style={{
+            transform: `translateX(-${slideIdx * 100}%)`,
+          }}
+        >
+          {extendedSlides.map((slide, idx) => (
+            <div
+              key={idx}
+              className="relative w-full h-full shrink-0 overflow-hidden"
+            >
+              <img
+                src={slide.img}
+                alt={slide.eyebrow}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent flex flex-col justify-center px-5 z-10">
+                <p className="text-[10px] uppercase tracking-widest text-amber-300 font-['Inter'] font-medium mb-1">
+                  {slide.eyebrow}
+                </p>
+                <h2 className="text-xl font-['Playfair_Display'] text-white font-bold leading-tight whitespace-pre-line">
+                  {slide.title}
+                </h2>
+                <button
+                  onClick={() => {
+                    const targetProd =
+                      productsList[slide.productIndex % productsList.length] ||
+                      productsList[0];
+                    if (targetProd) {
+                      onSelectProduct(targetProd);
+                    } else {
+                      onOpenShopCategory(null);
+                    }
+                  }}
+                  className="mt-3 px-4 py-1.5 rounded-full text-xs font-medium text-white border border-white/60 w-fit font-['Inter'] hover:bg-white/20 transition-colors cursor-pointer"
+                >
+                  Khám phá ngay
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Banner Carousel Pagination Dots */}
       <div className="flex justify-center gap-1.5 mt-3">
-        {[0, 1, 2, 3].map((idx) => (
+        {promoSlides.map((_, idx) => (
           <button
             key={idx}
-            onClick={() => setActiveSlide(idx)}
-            className={`rounded-full transition-all cursor-pointer ${
-              idx === activeSlide ? "w-5 h-1.5" : "w-1.5 h-1.5"
+            onClick={() => {
+              setEnableTransition(true);
+              setSlideIdx(idx);
+            }}
+            className={`rounded-full transition-all duration-300 cursor-pointer ${
+              idx === activeDot ? "w-5 h-1.5" : "w-1.5 h-1.5"
             }`}
             style={{
-              background: idx === activeSlide ? PRIMARY_GOLD : "#d4c4a0",
+              background: idx === activeDot ? PRIMARY_GOLD : "#d4c4a0",
             }}
           />
         ))}
       </div>
 
-      {/* Categories */}
+      {/* Categories - Bấm chọn danh mục dẫn thẳng đến trang Sản phẩm / Toàn bộ sản phẩm (Hình 2 -> Hình 3) */}
       <div className="px-4 mt-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-['Playfair_Display'] text-base font-semibold text-foreground">
             Danh mục
           </h3>
           <button
-            onClick={() => setSelectedCategory(null)}
+            onClick={() => onOpenShopCategory(null)}
             className="text-xs font-['Inter'] cursor-pointer"
             style={{ color: PRIMARY_GOLD }}
           >
-            {selectedCategory ? "Tất cả" : "Xem thêm"}
+            Tất cả
           </button>
         </div>
         <div className="grid grid-cols-4 gap-3">
-          {categoriesList.slice(0, 4).map((cat) => {
-            const isSelected = selectedCategory === cat.name;
-            return (
-              <button
-                key={cat.id}
-                onClick={() =>
-                  setSelectedCategory(isSelected ? null : cat.name)
-                }
-                className="flex flex-col items-center gap-2 group cursor-pointer"
+          {homeCategories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => onOpenShopCategory(cat.id)}
+              className="flex flex-col items-center gap-2 group cursor-pointer"
+            >
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition-transform group-active:scale-95"
+                style={{
+                  background: "linear-gradient(135deg,#fdf8ef 0%,#f5edd8 100%)",
+                  border: `1px solid ${BORDER_GOLD_LIGHT}`,
+                }}
               >
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition-transform group-active:scale-95"
-                  style={{
-                    background: isSelected
-                      ? "linear-gradient(135deg,#f5e4bc 0%,#ebd296 100%)"
-                      : "linear-gradient(135deg,#fdf8ef 0%,#f5edd8 100%)",
-                    border: `1px solid ${
-                      isSelected ? PRIMARY_GOLD : BORDER_GOLD_LIGHT
-                    }`,
-                  }}
-                >
-                  {cat.icon}
-                </div>
-                <span
-                  className="text-[11px] font-['Inter'] text-center"
-                  style={{
-                    color: isSelected ? PRIMARY_GOLD : "var(--foreground)",
-                    fontWeight: isSelected ? 600 : 400,
-                  }}
-                >
-                  {cat.name}
-                </span>
-              </button>
-            );
-          })}
+                {cat.icon}
+              </div>
+              <span
+                className="text-[11px] font-['Inter'] text-center"
+                style={{
+                  color: "var(--foreground)",
+                  fontWeight: 500,
+                }}
+              >
+                {cat.name}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1443,10 +2411,7 @@ function HomeScreen({
             Nổi bật
           </h3>
           <button
-            onClick={() => {
-              setSelectedCategory(null);
-              setSearchQuery("");
-            }}
+            onClick={() => onOpenShopCategory(null)}
             className="text-xs font-['Inter'] cursor-pointer"
             style={{ color: PRIMARY_GOLD }}
           >
@@ -1528,10 +2493,7 @@ function HomeScreen({
             Hàng mới về
           </h3>
           <button
-            onClick={() => {
-              setSelectedCategory(null);
-              setSearchQuery("");
-            }}
+            onClick={() => onOpenShopCategory(null)}
             className="text-xs font-['Inter'] cursor-pointer"
             style={{ color: PRIMARY_GOLD }}
           >
@@ -1851,7 +2813,7 @@ function PersonalInfoScreen({
             {name}
           </h2>
           <p className="text-xs font-['Inter'] text-muted-foreground mt-0.5">
-            Thành viên Vàng · Hương Jewelry
+            {email}
           </p>
         </div>
 
@@ -2017,47 +2979,6 @@ function PersonalInfoScreen({
             {errMsg}
           </div>
         )}
-
-        {/* Membership Gold Card */}
-        <div
-          className="mx-4 mt-4 rounded-2xl p-4 relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg,#c9972d 0%,#8b6914 100%)",
-          }}
-        >
-          <div
-            className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-20"
-            style={{ background: "white" }}
-          />
-          <div
-            className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full opacity-10"
-            style={{ background: "white" }}
-          />
-          <p className="text-[10px] font-['Inter'] uppercase tracking-widest text-white/60 mb-1">
-            Hương Jewelry
-          </p>
-          <p className="text-base font-['Playfair_Display'] font-bold text-white">
-            Thành viên Vàng
-          </p>
-          <div className="flex items-end justify-between mt-3">
-            <div>
-              <p className="text-[10px] font-['Inter'] text-white/60">
-                Điểm tích lũy
-              </p>
-              <p className="text-xl font-['Playfair_Display'] font-bold text-white">
-                {user.points.toLocaleString("vi-VN")}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] font-['Inter'] text-white/60">
-                Ngày tham gia
-              </p>
-              <p className="text-xs font-['Inter'] text-white/80">
-                {user.joinDate}
-              </p>
-            </div>
-          </div>
-        </div>
 
         <div className="h-6" />
       </div>
@@ -2542,12 +3463,11 @@ function ProfileScreen({
           {maskPhone(user.phone)}
         </p>
 
-        {/* Stats Row */}
-        <div className="flex gap-6 mt-4 z-10">
+        {/* Stats Row (Không hiển thị điểm / hạng thành viên) */}
+        <div className="flex gap-10 mt-4 z-10">
           {[
             { label: "Đơn hàng", val: String(user.ordersCount) },
             { label: "Yêu thích", val: String(favoritesCount) },
-            { label: "Điểm", val: user.points.toLocaleString("vi-VN") },
           ].map((stat) => (
             <div key={stat.label} className="flex flex-col items-center">
               <span className="text-base font-['Playfair_Display'] font-bold text-white">
@@ -2752,18 +3672,20 @@ function ProfileScreen({
 }
 
 // ==========================================
-// 10. CHECKOUT / ORDER SCREEN (P1) - LƯU ĐƠN HÀNG VÀO SUPABASE
+// 10. CHECKOUT / ORDER SCREEN (P1) - GIAO DIỆN MÀU TRẮNG CHỦ ĐẠO (HÌNH 1), KHÔNG DÙNG ĐIỂM THƯỞNG
 // ==========================================
 function OrderScreen({
   user,
   onBack,
   onGoHome,
+  onViewOrders,
   items,
   onOrderPlaced,
 }: {
   user: CustomerProfile;
   onBack: () => void;
   onGoHome: () => void;
+  onViewOrders?: () => void;
   items: CartItem[];
   onOrderPlaced: (orderCode: string) => void;
 }) {
@@ -2798,62 +3720,82 @@ function OrderScreen({
     }
   };
 
-  // Success view
+  // Success view (Màu trắng chủ đạo)
   if (isSuccess) {
     return (
       <div
         className="flex flex-col h-full items-center justify-center gap-6 px-6"
-        style={{ background: DARK_BG }}
+        style={{ background: "#ffffff" }}
       >
         <div
           className="w-20 h-20 rounded-full flex items-center justify-center"
           style={{
-            background: "rgba(184,146,42,0.15)",
+            background: "#fdf8ef",
             border: `2px solid ${PRIMARY_GOLD}`,
           }}
         >
           <CheckCircle size={40} color={PRIMARY_GOLD} />
         </div>
         <div className="text-center">
-          <p className="text-xl font-['Playfair_Display'] font-bold text-white mb-2">
+          <p className="text-xl font-['Playfair_Display'] font-bold text-[#141210] mb-2">
             Đặt hàng thành công!
           </p>
-          <p className="text-sm font-['Inter'] text-white/60">
+          <p className="text-sm font-['Inter'] font-semibold text-[#6b6358]">
             Mã đơn hàng: {orderCode}
           </p>
-          <p className="text-xs font-['Inter'] text-white/40 mt-1">
+          <p className="text-xs font-['Inter'] text-[#8a7a5c] mt-1">
             Đơn hàng đã được lưu vào cơ sở dữ liệu Supabase
           </p>
         </div>
-        <button
-          onClick={onGoHome}
-          className="px-8 py-3 rounded-2xl text-sm font-['Inter'] font-bold text-white cursor-pointer active:scale-95 transition-transform"
-          style={{
-            background: `linear-gradient(135deg, ${PRIMARY_GOLD} 0%, #8b6914 100%)`,
-          }}
-        >
-          Về trang chủ
-        </button>
+        <div className="flex flex-col gap-2.5 w-full max-w-[240px]">
+          {onViewOrders && (
+            <button
+              onClick={onViewOrders}
+              className="w-full py-3 rounded-2xl text-sm font-['Inter'] font-bold text-white cursor-pointer active:scale-95 transition-transform"
+              style={{
+                background: `linear-gradient(135deg, ${PRIMARY_GOLD} 0%, #8b6914 100%)`,
+                boxShadow: "0 4px 14px rgba(184,146,42,0.3)",
+              }}
+            >
+              Xem đơn hàng của tôi
+            </button>
+          )}
+          <button
+            onClick={onGoHome}
+            className="w-full py-3 rounded-2xl text-sm font-['Inter'] font-bold text-[#141210] bg-[#faf8f5] cursor-pointer active:scale-95 transition-transform"
+            style={{
+              border: `1px solid ${BORDER_GOLD_LIGHT}`,
+            }}
+          >
+            Về trang chủ
+          </button>
+        </div>
       </div>
     );
   }
 
-  // Checkout Review view (Dark luxury theme)
+  // Checkout Review view (White & Clean Gold Theme - Hình 1)
   return (
-    <div className="flex flex-col h-full" style={{ background: DARK_BG }}>
-      {/* Header */}
+    <div className="flex flex-col h-full" style={{ background: "#f8f6f2" }}>
+      {/* Header màu trắng chủ đạo */}
       <div
-        className="flex items-center gap-3 px-4 pt-10 pb-5 shrink-0"
-        style={{ background: NAVY_HEADER }}
+        className="flex items-center gap-3 px-4 pt-10 pb-4 shrink-0 bg-white"
+        style={{
+          borderBottom: `1px solid ${BORDER_GOLD_LIGHT}`,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+        }}
       >
         <button
           onClick={onBack}
-          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
-          style={{ background: "rgba(255,255,255,0.15)" }}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+          style={{
+            background: "#faf8f5",
+            border: `1px solid ${BORDER_GOLD_LIGHT}`,
+          }}
         >
-          <ArrowLeft size={18} color="white" />
+          <ArrowLeft size={18} color="#141210" />
         </button>
-        <h1 className="flex-1 text-lg font-['Playfair_Display'] font-semibold text-white">
+        <h1 className="flex-1 text-lg font-['Playfair_Display'] font-bold text-[#141210]">
           Tổng quan đơn hàng
         </h1>
       </div>
@@ -2864,8 +3806,8 @@ function OrderScreen({
       >
         {/* Delivery Address Card */}
         <div
-          className="mx-4 mt-4 rounded-2xl px-4 py-3.5 flex items-start gap-3"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
+          className="mx-4 mt-4 rounded-2xl px-4 py-3.5 flex items-start gap-3 bg-white shadow-2xs"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
           <MapPin
             size={16}
@@ -2873,13 +3815,13 @@ function OrderScreen({
             className="mt-0.5 shrink-0"
           />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-['Inter'] font-semibold text-white/50 uppercase tracking-wide mb-0.5">
+            <p className="text-[11px] font-['Inter'] font-semibold text-[#8a7a5c] uppercase tracking-wide mb-0.5">
               Địa chỉ giao hàng
             </p>
-            <p className="text-sm font-['Inter'] font-semibold text-white">
+            <p className="text-sm font-['Inter'] font-bold text-[#141210]">
               {user.name} · {maskPhone(user.phone)}
             </p>
-            <p className="text-xs font-['Inter'] text-white/50 mt-0.5 leading-relaxed">
+            <p className="text-xs font-['Inter'] text-[#6b6358] mt-0.5 leading-relaxed">
               {user.address}
             </p>
           </div>
@@ -2890,12 +3832,12 @@ function OrderScreen({
 
         {/* Mall / Store Order Items */}
         <div
-          className="mx-4 mt-3 rounded-2xl overflow-hidden"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
+          className="mx-4 mt-3 rounded-2xl overflow-hidden bg-white shadow-2xs"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
           <div
             className="flex items-center justify-between px-4 py-3 border-b"
-            style={{ borderColor: DARK_BORDER }}
+            style={{ borderColor: "#f1eadc" }}
           >
             <div className="flex items-center gap-2">
               <span
@@ -2904,12 +3846,12 @@ function OrderScreen({
               >
                 MALL
               </span>
-              <span className="text-sm font-['Inter'] font-semibold text-white">
-                Hương Jewelry
+              <span className="text-sm font-['Inter'] font-bold text-[#141210]">
+                SaiGon Jewelry
               </span>
             </div>
             <button
-              className="flex items-center gap-1 text-xs font-['Inter'] cursor-pointer"
+              className="flex items-center gap-1 text-xs font-['Inter'] font-medium cursor-pointer"
               style={{ color: PRIMARY_GOLD }}
             >
               <Pencil size={11} />
@@ -2923,9 +3865,12 @@ function OrderScreen({
               className={`flex gap-3 px-4 py-3 ${
                 idx < items.length - 1 ? "border-b" : ""
               }`}
-              style={{ borderColor: DARK_BORDER }}
+              style={{ borderColor: "#f1eadc" }}
             >
-              <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-white/5">
+              <div
+                className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-[#faf8f5]"
+                style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+              >
                 <img
                   src={item.img}
                   alt={item.name}
@@ -2934,19 +3879,19 @@ function OrderScreen({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-['Playfair_Display'] font-semibold text-white leading-snug">
+                  <p className="text-sm font-['Playfair_Display'] font-bold text-[#141210] leading-snug">
                     {item.name}
                   </p>
-                  <span className="text-xs font-['Inter'] text-white/50 shrink-0">
+                  <span className="text-xs font-['Inter'] font-semibold text-[#6b6358] shrink-0">
                     x{item.qty}
                   </span>
                 </div>
-                <p className="text-xs font-['Inter'] text-white/40 mt-0.5">
+                <p className="text-xs font-['Inter'] text-[#8a7a5c] mt-0.5">
                   {item.variant}
                 </p>
                 <p
-                  className="text-sm font-['Inter'] font-semibold mt-1"
-                  style={{ color: PRIMARY_GOLD }}
+                  className="text-sm font-['Inter'] font-bold mt-1"
+                  style={{ color: "#9a6b24" }}
                 >
                   {formatCurrency(item.price)}
                 </p>
@@ -2956,85 +3901,65 @@ function OrderScreen({
 
           {/* Shipping Row */}
           <div
-            className="flex items-center justify-between px-4 py-3 border-t"
-            style={{ borderColor: DARK_BORDER }}
+            className="flex items-center justify-between px-4 py-3 border-t bg-[#fdfbf7]"
+            style={{ borderColor: "#f1eadc" }}
           >
             <div className="flex items-center gap-2">
               <Truck size={14} color={PRIMARY_GOLD} />
-              <span className="text-xs font-['Inter'] text-white/80">
+              <span className="text-xs font-['Inter'] text-[#3f3a34] font-medium">
                 Giao hàng bảo hiểm niêm phong
               </span>
             </div>
             <div className="flex items-center gap-2">
               {isFreeShipping && (
-                <span className="text-xs font-['Inter'] text-white/40 line-through">
+                <span className="text-xs font-['Inter'] text-[#9c9283] line-through">
                   {formatCurrency(shippingOriginal)}
                 </span>
               )}
               <span
-                className="text-xs font-['Inter'] font-semibold"
-                style={{ color: isFreeShipping ? "#4ade80" : PRIMARY_GOLD }}
+                className="text-xs font-['Inter'] font-bold"
+                style={{ color: isFreeShipping ? "#16a34a" : "#9a6b24" }}
               >
                 {isFreeShipping
                   ? "Miễn phí"
                   : formatCurrency(shippingOriginal)}
               </span>
-              <ChevronRight size={12} color="#666" />
+              <ChevronRight size={12} color="#b5a68e" />
             </div>
           </div>
         </div>
 
         {/* Voucher */}
         <div
-          className="mx-4 mt-3 rounded-2xl px-4 py-3.5 flex items-center gap-3"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
+          className="mx-4 mt-3 rounded-2xl px-4 py-3.5 flex items-center gap-3 bg-white shadow-2xs"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
           <Tag size={15} color={PRIMARY_GOLD} />
-          <span className="flex-1 text-sm font-['Inter'] text-white/80">
-            Voucher Hương Jewelry
+          <span className="flex-1 text-sm font-['Inter'] font-medium text-[#141210]">
+            Voucher SaiGon Jewelry
           </span>
           {isFreeShipping ? (
-            <span className="text-sm font-['Inter'] font-semibold text-green-400">
+            <span className="text-sm font-['Inter'] font-bold text-[#16a34a]">
               −{formatCurrency(shippingDiscount)}
             </span>
           ) : (
-            <span className="text-xs font-['Inter'] text-white/40">
+            <span className="text-xs font-['Inter'] text-[#8a7a5c]">
               Chọn voucher
             </span>
           )}
-          <ChevronRight size={14} color="#555" />
-        </div>
-
-        {/* Points */}
-        <div
-          className="mx-4 mt-2 rounded-2xl px-4 py-3.5 flex items-center gap-3"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
-        >
-          <Gift size={15} color={PRIMARY_GOLD} />
-          <div className="flex-1">
-            <span className="text-sm font-['Inter'] text-white/80">
-              Điểm thưởng ({user.points.toLocaleString("vi-VN")} điểm)
-            </span>
-          </div>
-          <span
-            className="text-sm font-['Inter'] font-semibold"
-            style={{ color: PRIMARY_GOLD }}
-          >
-            Dùng 1.200đ
-          </span>
-          <ChevronRight size={14} color="#555" />
+          <ChevronRight size={14} color="#b5a68e" />
         </div>
 
         {/* Collapsible Order Summary ("Tóm tắt đơn hàng") */}
         <div
-          className="mx-4 mt-3 rounded-2xl overflow-hidden"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
+          className="mx-4 mt-3 rounded-2xl overflow-hidden bg-white shadow-2xs"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
           <button
             onClick={() => setShowSummaryDetails(!showSummaryDetails)}
             className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer"
           >
-            <span className="text-sm font-['Inter'] font-bold text-white">
+            <span className="text-sm font-['Inter'] font-bold text-[#141210]">
               Tóm tắt đơn hàng
             </span>
             {showSummaryDetails ? (
@@ -3046,18 +3971,18 @@ function OrderScreen({
 
           <div className="px-4 pb-2">
             <div className="flex justify-between py-1">
-              <span className="text-xs font-['Inter'] text-white/70">
+              <span className="text-xs font-['Inter'] text-[#6b6358]">
                 Tổng phụ sản phẩm
               </span>
-              <span className="text-xs font-['Inter'] font-semibold text-white">
+              <span className="text-xs font-['Inter'] font-semibold text-[#141210]">
                 {formatCurrency(subtotal)}
               </span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-xs font-['Inter'] text-white/70">
+              <span className="text-xs font-['Inter'] text-[#6b6358]">
                 Tổng phụ vận chuyển
               </span>
-              <span className="text-xs font-['Inter'] font-semibold text-white">
+              <span className="text-xs font-['Inter'] font-semibold text-[#141210]">
                 {formatCurrency(shippingFinal)}
               </span>
             </div>
@@ -3065,18 +3990,18 @@ function OrderScreen({
             {showSummaryDetails && (
               <>
                 <div className="flex justify-between py-1">
-                  <span className="text-xs font-['Inter'] text-white/50 pl-3">
+                  <span className="text-xs font-['Inter'] text-[#8a7a5c] pl-3">
                     Giá gốc vận chuyển
                   </span>
-                  <span className="text-xs font-['Inter'] text-white/60">
+                  <span className="text-xs font-['Inter'] text-[#6b6358]">
                     {formatCurrency(shippingOriginal)}
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-xs font-['Inter'] text-white/50 pl-3">
+                  <span className="text-xs font-['Inter'] text-[#8a7a5c] pl-3">
                     Giảm phí vận chuyển
                   </span>
-                  <span className="text-xs font-['Inter'] text-red-400">
+                  <span className="text-xs font-['Inter'] font-semibold text-[#16a34a]">
                     −{formatCurrency(shippingDiscount)}
                   </span>
                 </div>
@@ -3086,15 +4011,15 @@ function OrderScreen({
 
           <div
             className="mx-4 border-t my-1"
-            style={{ borderColor: DARK_BORDER }}
+            style={{ borderColor: "#f1eadc" }}
           />
           <div className="flex justify-between px-4 py-3.5">
-            <span className="text-base font-['Inter'] font-bold text-white">
+            <span className="text-base font-['Inter'] font-bold text-[#141210]">
               Tổng
             </span>
             <span
               className="text-base font-['Playfair_Display'] font-bold"
-              style={{ color: PRIMARY_GOLD }}
+              style={{ color: "#9a6b24" }}
             >
               {formatCurrency(total)}
             </span>
@@ -3103,10 +4028,10 @@ function OrderScreen({
 
         {/* Payment Methods */}
         <div
-          className="mx-4 mt-3 rounded-2xl overflow-hidden"
-          style={{ background: DARK_CARD, border: `1px solid ${DARK_BORDER}` }}
+          className="mx-4 mt-3 rounded-2xl overflow-hidden bg-white shadow-2xs"
+          style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
-          <p className="px-4 pt-4 pb-2 text-sm font-['Inter'] font-semibold text-white">
+          <p className="px-4 pt-4 pb-2 text-sm font-['Inter'] font-bold text-[#141210]">
             Phương thức thanh toán
           </p>
           {(
@@ -3135,7 +4060,7 @@ function OrderScreen({
               {idx > 0 && (
                 <div
                   className="mx-4 border-t"
-                  style={{ borderColor: DARK_BORDER }}
+                  style={{ borderColor: "#f1eadc" }}
                 />
               )}
               <button
@@ -3144,14 +4069,16 @@ function OrderScreen({
               >
                 <div
                   className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: "rgba(184,146,42,0.12)" }}
+                  style={{ background: "#fdf6e7" }}
                 >
                   {m.icon}
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="text-sm font-['Inter'] text-white">{m.name}</p>
+                  <p className="text-sm font-['Inter'] font-medium text-[#141210]">
+                    {m.name}
+                  </p>
                   {m.sub && (
-                    <p className="text-[11px] font-['Inter'] text-white/40 mt-0.5">
+                    <p className="text-[11px] font-['Inter'] text-[#8a7a5c] mt-0.5">
                       {m.sub}
                     </p>
                   )}
@@ -3160,7 +4087,7 @@ function OrderScreen({
                   className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
                   style={{
                     borderColor:
-                      paymentMethod === m.id ? PRIMARY_GOLD : "#555",
+                      paymentMethod === m.id ? PRIMARY_GOLD : "#d4c8b4",
                     background:
                       paymentMethod === m.id ? PRIMARY_GOLD : "transparent",
                   }}
@@ -3175,16 +4102,13 @@ function OrderScreen({
 
           {/* Legal Disclaimer */}
           <div className="px-4 pb-4 pt-1">
-            <p
-              className="text-[10px] font-['Inter'] leading-relaxed"
-              style={{ color: "rgba(255,255,255,0.35)" }}
-            >
+            <p className="text-[10px] font-['Inter'] leading-relaxed text-[#8a7a5c]">
               Bằng cách đặt đơn hàng, bạn đồng ý với{" "}
-              <span style={{ color: PRIMARY_GOLD }}>
+              <span className="font-semibold" style={{ color: "#9a6b24" }}>
                 Điều khoản sử dụng và bán hàng
               </span>{" "}
-              của Hương Jewelry và đồng ý rằng dữ liệu của bạn sẽ được xử lý theo{" "}
-              <span style={{ color: PRIMARY_GOLD }}>
+              của SaiGon Jewelry và đồng ý rằng dữ liệu của bạn sẽ được xử lý theo{" "}
+              <span className="font-semibold" style={{ color: "#9a6b24" }}>
                 Chính sách quyền riêng tư
               </span>
               .
@@ -3195,26 +4119,22 @@ function OrderScreen({
         <div className="h-4" />
       </div>
 
-      {/* Sticky Bottom Order Confirmation Action */}
+      {/* Sticky Bottom Order Confirmation Action (Màu trắng chủ đạo) */}
       <div
-        className="shrink-0 px-4 pt-3 pb-5"
+        className="shrink-0 px-4 pt-3 pb-5 bg-white"
         style={{
-          background: DARK_CARD,
-          borderTop: `1px solid ${DARK_BORDER}`,
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.4)",
+          borderTop: `1px solid ${BORDER_GOLD_LIGHT}`,
+          boxShadow: "0 -4px 16px rgba(0,0,0,0.06)",
         }}
       >
         <div className="flex items-center justify-between">
           <div>
-            <p
-              className="text-[11px] font-['Inter']"
-              style={{ color: "rgba(255,255,255,0.45)" }}
-            >
+            <p className="text-[11px] font-['Inter'] text-[#6b6358]">
               Tổng ({totalItemCount} mặt hàng)
             </p>
             <p
               className="text-lg font-['Inter'] font-bold"
-              style={{ color: PRIMARY_GOLD }}
+              style={{ color: "#9a6b24" }}
             >
               {formatCurrency(total)}
             </p>
@@ -3225,7 +4145,7 @@ function OrderScreen({
             className="px-6 py-3 rounded-2xl text-sm font-['Inter'] font-bold text-white active:scale-95 transition-transform cursor-pointer"
             style={{
               background: `linear-gradient(135deg, ${PRIMARY_GOLD} 0%, #8b6914 100%)`,
-              boxShadow: "0 4px 14px rgba(184,146,42,0.4)",
+              boxShadow: "0 4px 14px rgba(184,146,42,0.32)",
             }}
           >
             {submitting ? "Đang xử lý..." : "Xác nhận đặt hàng"}
@@ -3237,19 +4157,453 @@ function OrderScreen({
 }
 
 // ==========================================
-// 11. BOTTOM NAVIGATION BAR (L1)
+// 10B. ORDERS HISTORY SCREEN (HÌNH 3 - TRANG ĐƠN HÀNG CỦA TÔI)
+// ==========================================
+function OrdersHistoryScreen({
+  userId,
+  orders,
+  loading,
+  onRefreshOrders,
+  onOpenShop,
+  onShowToast,
+}: {
+  userId: string;
+  orders: DbOrder[];
+  loading: boolean;
+  onRefreshOrders: () => Promise<void>;
+  onOpenShop: () => void;
+  onShowToast: (msg: string) => void;
+}) {
+  const [selectedOrder, setSelectedOrder] = useState<DbOrder | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+
+  const STATUS_LABELS: Record<string, string> = {
+    pending: "CHỜ XÁC NHẬN",
+    processing: "ĐANG XỬ LÝ",
+    shipped: "ĐANG GIAO",
+    delivered: "ĐÃ GIAO",
+    cancelled: "ĐÃ HỦY",
+    returned: "ĐÃ TRẢ HÀNG",
+  };
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case "returned":
+        return {
+          background: "#fae8e8",
+          color: "#a82424",
+          border: "1px solid #f3c7c7",
+        };
+      case "cancelled":
+        return {
+          background: "#fee2e2",
+          color: "#991b1b",
+          border: "1px solid #fecaca",
+        };
+      case "delivered":
+        return {
+          background: "#dcfce7",
+          color: "#15803d",
+          border: "1px solid #bbf7d0",
+        };
+      case "shipped":
+        return {
+          background: "#e0e7ff",
+          color: "#3730a3",
+          border: "1px solid #c7d2fe",
+        };
+      case "processing":
+        return {
+          background: "#e0f2fe",
+          color: "#0369a1",
+          border: "1px solid #bae6fd",
+        };
+      default:
+        return {
+          background: "#fef3c7",
+          color: "#b45309",
+          border: "1px solid #fde68a",
+        };
+    }
+  };
+
+  const METHOD_LABELS: Record<string, string> = {
+    cod: "Thanh toán khi nhận hàng (COD)",
+    bank_transfer: "Chuyển khoản",
+    e_wallet: "Ví điện tử",
+    credit_card: "Thẻ tín dụng",
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
+    setCancellingId(orderId);
+    try {
+      await cancelCustomerOrderInDb(orderId, userId);
+      await onRefreshOrders();
+      onShowToast(`Đã hủy đơn hàng #${orderId} thành công!`);
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, status: "cancelled" });
+      }
+    } catch (e: any) {
+      onShowToast(e?.message || "Không thể hủy đơn hàng.");
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  return (
+    <div
+      className="flex flex-col h-full overflow-y-auto relative"
+      style={{ background: "#faf8f5", scrollbarWidth: "none" }}
+    >
+      {/* Header giống Hình 3: — LỊCH SỬ MUA HÀNG / Đơn hàng của tôi */}
+      <div
+        className="px-4 pt-10 pb-5 text-center bg-[#faf8f5] sticky top-0 z-10"
+        style={{ borderBottom: `1px solid ${BORDER_GOLD_LIGHT}` }}
+      >
+        <p
+          className="text-[10px] font-['Inter'] font-bold uppercase tracking-[0.22em]"
+          style={{ color: "#9a6b24" }}
+        >
+          — LỊCH SỬ MUA HÀNG
+        </p>
+        <h1 className="text-2xl font-['Playfair_Display'] font-normal text-[#141210] mt-1">
+          Đơn hàng của tôi
+        </h1>
+      </div>
+
+      {/* Danh sách đơn hàng giống Hình 3 */}
+      <div className="p-4 flex flex-col gap-3.5 pb-8">
+        {loading ? (
+          <div className="py-16 text-center text-xs font-['Inter'] text-[#6b6358]">
+            Đang tải lịch sử đơn hàng từ Supabase...
+          </div>
+        ) : orders.length === 0 ? (
+          <div
+            className="bg-white rounded-2xl p-8 text-center shadow-2xs"
+            style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+          >
+            <p className="text-base font-['Playfair_Display'] font-bold text-[#141210]">
+              Bạn chưa có đơn hàng nào
+            </p>
+            <p className="text-xs font-['Inter'] text-[#6b6358] mt-1">
+              Khám phá bộ sưu tập trang sức SaiGon Jewelry ngay hôm nay.
+            </p>
+            <button
+              type="button"
+              onClick={onOpenShop}
+              className="mt-4 px-5 py-2.5 rounded-full text-xs font-['Inter'] font-bold text-white cursor-pointer active:scale-95"
+              style={{ background: "#8c5e1a" }}
+            >
+              Mua sắm ngay
+            </button>
+          </div>
+        ) : (
+          orders.map((o) => {
+            const totalQty = o.items.reduce((s, i) => s + i.quantity, 0);
+            const firstItem = o.items[0];
+            const summaryText = firstItem
+              ? `${firstItem.productName}${
+                  o.items.length > 1
+                    ? ` và ${o.items.length - 1} sản phẩm khác`
+                    : ""
+                } (${totalQty} món)`
+              : `Đơn hàng trang sức (${totalQty} món)`;
+            const stStyle = getStatusStyle(o.status);
+
+            return (
+              <div
+                key={o.id}
+                className="bg-white rounded-2xl p-4 shadow-2xs transition-all"
+                style={{
+                  border: "1px solid #e2d6c1",
+                }}
+              >
+                {/* Hàng trên: Đơn #48 · 12:21 12/11/26 + Badge trạng thái */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-['Inter']">
+                    <strong className="text-[#141210] font-bold">
+                      Đơn #{o.id}
+                    </strong>{" "}
+                    <span className="text-[#6b6358]">· {o.formattedDate}</span>
+                  </div>
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wider shrink-0"
+                    style={stStyle}
+                  >
+                    {STATUS_LABELS[o.status] || o.status}
+                  </span>
+                </div>
+
+                {/* Hàng giữa: Hình ảnh thu nhỏ + Tên sản phẩm (X món) */}
+                <div
+                  className="flex items-center gap-3 py-3 my-2.5"
+                  style={{
+                    borderBottom: "1px dashed #e9e0cf",
+                  }}
+                >
+                  <div className="flex -space-x-1.5 shrink-0">
+                    {(o.items.length > 0 ? o.items.slice(0, 3) : []).map(
+                      (item, idx) => (
+                        <img
+                          key={idx}
+                          src={item.imageUrl}
+                          alt={item.productName}
+                          className="w-11 h-11 rounded-xl object-cover bg-[#faf8f5]"
+                          style={{ border: "1px solid #e2d6c1" }}
+                        />
+                      )
+                    )}
+                  </div>
+                  <span className="text-xs font-['Inter'] text-[#575047] leading-snug line-clamp-2">
+                    {summaryText}
+                  </span>
+                </div>
+
+                {/* Hàng dưới: Tổng tiền: 17.064.000đ + Nút XEM CHI TIẾT giống Hình 3 */}
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <div className="text-xs font-['Inter'] text-[#3f3a34]">
+                    Tổng tiền:{" "}
+                    <strong
+                      className="text-sm font-bold"
+                      style={{ color: "#8c5e1a" }}
+                    >
+                      {formatCurrency(o.totalAmount)}
+                    </strong>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {o.status === "pending" && (
+                      <button
+                        type="button"
+                        disabled={cancellingId === o.id}
+                        onClick={() => handleCancelOrder(o.id)}
+                        className="px-3 py-1.5 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wider cursor-pointer active:scale-95"
+                        style={{
+                          border: "1px solid #d4c4a8",
+                          color: "#6b5327",
+                          background: "#ffffff",
+                        }}
+                      >
+                        {cancellingId === o.id ? "Đang hủy..." : "Hủy đơn"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrder(o)}
+                      className="px-4 py-2 rounded-full text-[10px] font-['Inter'] font-bold uppercase tracking-wider text-white cursor-pointer active:scale-95 transition-transform"
+                      style={{
+                        background: "#141210",
+                      }}
+                    >
+                      XEM CHI TIẾT
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Modal Xem Chi Tiết Đơn Hàng / Hóa Đơn Điện Tử */}
+      {selectedOrder && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/55 flex items-center justify-center p-4"
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-[360px] max-h-[84vh] flex flex-col overflow-hidden shadow-2xl"
+            style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              className="flex items-center justify-between px-4 py-3.5 bg-[#faf8f5]"
+              style={{ borderBottom: `1px solid ${BORDER_GOLD_LIGHT}` }}
+            >
+              <div>
+                <p
+                  className="text-[10px] font-['Inter'] font-bold uppercase tracking-wider"
+                  style={{ color: "#9a6b24" }}
+                >
+                  HÓA ĐƠN ĐIỆN TỬ #HD-{String(selectedOrder.id).padStart(6, "0")}
+                </p>
+                <h3 className="text-base font-['Playfair_Display'] font-bold text-[#141210]">
+                  Đơn hàng #{selectedOrder.id}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#141210] cursor-pointer"
+                style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div
+              className="p-4 overflow-y-auto flex flex-col gap-3"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {/* Trạng thái & Thời gian */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-['Inter'] text-[#6b6358]">
+                  Thời gian: {selectedOrder.formattedDate}
+                </span>
+                <span
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-['Inter'] font-bold uppercase"
+                  style={getStatusStyle(selectedOrder.status)}
+                >
+                  {STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
+                </span>
+              </div>
+
+              {/* Thông tin người nhận & Thanh toán */}
+              <div
+                className="rounded-2xl p-3 bg-[#faf8f5] text-xs font-['Inter'] flex flex-col gap-2"
+                style={{ border: "1px solid #ebd9b5" }}
+              >
+                <div>
+                  <strong className="text-[#141210]">Người nhận hàng:</strong>
+                  <p className="text-[#3f3a34] mt-0.5">
+                    {selectedOrder.cusName} · {selectedOrder.cusPhone}
+                  </p>
+                  <p className="text-[#6b6358] text-[11px] mt-0.5">
+                    {selectedOrder.address}
+                  </p>
+                </div>
+                <div
+                  className="pt-2"
+                  style={{ borderTop: "1px dashed #e2d3b5" }}
+                >
+                  <strong className="text-[#141210]">
+                    Hình thức thanh toán:
+                  </strong>
+                  <p className="text-[#3f3a34] mt-0.5">
+                    {METHOD_LABELS[selectedOrder.paymentMethod] ||
+                      selectedOrder.paymentMethod}
+                  </p>
+                </div>
+              </div>
+
+              {/* Danh sách sản phẩm trong đơn */}
+              <div className="flex flex-col gap-2.5">
+                {selectedOrder.items.map((it) => (
+                  <div
+                    key={it.id}
+                    className="flex items-center gap-3 pb-2.5"
+                    style={{ borderBottom: "1px solid #f1eadc" }}
+                  >
+                    <img
+                      src={it.imageUrl}
+                      alt={it.productName}
+                      className="w-12 h-12 rounded-xl object-cover shrink-0 bg-[#faf8f5]"
+                      style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-['Playfair_Display'] font-bold text-[#141210] truncate">
+                        {it.productName}
+                      </p>
+                      <p className="text-[11px] font-['Inter'] text-[#6b6358] mt-0.5">
+                        {it.variantLabel} · {formatCurrency(it.unitPrice)} ×{" "}
+                        {it.quantity}
+                      </p>
+                    </div>
+                    <strong
+                      className="text-xs font-['Inter'] font-bold shrink-0"
+                      style={{ color: "#8c5e1a" }}
+                    >
+                      {formatCurrency(it.subtotal)}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tổng kết tiền */}
+              <div className="flex flex-col gap-1.5 text-xs font-['Inter'] pt-1">
+                <div className="flex justify-between text-[#6b6358]">
+                  <span>Phí vận chuyển</span>
+                  <strong className="text-[#141210]">
+                    {selectedOrder.shippingFee > 0
+                      ? formatCurrency(selectedOrder.shippingFee)
+                      : "Miễn phí"}
+                  </strong>
+                </div>
+                {selectedOrder.discountAmount > 0 && (
+                  <div className="flex justify-between text-[#16a34a]">
+                    <span>Giảm giá</span>
+                    <strong>
+                      −{formatCurrency(selectedOrder.discountAmount)}
+                    </strong>
+                  </div>
+                )}
+                <div
+                  className="flex justify-between items-center pt-2 mt-1 text-sm font-bold"
+                  style={{ borderTop: "1px solid #e9e0cf" }}
+                >
+                  <span className="text-[#141210]">
+                    {selectedOrder.status === "returned"
+                      ? "Tổng tiền hoàn trả"
+                      : "Tổng thanh toán"}
+                  </span>
+                  <span style={{ color: "#8c5e1a" }}>
+                    {formatCurrency(selectedOrder.totalAmount)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              className="px-4 py-3 bg-[#faf8f5] flex items-center justify-end gap-2"
+              style={{ borderTop: `1px solid ${BORDER_GOLD_LIGHT}` }}
+            >
+              {selectedOrder.status === "pending" && (
+                <button
+                  type="button"
+                  disabled={cancellingId === selectedOrder.id}
+                  onClick={() => handleCancelOrder(selectedOrder.id)}
+                  className="px-4 py-2 rounded-full text-xs font-['Inter'] font-bold text-red-600 bg-red-50 cursor-pointer"
+                  style={{ border: "1px solid #fecaca" }}
+                >
+                  {cancellingId === selectedOrder.id
+                    ? "Đang hủy..."
+                    : "Hủy đơn hàng"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="px-5 py-2 rounded-full text-xs font-['Inter'] font-bold text-white cursor-pointer"
+                style={{ background: "#141210" }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// 11. BOTTOM NAVIGATION BAR (L1) - THÊM MỤC "ĐƠN HÀNG" (HÌNH 2 & HÌNH 3)
 // ==========================================
 function BottomNav({
   tab,
   setTab,
   unread,
 }: {
-  tab: "home" | "notifications" | "profile";
-  setTab: (tab: "home" | "notifications" | "profile") => void;
+  tab: "home" | "orders" | "notifications" | "profile";
+  setTab: (tab: "home" | "orders" | "notifications" | "profile") => void;
   unread: number;
 }) {
   const tabs = [
     { id: "home", icon: HomeIcon, label: "Trang chủ" },
+    { id: "orders", icon: Package, label: "Đơn hàng" },
     { id: "notifications", icon: Bell, label: "Thông báo" },
     { id: "profile", icon: User, label: "Cá nhân" },
   ] as const;
@@ -3305,14 +4659,17 @@ function BottomNav({
 // ==========================================
 export default function App() {
   const [activeTab, setActiveTab] = useState<
-    "home" | "notifications" | "profile"
+    "home" | "orders" | "notifications" | "profile"
   >("home");
   const [overlayScreen, setOverlayScreen] = useState<
-    "main" | "cart" | "order" | "product-detail"
+    "main" | "shop" | "cart" | "order" | "product-detail"
   >("main");
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(
     null
   );
+  const [shopCategoryId, setShopCategoryId] = useState<number | null>(null);
+  const [returnToShopAfterDetail, setReturnToShopAfterDetail] =
+    useState<boolean>(false);
 
   // Supabase Store State
   const [categoriesList, setCategoriesList] =
@@ -3325,8 +4682,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CustomerProfile | null>(null);
   const [loggedOutMessage, setLoggedOutMessage] = useState<string | null>(null);
 
-  // Cart & Notifications State
+  // Cart, Orders & Notifications State
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<DbOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<number[]>([5]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -3340,17 +4699,22 @@ export default function App() {
 
   // Load dữ liệu người dùng cụ thể từ Supabase
   const loadUserSessionData = async (uid: string) => {
+    setOrdersLoading(true);
     try {
-      const [profile, cart, notifs] = await Promise.all([
+      const [profile, cart, notifs, ords] = await Promise.all([
         fetchCustomerProfileById(uid),
         fetchCustomerCart(uid),
         fetchCustomerNotifications(uid),
+        fetchCustomerOrders(uid),
       ]);
       setCurrentUser(profile);
       setCartItems(cart);
       setNotifications(notifs);
+      setCustomerOrders(ords);
     } catch {
       // Nếu lỗi session thì để người dùng đăng nhập lại
+    } finally {
+      setOrdersLoading(false);
     }
   };
 
@@ -3488,6 +4852,7 @@ export default function App() {
     sessionStorage.setItem("jewels_mobile_logged_out", "1");
     setCurrentUser(null);
     setCartItems([]);
+    setCustomerOrders([]);
     setSelectedProduct(null);
     setOverlayScreen("main");
     setLoggedOutMessage(
@@ -3504,12 +4869,14 @@ export default function App() {
     setOverlayScreen("main");
     showToast(`Chào mừng trở lại, ${profile.name}!`);
     try {
-      const [cart, notifs] = await Promise.all([
+      const [cart, notifs, ords] = await Promise.all([
         fetchCustomerCart(profile.id),
         fetchCustomerNotifications(profile.id),
+        fetchCustomerOrders(profile.id),
       ]);
       setCartItems(cart);
       setNotifications(notifs);
+      setCustomerOrders(ords);
     } catch {}
   };
 
@@ -3552,13 +4919,35 @@ export default function App() {
           />
         ) : (
           <>
+            {/* Full-Screen Overlay: Shop / All Products (Hình 3) */}
+            {overlayScreen === "shop" && (
+              <div className="absolute inset-0 z-30 flex flex-col sm:rounded-[40px] overflow-hidden">
+                <ShopScreen
+                  categoriesList={categoriesList}
+                  productsList={productsList}
+                  initialCategoryId={shopCategoryId}
+                  cartCount={cartItems.reduce((s, i) => s + i.qty, 0)}
+                  onBack={() => setOverlayScreen("main")}
+                  onOpenCart={() => setOverlayScreen("cart")}
+                  onSelectProduct={(prod) => {
+                    setSelectedProduct(prod);
+                    setReturnToShopAfterDetail(true);
+                    setOverlayScreen("product-detail");
+                  }}
+                  onAddToCart={(prod, q, v) => handleAddToCart(prod, q, v)}
+                />
+              </div>
+            )}
+
             {/* Full-Screen Overlay 0: Product Detail */}
             {overlayScreen === "product-detail" && selectedProduct && (
               <div className="absolute inset-0 z-40 flex flex-col sm:rounded-[40px] overflow-hidden">
                 <ProductDetailScreen
                   product={selectedProduct}
                   cartCount={cartItems.reduce((s, i) => s + i.qty, 0)}
-                  onBack={() => setOverlayScreen("main")}
+                  onBack={() =>
+                    setOverlayScreen(returnToShopAfterDetail ? "shop" : "main")
+                  }
                   onOpenCart={() => setOverlayScreen("cart")}
                   onAddToCart={(prod, q, v) => handleAddToCart(prod, q, v)}
                   onBuyNow={async (prod, q, v) => {
@@ -3578,7 +4967,11 @@ export default function App() {
                   onRemoveItem={handleRemoveCartItem}
                   onBack={() =>
                     setOverlayScreen(
-                      selectedProduct ? "product-detail" : "main"
+                      selectedProduct
+                        ? "product-detail"
+                        : returnToShopAfterDetail
+                        ? "shop"
+                        : "main"
                     )
                   }
                   onOrder={() => setOverlayScreen("order")}
@@ -3594,8 +4987,15 @@ export default function App() {
                   onBack={() => setOverlayScreen("cart")}
                   onGoHome={() => {
                     setSelectedProduct(null);
+                    setReturnToShopAfterDetail(false);
                     setOverlayScreen("main");
                     setActiveTab("home");
+                  }}
+                  onViewOrders={() => {
+                    setSelectedProduct(null);
+                    setReturnToShopAfterDetail(false);
+                    setOverlayScreen("main");
+                    setActiveTab("orders");
                   }}
                   items={cartItems}
                   onOrderPlaced={async () => {
@@ -3621,12 +5021,35 @@ export default function App() {
                   cartCount={cartItems.reduce((s, i) => s + i.qty, 0)}
                   onOpenCart={() => {
                     setSelectedProduct(null);
+                    setReturnToShopAfterDetail(false);
                     setOverlayScreen("cart");
                   }}
                   onSelectProduct={(prod) => {
                     setSelectedProduct(prod);
+                    setReturnToShopAfterDetail(false);
                     setOverlayScreen("product-detail");
                   }}
+                  onOpenShopCategory={(catId) => {
+                    setShopCategoryId(catId);
+                    setReturnToShopAfterDetail(true);
+                    setOverlayScreen("shop");
+                  }}
+                />
+              )}
+              {activeTab === "orders" && (
+                <OrdersHistoryScreen
+                  userId={currentUser.id}
+                  orders={customerOrders}
+                  loading={ordersLoading}
+                  onRefreshOrders={async () => {
+                    await loadUserSessionData(currentUser.id);
+                  }}
+                  onOpenShop={() => {
+                    setShopCategoryId(null);
+                    setReturnToShopAfterDetail(true);
+                    setOverlayScreen("shop");
+                  }}
+                  onShowToast={showToast}
                 />
               )}
               {activeTab === "notifications" && (
