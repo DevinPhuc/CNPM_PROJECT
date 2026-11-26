@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.huongjewelry.app-mergeDebugResources-19:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\Comet\\.gradle\\caches\\8.10.2\\transforms\\e6b90d9473e099143e66326e18e4d50b\\transformed\\appcompat-1.6.1\\res\\values-v16\\values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "223"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "121",
+                        "endLines": "6",
+                        "endColumns": "12",
+                        "endOffsets": "289"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\Comet\\.gradle\\caches\\8.10.2\\transforms\\9d1d223da40b4d4b2381736cc5c30bb5\\transformed\\core-1.9.0\\res\\values-v16\\values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "65",
+                        "endOffsets": "116"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -27,6 +27,7 @@ export interface DbCategory {
   id: number;
   name: string;
   icon: string;
+  parentCatId?: number | null;
 }
 
 export interface DbVariant {
@@ -53,6 +54,7 @@ export interface DbProduct {
   defaultVariantId: number | null;
   stock: number;
   img: string;
+  images?: string[];
   desc: string;
   createdAt?: string;
 }
@@ -75,6 +77,37 @@ export interface DbNotification {
   body: string;
   time: string;
   read: boolean;
+}
+
+export interface DbOrderItem {
+  id: number;
+  variantId?: number | null;
+  productName: string;
+  material?: string | null;
+  gemstone?: string | null;
+  size?: number | null;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  imageUrl: string;
+  variantLabel: string;
+}
+
+export interface DbOrder {
+  id: number;
+  orderDate: string;
+  formattedDate: string;
+  status: string;
+  cusName: string;
+  cusPhone: string;
+  address: string;
+  shippingFee: number;
+  discountAmount: number;
+  discountCode?: string | null;
+  totalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  items: DbOrderItem[];
 }
 
 // Map ảnh sản phẩm để hoạt động mượt trên cả trình duyệt web, VS Code Live Server và Android Studio WebView
@@ -180,13 +213,12 @@ export async function fetchStoreCatalog(): Promise<{
       .order("img_id"),
   ]);
 
-  const categories: DbCategory[] = (catRes.data || [])
-    .filter((c: any) => !c.parent_cat_id)
-    .map((c: any) => ({
-      id: c.cat_id,
-      name: c.name,
-      icon: getCategoryIcon(c.name),
-    }));
+  const categories: DbCategory[] = (catRes.data || []).map((c: any) => ({
+    id: c.cat_id,
+    name: c.name,
+    icon: getCategoryIcon(c.name),
+    parentCatId: c.parent_cat_id || null,
+  }));
 
   const imgMap: Record<number, any[]> = {};
   (imgRes.data || []).forEach((row: any) => {
@@ -221,6 +253,15 @@ export async function fetchStoreCatalog(): Promise<{
       const pImgs = imgMap[p.pro_id] || [];
       const primaryImg =
         pImgs.find((i) => i.is_primary) || pImgs[0] || null;
+      const resolvedPrimaryImg = resolveImageUrl(primaryImg?.image_url, p.pro_id);
+      const resolvedGallery = Array.from(
+        new Set([
+          resolvedPrimaryImg,
+          ...pImgs.map((row: any, rIdx: number) =>
+            resolveImageUrl(row?.image_url, p.pro_id + rIdx)
+          ),
+        ])
+      );
 
       const variantsLabels =
         variantObjects.length > 0
@@ -240,10 +281,11 @@ export async function fetchStoreCatalog(): Promise<{
         variantObjects,
         defaultVariantId: defVar ? defVar.id : null,
         stock: totalStock > 0 ? totalStock : 5,
-        img: resolveImageUrl(primaryImg?.image_url, p.pro_id),
+        img: resolvedPrimaryImg,
+        images: resolvedGallery,
         desc:
           p.description ||
-          "Chế tác tinh xảo từ chất liệu quý hiếm kèm chứng thư kiểm định chất lượng tại Hương Jewelry.",
+          "Chế tác tinh xảo từ chất liệu quý hiếm kèm chứng thư kiểm định chất lượng tại SaiGon Jewelry.",
         createdAt: p.created_at,
       };
     }
@@ -628,7 +670,7 @@ export async function fetchCustomerCart(userId: string): Promise<DbCartItem[]> {
         id: r.cart_item_id,
         variantId: v.variant_id,
         productId: v.pro_id,
-        name: v.products?.name || "Trang sức Hương Jewelry",
+        name: v.products?.name || "Trang sức SaiGon Jewelry",
         price: Number(v.price || 0),
         img: resolveImageUrl(chosenImg?.image_url, v.pro_id),
         qty: Number(r.quantity || 1),
@@ -792,7 +834,7 @@ export async function fetchCustomerNotifications(
   const dynamicNotifs: DbNotification[] = (orders || []).map(
     (o: any, idx: number) => {
       const firstProd =
-        o.order_items?.[0]?.product_name || "Trang sức Hương Jewelry";
+        o.order_items?.[0]?.product_name || "Trang sức SaiGon Jewelry";
       const code = `HD${String(o.order_id).padStart(6, "0")}`;
       const statusTitle =
         o.status === "delivered"
@@ -825,13 +867,13 @@ export async function fetchCustomerNotifications(
     {
       id: 2,
       title: "KHUYẾN MÃI ĐẶC BIỆT CUỐI TUẦN",
-      body: "Giảm 10% cho thành viên VIP khi nhập mã WELCOME10 tại Hương Jewelry.",
+      body: "Giảm 10% khi nhập mã WELCOME10 tại SaiGon Jewelry.",
       time: "14/11/2026 14:00",
       read: false,
     },
     {
       id: 5,
-      title: "HƯƠNG JEWELRY – ĐẶC QUYỀN THÀNH VIÊN",
+      title: "SAIGON JEWELRY – THÔNG BÁO HỆ THỐNG",
       body: "Tài khoản của bạn đã được đồng bộ dữ liệu trực tiếp với hệ thống Supabase.",
       time: "14/11/2026 10:00",
       read: true,
@@ -839,6 +881,123 @@ export async function fetchCustomerNotifications(
   ];
 
   return [...dynamicNotifs, ...defaultNotifs];
+}
+
+function formatShortDateVN(isoStr?: string | null): string {
+  if (!isoStr) return "Hôm nay";
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return "Hôm nay";
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const dd = d.getDate();
+  const mo = d.getMonth() + 1;
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${hh}:${mm} ${dd}/${mo}/${yy}`;
+}
+
+export async function fetchCustomerOrders(userId: string): Promise<DbOrder[]> {
+  const { data: rows } = await supabase
+    .from("orders")
+    .select("*,order_items(*),payments(*),discounts(name,code)")
+    .eq("customer_id", userId)
+    .order("order_date", { ascending: false });
+
+  if (!rows || rows.length === 0) return [];
+
+  return rows.map((o: any) => {
+    const payRow = Array.isArray(o.payments) ? o.payments[0] : o.payments;
+    const discRow = Array.isArray(o.discounts) ? o.discounts[0] : o.discounts;
+    const items: DbOrderItem[] = (o.order_items || []).map(
+      (it: any, idx: number) => ({
+        id: it.order_item_id || idx + 1,
+        variantId: it.variant_id || null,
+        productName: it.product_name || "Trang sức SaiGon Jewelry",
+        material: it.material || null,
+        gemstone: it.gemstone || null,
+        size: it.size || null,
+        quantity: Number(it.quantity || 1),
+        unitPrice: Number(it.unit_price || 0),
+        subtotal: Number(
+          it.subtotal ?? Number(it.unit_price || 0) * Number(it.quantity || 1)
+        ),
+        imageUrl: resolveImageUrl(it.image_url, o.order_id + idx),
+        variantLabel: formatVariantLabel({
+          material: it.material,
+          gemstone: it.gemstone,
+          size: it.size,
+        }),
+      })
+    );
+
+    return {
+      id: o.order_id,
+      orderDate: o.order_date || "",
+      formattedDate: formatShortDateVN(o.order_date),
+      status: o.status || "pending",
+      cusName: o.cus_name || "Khách hàng",
+      cusPhone: o.cus_phone || "",
+      address: o.address || "",
+      shippingFee: Number(o.shipping_fee || 0),
+      discountAmount: Number(o.discount_amount || 0),
+      discountCode: discRow?.code || null,
+      totalAmount: Number(o.total_amount || 0),
+      paymentMethod: payRow?.method || "cod",
+      paymentStatus: payRow?.status || "pending",
+      items,
+    };
+  });
+}
+
+export async function cancelCustomerOrderInDb(
+  orderId: number,
+  userId: string
+): Promise<DbOrder[]> {
+  const { data: ord } = await supabase
+    .from("orders")
+    .select("order_id,status,order_items(variant_id,quantity)")
+    .eq("order_id", orderId)
+    .eq("customer_id", userId)
+    .limit(1);
+
+  const row = ord?.[0];
+  if (!row) throw new Error("Không tìm thấy đơn hàng.");
+  if (row.status !== "pending") {
+    throw new Error("Chỉ có thể hủy đơn hàng đang ở trạng thái Chờ xác nhận.");
+  }
+
+  await supabase
+    .from("orders")
+    .update({ status: "cancelled" })
+    .eq("order_id", orderId)
+    .eq("customer_id", userId);
+
+  await supabase
+    .from("payments")
+    .update({ status: "failed" })
+    .eq("order_id", orderId)
+    .eq("status", "pending");
+
+  // Hoàn lại số lượng tồn kho
+  for (const it of row.order_items || []) {
+    if (it.variant_id) {
+      const { data: vRows } = await supabase
+        .from("product_variants")
+        .select("stock_quantity")
+        .eq("variant_id", it.variant_id)
+        .limit(1);
+      if (vRows?.[0]) {
+        await supabase
+          .from("product_variants")
+          .update({
+            stock_quantity:
+              Number(vRows[0].stock_quantity || 0) + Number(it.quantity || 0),
+          })
+          .eq("variant_id", it.variant_id);
+      }
+    }
+  }
+
+  return fetchCustomerOrders(userId);
 }
 
 // Lấy danh sách tài khoản khách hàng mẫu từ Supabase để người dùng có thể chọn đăng nhập nhanh hoặc kiểm tra
