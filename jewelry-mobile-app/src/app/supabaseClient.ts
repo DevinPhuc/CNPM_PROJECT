@@ -110,6 +110,19 @@ export interface DbOrder {
   items: DbOrderItem[];
 }
 
+export interface DbVoucher {
+  discountId: number;
+  voucherName: string;
+  code: string;
+  discountPercentage: number;
+  usageLimit: number;
+  timesUsed: number;
+  remainingCount: number;
+  limitPerCus: number;
+  endDate?: string | null;
+  isActive: boolean;
+}
+
 // Map ảnh sản phẩm để hoạt động mượt trên cả trình duyệt web, VS Code Live Server và Android Studio WebView
 const FALLBACK_IMAGES: Record<string, string> = {
   "nhan-vang-18k.jpg":
@@ -380,19 +393,27 @@ export async function loginCustomer(
     .trim()
     .toLowerCase();
   if (!mail || !passwordInput) {
-    throw new Error("Vui lòng nhập đầy đủ email và mật khẩu.");
+    throw new Error("Tài khoản hoặc mật khẩu không chính xác");
   }
 
-  const { data: users, error } = await supabase
-    .from("users")
-    .select("id,email,password_hash,is_active,roles")
-    .eq("email", mail)
-    .limit(1);
+  let users: any[] | null = null;
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,email,password_hash,is_active,roles")
+      .ilike("email", mail)
+      .limit(1);
+    if (error) {
+      throw new Error("Lỗi kết nối, vui lòng thử lại");
+    }
+    users = data;
+  } catch {
+    throw new Error("Lỗi kết nối, vui lòng thử lại");
+  }
 
-  if (error) throw new Error("Lỗi kết nối cơ sở dữ liệu: " + error.message);
   const user = users?.[0];
   if (!user) {
-    throw new Error("Email hoặc mật khẩu chưa chính xác.");
+    throw new Error("Tài khoản chưa được đăng ký");
   }
 
   if (!user.is_active) {
@@ -407,23 +428,31 @@ export async function loginCustomer(
     user.password_hash &&
     (await bcrypt.compare(String(passwordInput), user.password_hash));
   if (!ok) {
-    throw new Error("Email hoặc mật khẩu chưa chính xác.");
+    throw new Error("Tài khoản hoặc mật khẩu không chính xác");
   }
 
   if (Array.isArray(user.roles) && !user.roles.includes("CUSTOMER")) {
-    throw new Error("Tài khoản này không phải tài khoản khách hàng.");
+    throw new Error("Tài khoản hoặc mật khẩu không chính xác");
   }
 
-  // Đảm bảo có bản ghi trong bảng customers
-  await supabase
-    .from("customers")
-    .upsert({ user_id: user.id }, { onConflict: "user_id", ignoreDuplicates: true });
+  try {
+    // Đảm bảo có bản ghi trong bảng customers
+    await supabase
+      .from("customers")
+      .upsert(
+        { user_id: user.id },
+        { onConflict: "user_id", ignoreDuplicates: true }
+      );
 
-  const profile = await fetchCustomerProfileById(user.id);
-  localStorage.setItem("jewels_mobile_uid", profile.id);
-  localStorage.setItem("jewels_user_email", profile.email);
-  localStorage.setItem("jewels_user_id", profile.id);
-  return profile;
+    const profile = await fetchCustomerProfileById(user.id);
+    appStorage.setItem("jewels_mobile_uid", profile.id);
+    localStorage.setItem("jewels_mobile_uid", profile.id);
+    localStorage.setItem("jewels_user_email", profile.email);
+    localStorage.setItem("jewels_user_id", profile.id);
+    return profile;
+  } catch {
+    throw new Error("Lỗi kết nối, vui lòng thử lại");
+  }
 }
 
 export async function registerCustomer(payload: {
@@ -746,11 +775,17 @@ export async function createOrderInDb(
   userId: string,
   profile: CustomerProfile,
   items: DbCartItem[],
-  paymentMethod: "cod" | "card" | "ewallet"
+  paymentMethod: "cod" | "card" | "ewallet",
+  discountId?: number | null,
+  discountAmountInput: number = 0
 ): Promise<{ orderCode: string; orderId: number }> {
   const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-  const shipping = subtotal >= 10000000 ? 0 : 30000;
-  const total = subtotal + shipping;
+  const shipping = subtotal >= 10000000 ? 0 : 83500;
+  const discountAmount = Math.max(
+    0,
+    Math.min(subtotal, Math.round(discountAmountInput || 0))
+  );
+  const total = Math.max(0, subtotal - discountAmount + shipping);
   const dbMethod =
     paymentMethod === "card"
       ? "credit_card"
@@ -762,18 +797,23 @@ export async function createOrderInDb(
     .from("customers")
     .upsert({ user_id: userId }, { onConflict: "user_id", ignoreDuplicates: true });
 
+  const orderInsertPayload: Record<string, any> = {
+    customer_id: userId,
+    cus_name: profile.name,
+    cus_phone: profile.phone || "0900000000",
+    address: profile.address || "123 Nguyễn Huệ, Quận 1, TP.HCM",
+    status: dbMethod === "cod" ? "pending" : "processing",
+    shipping_fee: shipping,
+    discount_amount: discountAmount,
+    total_amount: total,
+  };
+  if (discountId) {
+    orderInsertPayload.discount_id = discountId;
+  }
+
   const { data: orderRows, error: ordErr } = await supabase
     .from("orders")
-    .insert({
-      customer_id: userId,
-      cus_name: profile.name,
-      cus_phone: profile.phone || "0900000000",
-      address: profile.address || "123 Nguyễn Huệ, Quận 1, TP.HCM",
-      status: dbMethod === "cod" ? "pending" : "processing",
-      shipping_fee: shipping,
-      discount_amount: 0,
-      total_amount: total,
-    })
+    .insert(orderInsertPayload)
     .select("order_id");
 
   if (ordErr || !orderRows?.[0]) {
@@ -807,18 +847,136 @@ export async function createOrderInDb(
     status: dbMethod === "cod" ? "pending" : "completed",
   });
 
-  // Dọn giỏ hàng sau khi đặt
+  // Chỉ xóa những món hàng đã được chọn mua khỏi giỏ hàng (giữ lại các món chưa chọn)
   const cartId = await getOrCreateCartId(userId);
-  await supabase.from("cart_items").delete().eq("cart_id", cartId);
-  await supabase
-    .from("carts")
-    .update({ status: "empty", updated_at: new Date().toISOString() })
-    .eq("cart_id", cartId);
+  const dbCartItemIds = items
+    .map((i) => i.id)
+    .filter((id) => typeof id === "number" && id > 0 && id < 1000000000);
+  if (dbCartItemIds.length > 0) {
+    await supabase
+      .from("cart_items")
+      .delete()
+      .eq("cart_id", cartId)
+      .in("cart_item_id", dbCartItemIds);
+  }
 
   return {
     orderId,
     orderCode: `HD${String(orderId).padStart(6, "0")}`,
   };
+}
+
+// ==========================================
+// QUẢN LÝ VOUCHER HỆ THỐNG & GIỮ CHỖ VOUCHER TRÊN SUPABASE
+// ==========================================
+export async function fetchActiveVouchers(): Promise<DbVoucher[]> {
+  const [vRes, dRes] = await Promise.all([
+    supabase
+      .from("discount_by_voucher")
+      .select(
+        "discount_id,voucher_name,discount_percentage,usage_limit,times_used,limit_per_cus"
+      )
+      .order("discount_id"),
+    supabase
+      .from("discounts")
+      .select("discount_id,name,code,begin_date,end_date,is_active"),
+  ]);
+
+  const discountsMap = new Map<number, any>();
+  (dRes.data || []).forEach((d: any) => {
+    discountsMap.set(Number(d.discount_id), d);
+  });
+
+  const now = new Date();
+  const result: DbVoucher[] = [];
+
+  for (const row of vRes.data || []) {
+    const dId = Number(row.discount_id);
+    const parentDisc = discountsMap.get(dId);
+
+    // Nếu mã voucher trong bảng discounts có is_active === false hoặc đã hết hạn thì không hiển thị
+    if (parentDisc && parentDisc.is_active === false) {
+      continue;
+    }
+    if (parentDisc?.end_date) {
+      const endD = new Date(parentDisc.end_date);
+      if (!isNaN(endD.getTime()) && endD.getTime() + 86400000 < now.getTime()) {
+        continue;
+      }
+    }
+
+    const usageLimit = Number(row.usage_limit ?? 100);
+    const timesUsed = Math.max(0, Number(row.times_used ?? 0));
+    const remainingCount = Math.max(0, usageLimit - timesUsed);
+
+    result.push({
+      discountId: dId,
+      voucherName: String(
+        row.voucher_name || parentDisc?.name || `Voucher #${dId}`
+      ),
+      code: String(
+        parentDisc?.code || row.voucher_name || `VOUCHER${dId}`
+      ).toUpperCase(),
+      discountPercentage: Number(row.discount_percentage ?? 10),
+      usageLimit,
+      timesUsed,
+      remainingCount,
+      limitPerCus: Number(row.limit_per_cus ?? 1),
+      endDate: parentDisc?.end_date || null,
+      isActive: true,
+    });
+  }
+
+  return result;
+}
+
+export async function reserveVoucherInDb(
+  discountId: number
+): Promise<DbVoucher[]> {
+  const { data: rows, error } = await supabase
+    .from("discount_by_voucher")
+    .select("discount_id,usage_limit,times_used")
+    .eq("discount_id", discountId)
+    .limit(1);
+
+  if (error || !rows?.[0]) {
+    throw new Error("Không thể tải dữ liệu voucher.");
+  }
+
+  const row = rows[0];
+  const usageLimit = Number(row.usage_limit ?? 100);
+  const currentUsed = Math.max(0, Number(row.times_used ?? 0));
+  if (currentUsed >= usageLimit) {
+    throw new Error("Mã voucher này đã hết lượt sử dụng.");
+  }
+
+  await supabase
+    .from("discount_by_voucher")
+    .update({ times_used: currentUsed + 1 })
+    .eq("discount_id", discountId);
+
+  return fetchActiveVouchers();
+}
+
+export async function releaseVoucherInDb(
+  discountId: number
+): Promise<DbVoucher[]> {
+  const { data: rows } = await supabase
+    .from("discount_by_voucher")
+    .select("discount_id,times_used")
+    .eq("discount_id", discountId)
+    .limit(1);
+
+  if (rows?.[0]) {
+    const currentUsed = Math.max(0, Number(rows[0].times_used ?? 0));
+    const nextUsed = Math.max(0, currentUsed - 1);
+    await supabase
+      .from("discount_by_voucher")
+      .update({ times_used: nextUsed })
+      .eq("discount_id", discountId);
+  }
+
+  return fetchActiveVouchers();
 }
 
 export async function fetchCustomerNotifications(
@@ -881,6 +1039,114 @@ export async function fetchCustomerNotifications(
   ];
 
   return [...dynamicNotifs, ...defaultNotifs];
+}
+
+// ==========================================
+// LƯU TRỮ BỀN VỮNG TRẠNG THÁI ĐÃ ĐỌC THÔNG BÁO (LOCALSTORAGE + ANDROID SHAREDPREFERENCES)
+// ==========================================
+export const appStorage = {
+  getItem(key: string): string | null {
+    try {
+      const w = typeof window !== "undefined" ? (window as any) : null;
+      if (w?.AndroidStorage && typeof w.AndroidStorage.getItem === "function") {
+        const nativeVal = w.AndroidStorage.getItem(key);
+        if (
+          nativeVal !== null &&
+          nativeVal !== undefined &&
+          String(nativeVal) !== ""
+        ) {
+          return String(nativeVal);
+        }
+      }
+      if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(key);
+      }
+    } catch {}
+    return null;
+  },
+  setItem(key: string, value: string): void {
+    try {
+      const w = typeof window !== "undefined" ? (window as any) : null;
+      if (w?.AndroidStorage && typeof w.AndroidStorage.setItem === "function") {
+        w.AndroidStorage.setItem(key, value);
+      }
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(key, value);
+      }
+    } catch {}
+  },
+  removeItem(key: string): void {
+    try {
+      const w = typeof window !== "undefined" ? (window as any) : null;
+      if (
+        w?.AndroidStorage &&
+        typeof w.AndroidStorage.removeItem === "function"
+      ) {
+        w.AndroidStorage.removeItem(key);
+      }
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem(key);
+      }
+    } catch {}
+  },
+};
+
+export function getSavedReadNotificationIds(
+  userId: string,
+  notifs: DbNotification[] = []
+): number[] {
+  const key = `jewels_read_notifs_${userId}`;
+  const maxKey = `jewels_read_all_max_${userId}`;
+  const raw = appStorage.getItem(key);
+  const rawMax = appStorage.getItem(maxKey);
+  const maxReadAllId = rawMax !== null ? Number(rawMax) : -1;
+
+  let savedIds: number[] = [];
+  let hasSavedRecord = false;
+  if (raw !== null) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        savedIds = parsed.map((n) => Number(n)).filter((n) => !isNaN(n));
+        hasSavedRecord = true;
+      }
+    } catch {}
+  }
+
+  // Nếu người dùng chưa từng có lịch sử lưu trữ trên thiết bị, khởi tạo với các thông báo mặc định có read = true
+  if (!hasSavedRecord) {
+    const defaultRead = notifs.filter((n) => n.read).map((n) => n.id);
+    return Array.from(new Set([5, ...defaultRead]));
+  }
+
+  // Nếu người dùng đã bấm "Đọc tất cả" trước đó, mọi thông báo có id <= maxReadAllId đều được đánh dấu đã đọc
+  const autoReadFromWatermark =
+    maxReadAllId >= 0
+      ? notifs.filter((n) => n.id <= maxReadAllId).map((n) => n.id)
+      : [];
+
+  return Array.from(new Set([...savedIds, ...autoReadFromWatermark]));
+}
+
+export function saveReadNotificationIds(
+  userId: string,
+  readIds: number[],
+  markedAll: boolean = false
+): void {
+  if (!userId) return;
+  const uniqueIds = Array.from(
+    new Set(readIds.map((n) => Number(n)).filter((n) => !isNaN(n)))
+  );
+  appStorage.setItem(
+    `jewels_read_notifs_${userId}`,
+    JSON.stringify(uniqueIds)
+  );
+  if (markedAll && uniqueIds.length > 0) {
+    const prevMaxRaw = appStorage.getItem(`jewels_read_all_max_${userId}`);
+    const prevMax = prevMaxRaw !== null ? Number(prevMaxRaw) : 0;
+    const nextMax = Math.max(prevMax, ...uniqueIds);
+    appStorage.setItem(`jewels_read_all_max_${userId}`, String(nextMax));
+  }
 }
 
 function formatShortDateVN(isoStr?: string | null): string {

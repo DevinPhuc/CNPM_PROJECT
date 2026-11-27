@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import {
   addCartItemToDb,
+  appStorage,
   cancelCustomerOrderInDb,
   createOrderInDb,
   CustomerProfile,
@@ -52,15 +53,21 @@ import {
   DbNotification,
   DbOrder,
   DbProduct,
+  DbVoucher,
+  fetchActiveVouchers,
   fetchCustomerCart,
   fetchCustomerNotifications,
   fetchCustomerOrders,
   fetchCustomerProfileById,
   fetchSampleCustomerAccounts,
   fetchStoreCatalog,
+  getSavedReadNotificationIds,
   loginCustomer,
   registerCustomer,
+  releaseVoucherInDb,
   removeCartItemFromDb,
+  reserveVoucherInDb,
+  saveReadNotificationIds,
   updateCartItemQtyInDb,
   updateCustomerPassword,
   updateCustomerProfile,
@@ -520,7 +527,7 @@ function AuthScreen({
                   opacity: loading ? 0.7 : 1,
                 }}
               >
-                {loading ? "Đang xác thực Supabase..." : "Đăng Nhập Ngay →"}
+                {loading ? "Đang đăng nhập...." : "Đăng Nhập Ngay →"}
               </button>
             </form>
           ) : (
@@ -673,99 +680,6 @@ function AuthScreen({
             </form>
           )}
 
-          {/* Quick Fill Customer Accounts from Supabase Database */}
-          {mode === "login" && (
-            <div
-              className="mt-4 rounded-2xl p-3"
-              style={{
-                background: "#f5efe2",
-                border: `1px solid ${BORDER_GOLD_LIGHT}`,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowQuickAccounts(!showQuickAccounts)}
-                className="w-full flex items-center justify-between text-left cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <Sparkles size={14} color="#9a6b24" />
-                  <span className="text-[11px] font-['Inter'] font-semibold text-[#433216]">
-                    Tài khoản khách hàng từ Supabase DB
-                  </span>
-                </div>
-                {showQuickAccounts ? (
-                  <ChevronUp size={14} color="#9a6b24" />
-                ) : (
-                  <ChevronDown size={14} color="#9a6b24" />
-                )}
-              </button>
-
-              {showQuickAccounts && (
-                <div className="mt-2.5 flex flex-col gap-1.5">
-                  {[
-                    {
-                      email: "vana@gmail.com",
-                      name: "Nguyễn Văn A",
-                      pw: "12345678",
-                    },
-                    {
-                      email: "cust_417756@gmail.com",
-                      name: "Phạm Thị Khách",
-                      pw: "12345678",
-                    },
-                    {
-                      email: "mot1@gmail.com",
-                      name: "Nguyễn Văn Một",
-                      pw: "11111111",
-                    },
-                    ...sampleAccounts
-                      .filter(
-                        (a) =>
-                          ![
-                            "vana@gmail.com",
-                            "cust_417756@gmail.com",
-                            "mot1@gmail.com",
-                          ].includes(a.email)
-                      )
-                      .slice(0, 3)
-                      .map((a) => ({
-                        email: a.email,
-                        name: a.name,
-                        pw: "",
-                      })),
-                  ].map((acc) => (
-                    <button
-                      key={acc.email}
-                      type="button"
-                      onClick={() => {
-                        setEmail(acc.email);
-                        if (acc.pw) setPassword(acc.pw);
-                        setError("");
-                      }}
-                      className="flex items-center justify-between px-3 py-2 rounded-xl bg-white text-left hover:bg-amber-50/60 transition-colors cursor-pointer"
-                      style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-['Inter'] font-semibold text-[#1c1917] truncate">
-                          {acc.name}
-                        </p>
-                        <p className="text-[10px] font-['Inter'] text-[#6b6358] truncate">
-                          {acc.email}
-                        </p>
-                      </div>
-                      <span
-                        className="text-[10px] font-['Inter'] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: "#fdf0c8", color: "#9a6b24" }}
-                      >
-                        Điền nhanh
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Switch Mode Card (Giống auth-switch-card trên Web) */}
           <div
             className="mt-4 p-3.5 rounded-2xl flex items-center justify-between gap-3"
@@ -783,7 +697,7 @@ function AuthScreen({
               <p className="text-[11px] font-['Inter'] text-[#6b6358] mt-0.5 leading-snug">
                 {mode === "login"
                   ? "Gia nhập hội viên nhận ngay Voucher giảm 10%"
-                  : "Đăng nhập để theo dõi đơn và tích điểm"}
+                  : "Đăng nhập để theo dõi đơn hàng"}
               </p>
             </div>
             <button
@@ -817,7 +731,7 @@ function AuthScreen({
 }
 
 // ==========================================
-// 3. CART SCREEN (A1)
+// 3. CART SCREEN (A1) - CHO PHÉP CHỌN MÓN HÀNG MUỐN MUA (HÌNH 1)
 // ==========================================
 function CartScreen({
   items,
@@ -825,16 +739,63 @@ function CartScreen({
   onRemoveItem,
   onBack,
   onOrder,
+  onShowToast,
 }: {
   items: CartItem[];
   onUpdateQty: (item: CartItem, delta: number) => void;
   onRemoveItem: (item: CartItem) => void;
   onBack: () => void;
-  onOrder: () => void;
+  onOrder: (selectedItems: CartItem[]) => void;
+  onShowToast?: (msg: string) => void;
 }) {
-  const subtotal = items.reduce((acc, item) => acc + item.price * item.qty, 0);
+  const getItemKey = (item: CartItem) => `${item.id}-${item.variant}`;
+
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
+    items.map((item) => `${item.id}-${item.variant}`)
+  );
+
+  // Đồng bộ danh sách chọn khi giỏ hàng thay đổi
+  useEffect(() => {
+    setSelectedKeys((prev) => {
+      const currentKeys = items.map(getItemKey);
+      const kept = prev.filter((k) => currentKeys.includes(k));
+      // Nếu vừa thêm món mới hoặc chưa có món nào trong prev nhưng giỏ có hàng
+      if (kept.length === 0 && currentKeys.length > 0 && prev.length === 0) {
+        return currentKeys;
+      }
+      return kept;
+    });
+  }, [items]);
+
+  const toggleSelectItem = (item: CartItem) => {
+    const key = getItemKey(item);
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const isAllSelected =
+    items.length > 0 &&
+    items.every((item) => selectedKeys.includes(getItemKey(item)));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedKeys([]);
+    } else {
+      setSelectedKeys(items.map(getItemKey));
+    }
+  };
+
+  const selectedItems = items.filter((item) =>
+    selectedKeys.includes(getItemKey(item))
+  );
+  const subtotal = selectedItems.reduce(
+    (acc, item) => acc + item.price * item.qty,
+    0
+  );
   const isFreeShipping = subtotal >= 10000000;
-  const shippingFee = isFreeShipping ? 0 : 50000;
+  const shippingFee =
+    selectedItems.length === 0 ? 0 : isFreeShipping ? 0 : 50000;
   const total = subtotal + shippingFee;
 
   return (
@@ -888,67 +849,139 @@ function CartScreen({
           </div>
         ) : (
           <>
-            {items.map((item) => (
-              <div
-                key={`${item.id}-${item.variant}`}
-                className="bg-white rounded-2xl px-4 py-4 shadow-sm flex gap-3"
+            {/* Thanh Chọn tất cả món hàng muốn mua */}
+            <div className="bg-white rounded-2xl px-4 py-2.5 shadow-2xs flex items-center justify-between">
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2.5 cursor-pointer"
               >
-                <div className="w-18 h-18 rounded-xl overflow-hidden shrink-0 bg-[#f5f0e8]">
-                  <img
-                    src={item.img}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-['Playfair_Display'] font-semibold text-foreground leading-snug">
-                    {item.name}
-                  </p>
-                  <p className="text-xs font-['Inter'] text-muted-foreground mt-0.5">
-                    {item.variant}
-                  </p>
-                  <p
-                    className="text-sm font-['Inter'] font-bold mt-1"
-                    style={{ color: PRIMARY_GOLD }}
-                  >
-                    {formatCurrency(item.price)}
-                  </p>
-
-                  <div className="flex items-center justify-between mt-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        onClick={() => onUpdateQty(item, -1)}
-                        className="w-7 h-7 rounded-xl flex items-center justify-center text-foreground active:scale-95 transition-transform cursor-pointer"
-                        style={{
-                          border: `1px solid ${BORDER_GOLD_LIGHT}`,
+                <span
+                  className="w-5 h-5 rounded-md flex items-center justify-center text-xs font-bold transition-all"
+                  style={
+                    isAllSelected
+                      ? {
+                          background: PRIMARY_GOLD,
+                          color: "#ffffff",
+                          border: `1.5px solid ${PRIMARY_GOLD}`,
+                        }
+                      : {
                           background: "#ffffff",
-                        }}
-                      >
-                        <Minus size={13} color="#555" />
-                      </button>
-                      <span className="text-xs font-['Inter'] font-semibold w-5 text-center text-foreground">
-                        {item.qty}
-                      </span>
+                          color: "transparent",
+                          border: "1.5px solid #c9bea9",
+                        }
+                  }
+                >
+                  ✓
+                </span>
+                <span className="text-xs font-['Inter'] font-semibold text-[#141210]">
+                  Chọn tất cả ({selectedItems.length}/{items.length} sản phẩm)
+                </span>
+              </button>
+              <span className="text-[11px] font-['Inter'] text-[#8a7a5c]">
+                Tích chọn món muốn mua
+              </span>
+            </div>
+
+            {items.map((item) => {
+              const isSelected = selectedKeys.includes(getItemKey(item));
+              return (
+                <div
+                  key={getItemKey(item)}
+                  className="bg-white rounded-2xl px-3.5 py-4 shadow-sm flex items-center gap-3 transition-all"
+                  style={{
+                    border: isSelected
+                      ? `1.5px solid ${PRIMARY_GOLD}`
+                      : "1.5px solid transparent",
+                  }}
+                >
+                  {/* Button trước sản phẩm để chọn mua */}
+                  <button
+                    type="button"
+                    onClick={() => toggleSelectItem(item)}
+                    aria-label={`Chọn mua ${item.name}`}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer active:scale-90 transition-all"
+                    style={
+                      isSelected
+                        ? {
+                            background: PRIMARY_GOLD,
+                            color: "#ffffff",
+                            border: `1.5px solid ${PRIMARY_GOLD}`,
+                            boxShadow: "0 2px 6px rgba(184,146,42,0.3)",
+                          }
+                        : {
+                            background: "#ffffff",
+                            color: "transparent",
+                            border: "1.5px solid #c4b79e",
+                          }
+                    }
+                  >
+                    ✓
+                  </button>
+
+                  <div
+                    onClick={() => toggleSelectItem(item)}
+                    className="w-18 h-18 rounded-xl overflow-hidden shrink-0 bg-[#f5f0e8] cursor-pointer"
+                  >
+                    <img
+                      src={item.img}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      onClick={() => toggleSelectItem(item)}
+                      className="text-sm font-['Playfair_Display'] font-semibold text-foreground leading-snug cursor-pointer"
+                    >
+                      {item.name}
+                    </p>
+                    <p className="text-xs font-['Inter'] text-muted-foreground mt-0.5">
+                      {item.variant}
+                    </p>
+                    <p
+                      className="text-sm font-['Inter'] font-bold mt-1"
+                      style={{ color: PRIMARY_GOLD }}
+                    >
+                      {formatCurrency(item.price)}
+                    </p>
+
+                    <div className="flex items-center justify-between mt-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          onClick={() => onUpdateQty(item, -1)}
+                          className="w-7 h-7 rounded-xl flex items-center justify-center text-foreground active:scale-95 transition-transform cursor-pointer"
+                          style={{
+                            border: `1px solid ${BORDER_GOLD_LIGHT}`,
+                            background: "#ffffff",
+                          }}
+                        >
+                          <Minus size={13} color="#555" />
+                        </button>
+                        <span className="text-xs font-['Inter'] font-semibold w-5 text-center text-foreground">
+                          {item.qty}
+                        </span>
+                        <button
+                          onClick={() => onUpdateQty(item, 1)}
+                          className="w-7 h-7 rounded-xl flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
+                          style={{ background: PRIMARY_GOLD }}
+                        >
+                          <Plus size={13} color="white" />
+                        </button>
+                      </div>
+
                       <button
-                        onClick={() => onUpdateQty(item, 1)}
-                        className="w-7 h-7 rounded-xl flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
-                        style={{ background: PRIMARY_GOLD }}
+                        onClick={() => onRemoveItem(item)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-95"
+                        style={{ background: "#fff0f0" }}
                       >
-                        <Plus size={13} color="white" />
+                        <Trash2 size={14} color="#e74c3c" />
                       </button>
                     </div>
-
-                    <button
-                      onClick={() => onRemoveItem(item)}
-                      className="w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-95"
-                      style={{ background: "#fff0f0" }}
-                    >
-                      <Trash2 size={14} color="#e74c3c" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Shipping Box */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -970,14 +1003,25 @@ function CartScreen({
                 <div className="flex items-center gap-1">
                   <span
                     className="text-sm font-['Inter'] font-semibold"
-                    style={{ color: isFreeShipping ? "#27ae60" : PRIMARY_GOLD }}
+                    style={{
+                      color:
+                        selectedItems.length === 0
+                          ? "#8a7a5c"
+                          : isFreeShipping
+                            ? "#27ae60"
+                            : PRIMARY_GOLD,
+                    }}
                   >
-                    {isFreeShipping ? "Miễn phí" : formatCurrency(50000)}
+                    {selectedItems.length === 0
+                      ? "0đ"
+                      : isFreeShipping
+                        ? "Miễn phí"
+                        : formatCurrency(50000)}
                   </span>
                   <ChevronDown size={14} color="#aaa" />
                 </div>
               </div>
-              {isFreeShipping && (
+              {isFreeShipping && selectedItems.length > 0 && (
                 <div
                   className="mt-3 px-3 py-2 rounded-xl text-xs font-['Inter'] font-medium leading-relaxed"
                   style={{ background: "#f0faf4", color: "#27ae60" }}
@@ -1003,7 +1047,7 @@ function CartScreen({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-['Inter'] text-muted-foreground">
-                Tổng thanh toán
+                Tổng thanh toán ({selectedItems.length} món đã chọn)
               </p>
               <p
                 className="text-lg font-['Inter'] font-bold"
@@ -1013,14 +1057,26 @@ function CartScreen({
               </p>
             </div>
             <button
-              onClick={onOrder}
+              onClick={() => {
+                if (selectedItems.length === 0) {
+                  onShowToast?.("Vui lòng tích chọn ít nhất 1 sản phẩm để mua!");
+                  return;
+                }
+                onOrder(selectedItems);
+              }}
               className="px-6 py-3 rounded-2xl text-sm font-['Inter'] font-bold text-white active:scale-95 transition-transform cursor-pointer"
               style={{
-                background: `linear-gradient(135deg, ${PRIMARY_GOLD} 0%, #8b6914 100%)`,
-                boxShadow: "0 4px 14px rgba(184,146,42,0.35)",
+                background:
+                  selectedItems.length > 0
+                    ? `linear-gradient(135deg, ${PRIMARY_GOLD} 0%, #8b6914 100%)`
+                    : "#b5afa4",
+                boxShadow:
+                  selectedItems.length > 0
+                    ? "0 4px 14px rgba(184,146,42,0.35)"
+                    : "none",
               }}
             >
-              Đặt hàng ({items.length})
+              Đặt hàng ({selectedItems.length})
             </button>
           </div>
         </div>
@@ -2540,16 +2596,18 @@ function HomeScreen({
 }
 
 // ==========================================
-// 5. NOTIFICATIONS SCREEN (M1)
+// 5. NOTIFICATIONS SCREEN (M1) - ĐỒNG BỘ & LƯU BỀN VỮNG TRẠNG THÁI ĐÃ ĐỌC
 // ==========================================
 function NotificationsScreen({
   notifications,
   readIds,
-  setReadIds,
+  onMarkAllRead,
+  onMarkSingleRead,
 }: {
   notifications: DbNotification[];
   readIds: number[];
-  setReadIds: React.Dispatch<React.SetStateAction<number[]>>;
+  onMarkAllRead: () => void;
+  onMarkSingleRead: (id: number) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "unread">("unread");
 
@@ -2562,16 +2620,6 @@ function NotificationsScreen({
       ? notifications.filter((item) => !readIds.includes(item.id))
       : notifications;
 
-  const markAllRead = () => {
-    setReadIds(notifications.map((item) => item.id));
-  };
-
-  const markSingleRead = (id: number) => {
-    if (!readIds.includes(id)) {
-      setReadIds((prev) => [...prev, id]);
-    }
-  };
-
   return (
     <div
       className="flex flex-col h-full overflow-y-auto"
@@ -2583,7 +2631,7 @@ function NotificationsScreen({
             Thông báo
           </h1>
           <button
-            onClick={markAllRead}
+            onClick={onMarkAllRead}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-['Inter'] font-medium cursor-pointer active:scale-95 transition-transform"
             style={{ background: "#f5f0e8", color: PRIMARY_GOLD }}
           >
@@ -2635,7 +2683,7 @@ function NotificationsScreen({
           return (
             <button
               key={item.id}
-              onClick={() => markSingleRead(item.id)}
+              onClick={() => onMarkSingleRead(item.id)}
               className="flex items-start gap-3 bg-card rounded-2xl p-3.5 text-left w-full transition-opacity active:opacity-70 cursor-pointer"
               style={{
                 border: `1px solid ${
@@ -3672,7 +3720,7 @@ function ProfileScreen({
 }
 
 // ==========================================
-// 10. CHECKOUT / ORDER SCREEN (P1) - GIAO DIỆN MÀU TRẮNG CHỦ ĐẠO (HÌNH 1), KHÔNG DÙNG ĐIỂM THƯỞNG
+// 10. CHECKOUT / ORDER SCREEN (P1) - CHỌN MÃ VOUCHER HỆ THỐNG & GIỮ CHỖ VOUCHER (HÌNH 2 & HÌNH 3)
 // ==========================================
 function OrderScreen({
   user,
@@ -3681,6 +3729,7 @@ function OrderScreen({
   onViewOrders,
   items,
   onOrderPlaced,
+  onShowToast,
 }: {
   user: CustomerProfile;
   onBack: () => void;
@@ -3688,6 +3737,7 @@ function OrderScreen({
   onViewOrders?: () => void;
   items: CartItem[];
   onOrderPlaced: (orderCode: string) => void;
+  onShowToast?: (msg: string) => void;
 }) {
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -3697,22 +3747,120 @@ function OrderScreen({
   const [submitting, setSubmitting] = useState(false);
   const [orderCode, setOrderCode] = useState(() => "HD51411063");
 
+  // State quản lý danh sách Voucher đang hoạt động & giữ chỗ Voucher
+  const [vouchers, setVouchers] = useState<DbVoucher[]>([]);
+  const [voucherModalOpen, setVoucherModalOpen] = useState(false);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
+  const [updatingVoucherId, setUpdatingVoucherId] = useState<number | null>(
+    null
+  );
+  const [selectedVoucher, setSelectedVoucher] = useState<DbVoucher | null>(
+    null
+  );
+  const reservedVoucherIdRef = React.useRef<number | null>(null);
+  const orderConfirmedRef = React.useRef<boolean>(false);
+
+  // Tải danh sách các mã voucher đang hoạt động từ Supabase
+  const loadVouchers = async () => {
+    setLoadingVouchers(true);
+    try {
+      const list = await fetchActiveVouchers();
+      setVouchers(list);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingVouchers(false);
+    }
+  };
+
+  useEffect(() => {
+    loadVouchers();
+    return () => {
+      // Nếu thoát khỏi trang Tổng quan đơn hàng mà chưa xác nhận đặt hàng, hoàn trả lại lượt giữ chỗ voucher
+      if (reservedVoucherIdRef.current && !orderConfirmedRef.current) {
+        releaseVoucherInDb(reservedVoucherIdRef.current).catch(() => {});
+        reservedVoucherIdRef.current = null;
+      }
+    };
+  }, []);
+
+  // Xử lý chọn hoặc bỏ chọn mã voucher (Giữ chỗ & hiện thông báo "Đã tải dữ liệu")
+  const handleToggleSelectVoucher = async (v: DbVoucher) => {
+    if (updatingVoucherId !== null) return;
+    setUpdatingVoucherId(v.discountId);
+    onShowToast?.("Đã tải dữ liệu");
+
+    try {
+      const isCurrentlySelected = selectedVoucher?.discountId === v.discountId;
+
+      if (isCurrentlySelected) {
+        // Bỏ chọn mã voucher hiện tại -> Hoàn trả lại số lượng giữ chỗ (times_used - 1)
+        const updatedList = await releaseVoucherInDb(v.discountId);
+        reservedVoucherIdRef.current = null;
+        setSelectedVoucher(null);
+        setVouchers(updatedList);
+      } else {
+        // Nếu đang giữ chỗ một mã voucher khác trước đó -> Trả lại số lượng cho mã cũ trước
+        if (selectedVoucher) {
+          await releaseVoucherInDb(selectedVoucher.discountId);
+          reservedVoucherIdRef.current = null;
+        }
+        // Giữ chỗ mã voucher mới vừa chọn (times_used + 1)
+        const updatedList = await reserveVoucherInDb(v.discountId);
+        reservedVoucherIdRef.current = v.discountId;
+        const refreshed =
+          updatedList.find((x) => x.discountId === v.discountId) || v;
+        setSelectedVoucher(refreshed);
+        setVouchers(updatedList);
+      }
+    } catch (e: any) {
+      onShowToast?.(e?.message || "Không thể chọn mã voucher này.");
+    } finally {
+      setUpdatingVoucherId(null);
+    }
+  };
+
+  const handleBackFromOrder = async () => {
+    if (reservedVoucherIdRef.current && !orderConfirmedRef.current) {
+      const toRelease = reservedVoucherIdRef.current;
+      reservedVoucherIdRef.current = null;
+      setSelectedVoucher(null);
+      releaseVoucherInDb(toRelease).catch(() => {});
+    }
+    onBack();
+  };
+
   const subtotal = items.reduce((acc, item) => acc + item.price * item.qty, 0);
   const isFreeShipping = subtotal >= 10000000;
   const shippingOriginal = 83500;
   const shippingDiscount = isFreeShipping ? 83500 : 0;
   const shippingFinal = shippingOriginal - shippingDiscount;
-  const total = subtotal + shippingFinal;
+
+  const voucherDiscountAmount = selectedVoucher
+    ? Math.round((subtotal * selectedVoucher.discountPercentage) / 100)
+    : 0;
+  const total = Math.max(0, subtotal - voucherDiscountAmount + shippingFinal);
   const totalItemCount = items.reduce((acc, item) => acc + item.qty, 0);
 
   const handleConfirmOrder = async () => {
     setSubmitting(true);
     try {
-      const res = await createOrderInDb(user.id, user, items, paymentMethod);
+      const res = await createOrderInDb(
+        user.id,
+        user,
+        items,
+        paymentMethod,
+        selectedVoucher?.discountId || null,
+        voucherDiscountAmount
+      );
+      orderConfirmedRef.current = true;
+      reservedVoucherIdRef.current = null;
       setOrderCode(res.orderCode);
       setIsSuccess(true);
       onOrderPlaced(res.orderCode);
     } catch {
+      orderConfirmedRef.current = true;
+      reservedVoucherIdRef.current = null;
       setIsSuccess(true);
       onOrderPlaced(orderCode);
     } finally {
@@ -3774,9 +3922,9 @@ function OrderScreen({
     );
   }
 
-  // Checkout Review view (White & Clean Gold Theme - Hình 1)
+  // Checkout Review view (White & Clean Gold Theme - Hình 2)
   return (
-    <div className="flex flex-col h-full" style={{ background: "#f8f6f2" }}>
+    <div className="flex flex-col h-full relative" style={{ background: "#f8f6f2" }}>
       {/* Header màu trắng chủ đạo */}
       <div
         className="flex items-center gap-3 px-4 pt-10 pb-4 shrink-0 bg-white"
@@ -3786,7 +3934,7 @@ function OrderScreen({
         }}
       >
         <button
-          onClick={onBack}
+          onClick={handleBackFromOrder}
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
           style={{
             background: "#faf8f5",
@@ -3929,26 +4077,46 @@ function OrderScreen({
           </div>
         </div>
 
-        {/* Voucher */}
-        <div
-          className="mx-4 mt-3 rounded-2xl px-4 py-3.5 flex items-center gap-3 bg-white shadow-2xs"
+        {/* Khu vực Voucher SaiGon Jewelry -> Chọn mã (Hình 2 & Hình 3) */}
+        <button
+          type="button"
+          onClick={() => {
+            setVoucherModalOpen(true);
+            loadVouchers();
+          }}
+          className="mx-4 mt-3 w-[calc(100%-2rem)] rounded-2xl px-4 py-3.5 flex items-center gap-3 bg-white shadow-2xs cursor-pointer active:scale-[0.99] transition-transform text-left"
           style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
         >
-          <Tag size={15} color={PRIMARY_GOLD} />
-          <span className="flex-1 text-sm font-['Inter'] font-medium text-[#141210]">
-            Voucher SaiGon Jewelry
-          </span>
-          {isFreeShipping ? (
-            <span className="text-sm font-['Inter'] font-bold text-[#16a34a]">
-              −{formatCurrency(shippingDiscount)}
+          <Tag size={15} color={PRIMARY_GOLD} className="shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-['Inter'] font-medium text-[#141210] block">
+              Voucher SaiGon Jewelry
+            </span>
+            {selectedVoucher && (
+              <span className="text-[11px] font-['Inter'] text-[#9a6b24] font-semibold">
+                Đã chọn: {selectedVoucher.voucherName} (−
+                {selectedVoucher.discountPercentage}%)
+              </span>
+            )}
+          </div>
+          {selectedVoucher ? (
+            <span className="text-sm font-['Inter'] font-bold text-[#16a34a] shrink-0">
+              −{formatCurrency(voucherDiscountAmount)}
             </span>
           ) : (
-            <span className="text-xs font-['Inter'] text-[#8a7a5c]">
-              Chọn voucher
+            <span
+              className="text-xs font-['Inter'] font-semibold px-2.5 py-1 rounded-full shrink-0"
+              style={{
+                background: "#fdf6e7",
+                color: "#9a6b24",
+                border: `1px solid ${BORDER_GOLD_LIGHT}`,
+              }}
+            >
+              Chọn mã
             </span>
           )}
-          <ChevronRight size={14} color="#b5a68e" />
-        </div>
+          <ChevronRight size={14} color="#b5a68e" className="shrink-0" />
+        </button>
 
         {/* Collapsible Order Summary ("Tóm tắt đơn hàng") */}
         <div
@@ -3986,6 +4154,17 @@ function OrderScreen({
                 {formatCurrency(shippingFinal)}
               </span>
             </div>
+            {selectedVoucher && (
+              <div className="flex justify-between py-1">
+                <span className="text-xs font-['Inter'] text-[#16a34a]">
+                  Voucher ({selectedVoucher.voucherName} −
+                  {selectedVoucher.discountPercentage}%)
+                </span>
+                <span className="text-xs font-['Inter'] font-bold text-[#16a34a]">
+                  −{formatCurrency(voucherDiscountAmount)}
+                </span>
+              </div>
+            )}
 
             {showSummaryDetails && (
               <>
@@ -4025,6 +4204,158 @@ function OrderScreen({
             </span>
           </div>
         </div>
+
+        {/* Modal Chọn Mã Voucher Hệ Thống (Hình 3 - discount_by_voucher) */}
+        {voucherModalOpen && (
+          <div
+            className="fixed inset-0 z-[110] bg-black/55 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setVoucherModalOpen(false)}
+          >
+            <div
+              className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-[380px] max-h-[82vh] flex flex-col overflow-hidden shadow-2xl"
+              style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div
+                className="flex items-center justify-between px-4 py-3.5 bg-[#faf8f5]"
+                style={{ borderBottom: `1px solid ${BORDER_GOLD_LIGHT}` }}
+              >
+                <div>
+                  <p
+                    className="text-[10px] font-['Inter'] font-bold uppercase tracking-wider"
+                    style={{ color: "#9a6b24" }}
+                  >
+                    VOUCHER SAIGON JEWELRY
+                  </p>
+                  <h3 className="text-base font-['Playfair_Display'] font-bold text-[#141210]">
+                    Chọn mã giảm giá hệ thống
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVoucherModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#141210] cursor-pointer"
+                  style={{ border: `1px solid ${BORDER_GOLD_LIGHT}` }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Danh sách Voucher đang hoạt động */}
+              <div
+                className="p-4 overflow-y-auto flex flex-col gap-3"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {loadingVouchers && vouchers.length === 0 ? (
+                  <div className="py-10 text-center text-xs font-['Inter'] text-[#6b6358]">
+                    Đang tải danh sách mã voucher...
+                  </div>
+                ) : vouchers.length === 0 ? (
+                  <div className="py-10 text-center text-xs font-['Inter'] text-[#6b6358]">
+                    Hiện không có mã voucher nào đang hoạt động.
+                  </div>
+                ) : (
+                  vouchers.map((v) => {
+                    const isSelected =
+                      selectedVoucher?.discountId === v.discountId;
+                    const isUpdating = updatingVoucherId === v.discountId;
+                    const estDiscount = Math.round(
+                      (subtotal * v.discountPercentage) / 100
+                    );
+                    const isOut = v.remainingCount <= 0 && !isSelected;
+
+                    return (
+                      <div
+                        key={v.discountId}
+                        className="rounded-2xl p-3.5 transition-all flex items-center justify-between gap-3"
+                        style={{
+                          background: isSelected ? "#fdf8ef" : "#ffffff",
+                          border: isSelected
+                            ? `1.5px solid ${PRIMARY_GOLD}`
+                            : `1px solid ${BORDER_GOLD_LIGHT}`,
+                          opacity: isOut ? 0.55 : 1,
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="px-2 py-0.5 rounded-md text-[10px] font-['Inter'] font-bold text-white"
+                              style={{ background: "#8c5e1a" }}
+                            >
+                              −{v.discountPercentage}%
+                            </span>
+                            <p className="text-sm font-['Playfair_Display'] font-bold text-[#141210] truncate">
+                              {v.voucherName}
+                            </p>
+                          </div>
+
+                          <p className="text-xs font-['Inter'] font-semibold text-[#16a34a] mt-1">
+                            Giảm {formatCurrency(estDiscount)} trên đơn hiện tại
+                          </p>
+
+                          <div className="flex items-center gap-3 mt-1 text-[11px] font-['Inter'] text-[#6b6358]">
+                            <span>
+                              Số lượng:{" "}
+                              <strong className="text-[#141210]">
+                                {v.remainingCount}/{v.usageLimit}
+                              </strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={isOut || updatingVoucherId !== null}
+                          onClick={() => handleToggleSelectVoucher(v)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-['Inter'] font-bold shrink-0 cursor-pointer active:scale-95 transition-transform"
+                          style={
+                            isSelected
+                              ? {
+                                  background: "#fff1f2",
+                                  color: "#be123c",
+                                  border: "1px solid #fecdd3",
+                                }
+                              : {
+                                  background: PRIMARY_GOLD,
+                                  color: "#ffffff",
+                                }
+                          }
+                        >
+                          {isUpdating
+                            ? "Đang tải..."
+                            : isSelected
+                              ? "Bỏ chọn"
+                              : "Chọn mã"}
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Footer Modal */}
+              <div
+                className="px-4 py-3 bg-[#faf8f5] flex items-center justify-between"
+                style={{ borderTop: `1px solid ${BORDER_GOLD_LIGHT}` }}
+              >
+                <span className="text-xs font-['Inter'] text-[#6b6358]">
+                  {selectedVoucher
+                    ? `Đã chọn: ${selectedVoucher.voucherName} (−${formatCurrency(voucherDiscountAmount)})`
+                    : "Chưa chọn mã voucher"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setVoucherModalOpen(false)}
+                  className="px-5 py-2 rounded-full text-xs font-['Inter'] font-bold text-white cursor-pointer"
+                  style={{ background: "#141210" }}
+                >
+                  Xong
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Payment Methods */}
         <div
@@ -4684,6 +5015,10 @@ export default function App() {
 
   // Cart, Orders & Notifications State
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
+  const [orderReturnScreen, setOrderReturnScreen] = useState<
+    "cart" | "product-detail"
+  >("cart");
   const [customerOrders, setCustomerOrders] = useState<DbOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<DbNotification[]>([]);
@@ -4697,7 +5032,7 @@ export default function App() {
     }, 3000);
   };
 
-  // Load dữ liệu người dùng cụ thể từ Supabase
+  // Load dữ liệu người dùng cụ thể từ Supabase & khôi phục trạng thái thông báo đã đọc
   const loadUserSessionData = async (uid: string) => {
     setOrdersLoading(true);
     try {
@@ -4707,9 +5042,11 @@ export default function App() {
         fetchCustomerNotifications(uid),
         fetchCustomerOrders(uid),
       ]);
+      const restoredReadIds = getSavedReadNotificationIds(uid, notifs);
       setCurrentUser(profile);
       setCartItems(cart);
       setNotifications(notifs);
+      setReadNotificationIds(restoredReadIds);
       setCustomerOrders(ords);
     } catch {
       // Nếu lỗi session thì để người dùng đăng nhập lại
@@ -4734,9 +5071,11 @@ export default function App() {
       }
 
       const savedUid =
+        appStorage.getItem("jewels_mobile_uid") ||
         localStorage.getItem("jewels_mobile_uid") ||
         localStorage.getItem("jewels_user_id");
       const loggedOutFlag =
+        appStorage.getItem("jewels_mobile_logged_out") === "1" ||
         sessionStorage.getItem("jewels_mobile_logged_out") === "1";
 
       if (savedUid && !loggedOutFlag) {
@@ -4746,7 +5085,7 @@ export default function App() {
         try {
           const defaultUid = "e79979c4-fcd3-48c9-b882-16f8f6ffbe2e"; // Nguyễn Văn A (vana@gmail.com)
           await loadUserSessionData(defaultUid);
-          localStorage.setItem("jewels_mobile_uid", defaultUid);
+          appStorage.setItem("jewels_mobile_uid", defaultUid);
         } catch {}
       }
     })();
@@ -4762,6 +5101,26 @@ export default function App() {
   const unreadCount = notifications.filter(
     (item) => !readNotificationIds.includes(item.id)
   ).length;
+
+  const handleMarkAllNotificationsRead = () => {
+    const allIds = Array.from(
+      new Set([...readNotificationIds, ...notifications.map((n) => n.id)])
+    );
+    setReadNotificationIds(allIds);
+    if (currentUser) {
+      saveReadNotificationIds(currentUser.id, allIds, true);
+    }
+  };
+
+  const handleMarkSingleNotificationRead = (id: number) => {
+    if (readNotificationIds.includes(id)) return;
+    const nextIds = Array.from(new Set([...readNotificationIds, id]));
+    setReadNotificationIds(nextIds);
+    if (currentUser) {
+      const isAllRead = notifications.every((n) => nextIds.includes(n.id));
+      saveReadNotificationIds(currentUser.id, nextIds, isAllRead);
+    }
+  };
 
   const handleAddToCart = async (
     product: ProductItem,
@@ -4845,10 +5204,11 @@ export default function App() {
 
   const handleLogout = () => {
     const prevName = currentUser?.name || "Khách hàng";
-    localStorage.removeItem("jewels_mobile_uid");
-    localStorage.removeItem("jewels_user_id");
-    localStorage.removeItem("jewels_user_email");
-    localStorage.removeItem("jewels_token");
+    appStorage.removeItem("jewels_mobile_uid");
+    appStorage.removeItem("jewels_user_id");
+    appStorage.removeItem("jewels_user_email");
+    appStorage.removeItem("jewels_token");
+    appStorage.setItem("jewels_mobile_logged_out", "1");
     sessionStorage.setItem("jewels_mobile_logged_out", "1");
     setCurrentUser(null);
     setCartItems([]);
@@ -4862,7 +5222,9 @@ export default function App() {
   };
 
   const handleLoginSuccess = async (profile: CustomerProfile) => {
+    appStorage.removeItem("jewels_mobile_logged_out");
     sessionStorage.removeItem("jewels_mobile_logged_out");
+    appStorage.setItem("jewels_mobile_uid", profile.id);
     setLoggedOutMessage(null);
     setCurrentUser(profile);
     setActiveTab("home");
@@ -4874,8 +5236,10 @@ export default function App() {
         fetchCustomerNotifications(profile.id),
         fetchCustomerOrders(profile.id),
       ]);
+      const restoredReadIds = getSavedReadNotificationIds(profile.id, notifs);
       setCartItems(cart);
       setNotifications(notifs);
+      setReadNotificationIds(restoredReadIds);
       setCustomerOrders(ords);
     } catch {}
   };
@@ -4951,8 +5315,31 @@ export default function App() {
                   onOpenCart={() => setOverlayScreen("cart")}
                   onAddToCart={(prod, q, v) => handleAddToCart(prod, q, v)}
                   onBuyNow={async (prod, q, v) => {
-                    await handleAddToCart(prod, q, v);
-                    setOverlayScreen("cart");
+                    const finalVariant = v || prod.variant;
+                    const matchedVar =
+                      prod.variantObjects?.find(
+                        (vo) => vo.label === finalVariant
+                      ) || prod.variantObjects?.[0];
+                    const unitPrice = matchedVar
+                      ? matchedVar.price
+                      : prod.numericPrice;
+                    const variantId = matchedVar
+                      ? matchedVar.id
+                      : (prod.defaultVariantId || prod.id);
+                    const buyNowCartItem: CartItem = {
+                      id: Date.now(),
+                      variantId,
+                      productId: prod.id,
+                      name: prod.name,
+                      price: unitPrice,
+                      img: prod.img,
+                      qty: q,
+                      variant: finalVariant,
+                      stock: matchedVar ? matchedVar.stock : prod.stock,
+                    };
+                    setCheckoutItems([buyNowCartItem]);
+                    setOrderReturnScreen("product-detail");
+                    setOverlayScreen("order");
                   }}
                 />
               </div>
@@ -4970,11 +5357,16 @@ export default function App() {
                       selectedProduct
                         ? "product-detail"
                         : returnToShopAfterDetail
-                        ? "shop"
-                        : "main"
+                          ? "shop"
+                          : "main"
                     )
                   }
-                  onOrder={() => setOverlayScreen("order")}
+                  onOrder={(selectedList) => {
+                    setCheckoutItems(selectedList);
+                    setOrderReturnScreen("cart");
+                    setOverlayScreen("order");
+                  }}
+                  onShowToast={showToast}
                 />
               </div>
             )}
@@ -4984,22 +5376,36 @@ export default function App() {
               <div className="absolute inset-0 z-50 flex flex-col sm:rounded-[40px] overflow-hidden">
                 <OrderScreen
                   user={currentUser}
-                  onBack={() => setOverlayScreen("cart")}
+                  onBack={() => setOverlayScreen(orderReturnScreen)}
                   onGoHome={() => {
                     setSelectedProduct(null);
                     setReturnToShopAfterDetail(false);
+                    setCheckoutItems([]);
                     setOverlayScreen("main");
                     setActiveTab("home");
                   }}
                   onViewOrders={() => {
                     setSelectedProduct(null);
                     setReturnToShopAfterDetail(false);
+                    setCheckoutItems([]);
                     setOverlayScreen("main");
                     setActiveTab("orders");
                   }}
-                  items={cartItems}
+                  items={checkoutItems.length > 0 ? checkoutItems : cartItems}
+                  onShowToast={showToast}
                   onOrderPlaced={async () => {
-                    setCartItems([]);
+                    // Chỉ loại bỏ các món đã chọn đặt mua khỏi giỏ hàng
+                    const purchasedKeys = new Set(
+                      (checkoutItems.length > 0 ? checkoutItems : cartItems).map(
+                        (i) => `${i.id}-${i.variant}`
+                      )
+                    );
+                    setCartItems((prev) =>
+                      prev.filter(
+                        (i) => !purchasedKeys.has(`${i.id}-${i.variant}`)
+                      )
+                    );
+                    setCheckoutItems([]);
                     await loadUserSessionData(currentUser.id);
                     const catalog = await fetchStoreCatalog();
                     if (catalog.products.length > 0) {
@@ -5056,7 +5462,8 @@ export default function App() {
                 <NotificationsScreen
                   notifications={notifications}
                   readIds={readNotificationIds}
-                  setReadIds={setReadNotificationIds}
+                  onMarkAllRead={handleMarkAllNotificationsRead}
+                  onMarkSingleRead={handleMarkSingleNotificationRead}
                 />
               )}
               {activeTab === "profile" && (
