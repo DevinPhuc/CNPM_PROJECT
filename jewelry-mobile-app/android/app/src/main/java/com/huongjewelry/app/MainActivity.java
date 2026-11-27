@@ -1,7 +1,10 @@
 package com.huongjewelry.app;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -11,6 +14,29 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
+
+    public static class AndroidStorageBridge {
+        private final SharedPreferences prefs;
+
+        public AndroidStorageBridge(Context context) {
+            this.prefs = context.getSharedPreferences("SaiGonJewelryPrefs", Context.MODE_PRIVATE);
+        }
+
+        @JavascriptInterface
+        public String getItem(String key) {
+            return prefs.getString(key, null);
+        }
+
+        @JavascriptInterface
+        public void setItem(String key, String value) {
+            prefs.edit().putString(key, value).apply();
+        }
+
+        @JavascriptInterface
+        public void removeItem(String key) {
+            prefs.edit().remove(key).apply();
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -23,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         settings.setAllowFileAccessFromFileURLs(true);
@@ -31,10 +58,11 @@ public class MainActivity extends AppCompatActivity {
         settings.setUseWideViewPort(true);
         settings.setTextZoom(100);
 
+        webView.addJavascriptInterface(new AndroidStorageBridge(this), "AndroidStorage");
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        // Load bundled Hương Jewelry App from assets
+        // Load bundled SaiGon Jewelry App from assets
         webView.loadUrl("file:///android_asset/index.html");
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
