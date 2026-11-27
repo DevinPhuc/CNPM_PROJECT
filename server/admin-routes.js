@@ -277,7 +277,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     // Thống kê tổng quan trong kỳ lọc
     const totalRevenue = filteredInvoices.reduce((acc, i) => acc + (Number(i.total_price) || 0), 0);
     const totalCost = filteredReceipts.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
-    const estimatedProfit = Math.max(0, totalRevenue - totalCost);
+    const estimatedProfit = totalRevenue - totalCost;
     const profitMargin = totalRevenue > 0 ? Math.round((estimatedProfit / totalRevenue) * 100) : 0;
     const completedOrders = filteredOrders.filter((o) => o.status === "delivered").length;
     const cancelledOrders = filteredOrders.filter((o) => o.status === "cancelled").length;
@@ -327,7 +327,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
           deliveredCount: delivered,
           revenue: rev,
           cost: cost,
-          profit: Math.max(0, rev - cost),
+          profit: rev - cost,
           successRate: mOrders.length > 0 ? Math.round((delivered / mOrders.length) * 100) : 0,
         });
       }
@@ -358,7 +358,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
           deliveredCount: delivered,
           revenue: rev,
           cost: cost,
-          profit: Math.max(0, rev - cost),
+          profit: rev - cost,
           successRate: dOrders.length > 0 ? Math.round((delivered / dOrders.length) * 100) : 0,
         });
       }
@@ -398,7 +398,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
           deliveredCount: delivered,
           revenue: rev,
           cost: cost,
-          profit: Math.max(0, rev - cost),
+          profit: rev - cost,
           successRate: dOrders.length > 0 ? Math.round((delivered / dOrders.length) * 100) : 0,
         });
       }
@@ -559,7 +559,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       const q = quarterOf(r.receipt_date);
       if (q) costQ[q - 1] += Number(r.total_amount) || 0;
     });
-    const profitQ = revenueQ.map((r, idx) => Math.max(0, r - costQ[idx]));
+    const profitQ = revenueQ.map((r, idx) => r - costQ[idx]);
 
     // Tổng hóa đơn theo sản phẩm × quý (từ chi tiết hóa đơn của hóa đơn hợp lệ)
     const prodMap = {};
@@ -666,7 +666,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         buckets: win.buckets,
         revenue,
         cost,
-        profit: revenue.map((r, idx) => Math.max(0, r - cost[idx])),
+        profit: revenue.map((r, idx) => r - cost[idx]),
       };
     };
     const filteredSummary = aggBuckets(sumBuckets);
