@@ -2879,7 +2879,7 @@
             <span><span class="${r.successRate >= 50 ? 'status-online' : 'status-away'}">${r.successRate}%</span></span>
             <strong style="color:var(--admin-green);">${formatMoney(r.revenue)}</strong>
             <span style="color:#666;">${formatMoney(r.cost)}</span>
-            <strong style="color:${r.profit > 0 ? '#10b981' : '#666'}; ">${formatMoney(r.profit)}</strong>
+            <strong style="color:${r.profit > 0 ? '#10b981' : r.profit < 0 ? 'var(--admin-red)' : '#666'};">${formatMoney(r.profit)}</strong>
           </div>
         `;
       }).join("") +
@@ -2891,7 +2891,7 @@
           <strong><span class="status-online">${totRate}%</span></strong>
           <strong style="color:var(--admin-green); font-size:13px;">${formatMoney(totRev)}</strong>
           <strong style="color:#666;">${formatMoney(totCost)}</strong>
-          <strong style="color:#10b981; font-size:13px;">${formatMoney(totProfit)}</strong>
+          <strong style="color:${totProfit < 0 ? 'var(--admin-red)' : '#10b981'}; font-size:13px;">${formatMoney(totProfit)}</strong>
         </div>
       `;
   }
@@ -3368,7 +3368,9 @@
     return arr.reduce((a, v) => a + (Number(v) || 0), 0);
   }
 
-  function renderReportTable(containerId, columns, rows, totalRow = null) {
+  // opts.clickable: bấm dòng để lọc biểu đồ; opts.selectedKey: dòng đang được chọn
+  function renderReportTable(containerId, columns, rows, totalRow = null, opts = {}) {
+  const { clickable = false, selectedKey = null } = opts;
   const box = document.getElementById(containerId);
   if (!box) return;
   if (!rows || rows.length === 0) {
@@ -3391,14 +3393,24 @@
       ${columns.map((c, i) => `<strong style="${i === 0 ? firstStyle : numStyle}">${esc(c)}</strong>`).join("")}
     </div>`;
 
-  const rowHtml = (cells, isTotal) =>
-    `<div class="admin-row${isTotal ? " admin-row-header" : ""}" style="${rowStyle}">` +
-    cells.map((cell, idx) =>
-      idx === 0
-        ? `<strong style="${firstStyle}" title="${esc(cell)}">${esc(cell)}</strong>`
-        : `<strong style="${numStyle}${isTotal ? " color: var(--admin-green);" : ""}">${esc(cell)}</strong>`
-    ).join("") +
+  const rowHtml = (cells, isTotal) => {
+    const key = String(cells[0] ?? "");
+    const selectable = clickable && !isTotal;
+    const isSelected = selectable && key === selectedKey;
+    const cls = `admin-row${isTotal ? " admin-row-header" : ""}${selectable ? " clickable-row" : ""}${isSelected ? " selected-row" : ""}`;
+    const attrs = selectable
+      ? ` data-report-key="${esc(key)}" role="button" tabindex="0" aria-pressed="${isSelected}" title="Bấm để lọc biểu đồ theo dòng này"`
+      : "";
+    return `<div class="${cls}" style="${rowStyle}"${attrs}>` +
+    cells.map((cell, idx) => {
+      if (idx === 0) return `<strong style="${firstStyle}" title="${esc(cell)}">${esc(cell)}</strong>`;
+      // Số âm (lỗ) tô đỏ; dòng tổng giữ màu xanh thương hiệu khi dương
+      const negative = String(cell).trim().startsWith("-");
+      const color = negative ? "var(--admin-red)" : isTotal ? "var(--admin-green)" : "";
+      return `<strong style="${numStyle}${color ? ` color: ${color};` : ""}">${esc(cell)}</strong>`;
+    }).join("") +
     `</div>`;
+  };
 
   box.innerHTML =
     headerHtml +
@@ -3406,12 +3418,37 @@
     (totalRow ? rowHtml(totalRow, true) : "");
 }
 
+  // Dòng đang chọn ở 2 bảng Thống kê & Báo cáo (null = hiển thị tất cả)
+  const reportSelection = { sum: null, prod: null };
+
+  // Dữ liệu nguồn cho 2 biểu đồ (dùng chung cho vẽ cả bảng và vẽ lại riêng biểu đồ)
+  const reportSummaryData = () =>
+    state.reports?.filteredSummary || state.reports?.quarterlySummary ||
+    { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+  const reportProductData = () =>
+    state.reports?.filteredProducts || state.reports?.productQuarters || { rows: [] };
+
+  function updateReportChartTitles() {
+    const sumChartTitle = document.getElementById("sumChartTitle");
+    if (sumChartTitle) {
+      sumChartTitle.textContent = reportSelection.sum
+        ? `Biểu đồ ${reportSelection.sum.toLowerCase()} theo kỳ`
+        : "Biểu đồ thu – chi – lợi nhuận theo quý";
+    }
+    const prodChartTitle = document.getElementById("prodChartTitle");
+    if (prodChartTitle) {
+      prodChartTitle.textContent = reportSelection.prod
+        ? `Biểu đồ hóa đơn: ${reportSelection.prod}`
+        : "Biểu đồ hóa đơn theo sản phẩm × quý";
+    }
+  }
+
   function renderReports() {
     const r = state.reports;
     if (!r) return;
 
     // A. Tổng thu / tổng chi / lợi nhuận (bộ lọc pill riêng) - trục thời gian theo bộ lọc
-    const qs = r.filteredSummary || r.quarterlySummary || { revenue: [0, 0, 0, 0], cost: [0, 0, 0, 0], profit: [0, 0, 0, 0] };
+    const qs = reportSummaryData();
     const qsBuckets = qs.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
     const sumLabel = document.getElementById("sumFilterLabel");
     if (sumLabel) sumLabel.textContent = qs.label ? `Kỳ lọc: ${qs.label}` : "";
@@ -3420,10 +3457,16 @@
       ["Tổng chi", ...qs.cost.map((v) => formatMoney(v)), formatMoney(sumCol(qs.cost))],
       ["Lợi nhuận", ...qs.profit.map((v) => formatMoney(v)), formatMoney(sumCol(qs.profit))],
     ];
-    renderReportTable("reportQuarterlySummary", ["", ...qsBuckets, "Tổng cộng"], qsRows, null);
+    // Dòng đang chọn ở bảng thu-chi (null = vẽ cả 3 cột như cũ)
+    const sumSel = qsRows.some((row) => row[0] === reportSelection.sum) ? reportSelection.sum : null;
+    reportSelection.sum = sumSel;
+    renderReportTable("reportQuarterlySummary", ["", ...qsBuckets, "Tổng cộng"], qsRows, null, {
+      clickable: true,
+      selectedKey: sumSel,
+    });
 
     // B. Tổng hóa đơn theo sản phẩm (bộ lọc pill riêng) - tối đa 5 dòng
-    const fp = r.filteredProducts || r.productQuarters || { rows: [] };
+    const fp = reportProductData();
     const fpBuckets = fp.buckets || ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
     const fpRowVals = (row) => (fp.buckets ? (row.values || []) : [1, 2, 3, 4].map((i) => row[`q${i}`] || 0));
     const prodLabel = document.getElementById("prodFilterLabel");
@@ -3438,7 +3481,13 @@
       ...fpBuckets.map((_, i) => formatMoney(sumCol((fp.rows || []).map((row) => fpRowVals(row)[i] || 0)))),
       formatMoney(sumCol((fp.rows || []).map((row) => row.total || 0))),
     ];
-    renderReportTable("reportProductQuarters", ["", ...fpBuckets, "Tổng cộng"], pRows, pTotal);
+    // Dòng sản phẩm đang chọn (bỏ chọn nếu sản phẩm không còn trong kỳ lọc hiện tại)
+    const prodSel = (fp.rows || []).some((row) => row.name === reportSelection.prod) ? reportSelection.prod : null;
+    reportSelection.prod = prodSel;
+    renderReportTable("reportProductQuarters", ["", ...fpBuckets, "Tổng cộng"], pRows, pTotal, {
+      clickable: true,
+      selectedKey: prodSel,
+    });
 
     // C. Tổng hóa đơn theo nhân viên (bộ lọc chung) - tối đa 5 dòng
     const fe = r.filteredEmployeeYears || { buckets: QUARTER_LABELS, rows: [] };
@@ -3476,8 +3525,9 @@
     renderReportTable("reportCustomerQuarters", ["", ...fcBuckets, "Tổng cộng"], fcRows, fcTotal);
 
     // Hai biểu đồ cột cho 2 bảng trên (theo đúng dữ liệu bảng + bộ lọc đang chọn)
-    renderQuarterSummaryChart(qs);
-    renderQuarterProductsChart(fp);
+    updateReportChartTitles();
+    renderQuarterSummaryChart(qs, sumSel);
+    renderQuarterProductsChart(fp, prodSel);
   }
 
   const QUARTER_LABELS = ["Quý 1", "Quý 2", "Quý 3", "Quý 4"];
@@ -3500,21 +3550,27 @@
   }
 
   // Biểu đồ 1: mỗi mốc thời gian một nhóm 3 cột (tổng thu / tổng chi / lợi nhuận)
-  function renderQuarterSummaryChart(qs) {
+  // selected: tên dòng đang chọn trong bảng -> chỉ vẽ cột của dòng đó
+  function renderQuarterSummaryChart(qs, selected = null) {
     const barsBox = document.getElementById("sumChartBars");
     if (!barsBox) return;
     const buckets = qs?.buckets || QUARTER_LABELS;
     const revenue = qs?.revenue || buckets.map(() => 0);
     const cost = qs?.cost || buckets.map(() => 0);
     const profit = qs?.profit || buckets.map(() => 0);
-    const maxVal = Math.max(...revenue, ...cost, ...profit, 0);
-    const scaleMax = renderChartYAxis("sumChartYAxis", maxVal);
-
-    const series = [
+    const allSeries = [
       { key: "g-rev", name: "Tổng thu", vals: revenue },
       { key: "g-cost", name: "Tổng chi", vals: cost },
       { key: "g-profit", name: "Lợi nhuận", vals: profit },
     ];
+    const series = selected ? allSeries.filter((s) => s.name === selected) : allSeries;
+    const maxVal = Math.max(...series.flatMap((s) => s.vals), 0);
+    const scaleMax = renderChartYAxis("sumChartYAxis", maxVal);
+    // Cột âm (lỗ) không vẽ; số thực vẫn hiện trong tooltip
+    const barPct = (v) => {
+      const n = Number(v) || 0;
+      return n > 0 ? Math.max(2, Math.round((n / scaleMax) * 100)) : 0;
+    };
 
     barsBox.innerHTML = buckets.map((ql, i) => `
       <div class="bar-col has-revenue">
@@ -3523,7 +3579,7 @@
           ${series.map((s) => `<div class="chart-tooltip-row"><span>${s.name}:</span> <strong>${formatMoney(s.vals[i])}</strong></div>`).join("")}
         </div>
         <div class="grp-bars">
-          ${series.map((s) => `<div class="grp-bar ${s.key}" style="height:${Math.max(2, Math.round((Number(s.vals[i]) / scaleMax) * 100))}%;" title="${s.name} ${ql}: ${formatMoney(s.vals[i])}"></div>`).join("")}
+          ${series.map((s) => `<div class="grp-bar ${s.key}" style="height:${barPct(s.vals[i])}%;" title="${s.name} ${ql}: ${formatMoney(s.vals[i])}"></div>`).join("")}
         </div>
       </div>
     `).join("");
@@ -3534,24 +3590,32 @@
     }
   }
 
-  // Biểu đồ 2: mỗi mốc thời gian một cột = tổng doanh thu top sản phẩm tại mốc đó
-  function renderQuarterProductsChart(fp) {
+  // Biểu đồ 2: mỗi mốc thời gian một cột = doanh thu các sản phẩm tại mốc đó
+  // selected: tên sản phẩm đang chọn trong bảng -> chỉ vẽ doanh thu của sản phẩm đó
+  function renderQuarterProductsChart(fp, selected = null) {
     const barsBox = document.getElementById("prodChartBars");
     if (!barsBox) return;
     const buckets = fp?.buckets || QUARTER_LABELS;
-    const rows = (fp?.rows || []).slice(0, 5);
+    // Tính trên TẤT CẢ sản phẩm để cột khớp dòng "Tổng cộng" của bảng (bảng chỉ hiển thị top 5)
+    const rows = fp?.rows || [];
     const fpRowVals = (r) => (fp?.buckets ? (r.values || []) : [1, 2, 3, 4].map((i) => r[`q${i}`] || 0));
-    const quarterTotals = buckets.map((_, i) => rows.reduce((a, r) => a + (Number(fpRowVals(r)[i]) || 0), 0));
-    const maxVal = Math.max(...quarterTotals, 0);
+    const selectedRow = selected ? rows.find((r) => r.name === selected) : null;
+    const bucketValues = buckets.map((_, i) =>
+      selectedRow
+        ? Number(fpRowVals(selectedRow)[i]) || 0
+        : rows.reduce((a, r) => a + (Number(fpRowVals(r)[i]) || 0), 0)
+    );
+    const maxVal = Math.max(...bucketValues, 0);
     const scaleMax = renderChartYAxis("prodChartYAxis", maxVal);
+    const tooltipRows = selectedRow ? [selectedRow] : rows.slice(0, 3);
 
-    barsBox.innerHTML = quarterTotals.map((num, i) => {
+    barsBox.innerHTML = bucketValues.map((num, i) => {
       const hasRevenue = num > 0;
       return `
         <div class="bar-col ${hasRevenue ? "has-revenue" : "is-zero"}">
           <div class="chart-tooltip">
-            <div class="chart-tooltip-title">Top sản phẩm - ${buckets[i]}</div>
-            ${rows.slice(0, 3).map((r) => `<div class="chart-tooltip-row"><span>${esc(r.name)}:</span> <strong>${formatMoney(fpRowVals(r)[i] || 0)}</strong></div>`).join("")}
+            <div class="chart-tooltip-title">${selectedRow ? `${esc(selectedRow.name)} - ` : "Top sản phẩm - "}${buckets[i]}</div>
+            ${tooltipRows.map((r) => `<div class="chart-tooltip-row"><span>${esc(r.name)}:</span> <strong>${formatMoney(fpRowVals(r)[i] || 0)}</strong></div>`).join("")}
           </div>
           <div class="bar-fill" style="height:${hasRevenue ? Math.max(10, Math.round((num / scaleMax) * 100)) : 0}%;"></div>
         </div>
@@ -3560,7 +3624,7 @@
 
     const xAxisEl = document.getElementById("prodChartXAxis");
     if (xAxisEl) {
-      xAxisEl.innerHTML = buckets.map((ql, i) => `<div class="x-axis-item ${quarterTotals[i] > 0 ? "has-revenue" : ""}">${ql}</div>`).join("");
+      xAxisEl.innerHTML = buckets.map((ql, i) => `<div class="x-axis-item ${bucketValues[i] > 0 ? "has-revenue" : ""}">${ql}</div>`).join("");
     }
   }
 
@@ -3657,6 +3721,37 @@
       const btn = e.target.closest(".pill-seg-btn");
       if (!btn) return;
       setReportFilterMode(key, btn.getAttribute("data-qmode"));
+    });
+  });
+
+  // Bấm dòng dữ liệu -> lọc biểu đồ theo dòng đó; bấm lại (hoặc Enter/Space) để bỏ lọc
+  [["reportQuarterlySummary", "sum"], ["reportProductQuarters", "prod"]].forEach(([id, key]) => {
+    const box = document.getElementById(id);
+    if (!box) return;
+    const toggle = (row) => {
+      if (!state.reports) return;
+      const value = row.getAttribute("data-report-key");
+      reportSelection[key] = reportSelection[key] === value ? null : value;
+      // Chỉ đổi trạng thái chọn trên các dòng đã có + vẽ lại riêng biểu đồ (không dựng lại bảng)
+      box.querySelectorAll(".clickable-row").forEach((r) => {
+        const on = r.getAttribute("data-report-key") === reportSelection[key];
+        r.classList.toggle("selected-row", on);
+        r.setAttribute("aria-pressed", String(on));
+      });
+      updateReportChartTitles();
+      if (key === "sum") renderQuarterSummaryChart(reportSummaryData(), reportSelection.sum);
+      else renderQuarterProductsChart(reportProductData(), reportSelection.prod);
+    };
+    box.addEventListener("click", (e) => {
+      const row = e.target.closest(".clickable-row");
+      if (row) toggle(row);
+    });
+    box.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const row = e.target.closest(".clickable-row");
+      if (!row) return;
+      e.preventDefault();
+      toggle(row);
     });
   });
 

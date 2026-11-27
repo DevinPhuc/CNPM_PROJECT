@@ -2802,6 +2802,12 @@ html[data-theme="dark"] #breakdownTableTitle {
   position: relative;
   border-radius: 10px;
   margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.admin-row.clickable-row:focus-visible {
+  outline: 2px solid var(--admin-gold);
+  outline-offset: -2px;
 }
 
 .admin-row.clickable-row.selected-row {
@@ -3202,6 +3208,13 @@ html[data-theme="dark"] .report-duo-card .admin-row:not(.header-row):not(.admin-
 
 html[data-theme="dark"] .report-duo-card .admin-row:not(.header-row):not(.admin-row-header):hover {
   background: #f4f6f3 !important;
+  color: #111827 !important;
+}
+
+/* Dòng đang chọn trong 2 bảng báo cáo: giữ nền ấm kể cả ở dark theme (card vốn nền trắng) */
+html[data-theme="dark"] .report-duo-card .admin-row.clickable-row.selected-row,
+html[data-theme="dark"] .report-duo-card .admin-row.clickable-row.selected-row:hover {
+  background: #fdf6ec !important;
   color: #111827 !important;
 }
 
