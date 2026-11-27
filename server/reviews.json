@@ -1,0 +1,72 @@
+[
+  {
+    "id": "rev-seed-1",
+    "productId": 1,
+    "name": "Trần Thị Mai Anh",
+    "rating": 5,
+    "comment": "Nhẫn bên ngoài lấp lánh hơn trong hình nhiều! Viên kim cương nước D cắt giác rất lửa và sáng chói dưới ánh đèn. Có đầy đủ chứng thư GIA và hộp nhung sang trọng. Rất hài lòng!",
+    "createdAt": "2026-11-10T14:32:00.000Z",
+    "verified": true,
+    "reply": "Jewels Atelier trân trọng cảm ơn chị Mai Anh! Chúc chị luôn rạng ngời và hạnh phúc cùng món trang sức yêu thích ạ."
+  },
+  {
+    "id": "rev-seed-2",
+    "productId": 1,
+    "name": "Lê Hoàng Phúc",
+    "rating": 5,
+    "comment": "Mua tặng sinh nhật vợ, nhân viên tư vấn chọn ni tay rất chuẩn theo hướng dẫn đo size trên web. Vợ mình đeo vừa vặn và khen đẹp xuất sắc. Giao hàng niêm phong cẩn thận.",
+    "createdAt": "2026-11-08T09:15:00.000Z",
+    "verified": true,
+    "reply": null
+  },
+  {
+    "id": "rev-seed-3",
+    "productId": 1,
+    "name": "Nguyễn Vũ Thảo My",
+    "rating": 5,
+    "comment": "Vàng 18K hoàn thiện cực kỳ bóng bẩy và chắc chắn. Thích nhất là chính sách bảo hành đánh bóng trọn đời và đổi mẫu 90% rất yên tâm.",
+    "createdAt": "2026-11-05T18:40:00.000Z",
+    "verified": true,
+    "reply": null
+  },
+  {
+    "id": "rev-seed-4",
+    "productId": 2,
+    "name": "Võ Đăng Khoa",
+    "rating": 5,
+    "comment": "Dây chuyền thiết kế thanh lịch, phối cùng mặt kim cương cực kỳ bắt sáng. Đóng gói hộp hoa kèm nơ và thư cảm ơn rất trang trọng.",
+    "createdAt": "2026-11-11T10:20:00.000Z",
+    "verified": true,
+    "reply": "Dạ Jewels Atelier cảm ơn anh Khoa đã tin tưởng lựa chọn thương hiệu ạ!"
+  },
+  {
+    "id": "rev-seed-5",
+    "productId": 2,
+    "name": "Phạm Hải Yến",
+    "rating": 5,
+    "comment": "Chất lượng đá quý rất trong và tinh khiết, đi tiệc ai cũng khen. Có giấy kiểm định đá quý đàng hoàng.",
+    "createdAt": "2026-11-06T16:05:00.000Z",
+    "verified": true,
+    "reply": null
+  },
+  {
+    "id": "rev-seed-6",
+    "productId": 3,
+    "name": "Hoàng Minh Trí",
+    "rating": 5,
+    "comment": "Bông tai ngọc trai Akoya ánh xà cừ tròn đều, giác vàng chuẩn 18k sắc nét. Mua làm quà kỷ niệm ngày cưới rất ý nghĩa.",
+    "createdAt": "2026-11-09T11:45:00.000Z",
+    "verified": true,
+    "reply": null
+  },
+  {
+    "id": "rev-seed-7",
+    "productId": 4,
+    "name": "Đỗ Quốc Bảo",
+    "rating": 5,
+    "comment": "Lắc tay vàng 24K đúc đặc, hoa văn chạm khắc tinh xảo từng milimet. Cam kết thu mua 100% theo giá thị trường làm mình rất an tâm khi mua tích lũy.",
+    "createdAt": "2026-11-12T08:30:00.000Z",
+    "verified": true,
+    "reply": "Jewels Atelier cảm ơn anh Bảo. Chúc anh luôn tài lộc và hanh thông ạ!"
+  }
+]

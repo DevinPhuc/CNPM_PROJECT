@@ -1287,12 +1287,18 @@
             Đơn hàng này đã được khách hàng trả lại sản phẩm. Hóa đơn không còn giá trị lưu hành và đã hoàn tiền cho khách.
           </div>
         ` : ''}
-        <div class="side-detail-header" style="align-items: flex-start; margin-bottom: 14px;">
+        <div class="side-detail-header" style="align-items: flex-start; margin-bottom: 12px;">
           <div>
-            <span class="detail-badge" style="background:${inv.isVoided ? '#fee2e2' : '#fef3c7'}; color:${inv.isVoided ? '#991b1b' : '#92400e'}; font-weight:700;">
-              ${inv.isVoided ? 'HÓA ĐƠN ĐÃ THU HỒI' : 'HÓA ĐƠN BÁN HÀNG'}
-            </span>
-            <h3 style="margin: 6px 0 2px 0; font-size: 22px; font-weight: 800; color:${inv.isVoided ? '#991b1b' : '#14532d'}; letter-spacing:0.5px;">${inv.code}</h3>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+              <span class="detail-badge" style="background:${inv.isVoided ? '#fee2e2' : '#fef3c7'}; color:${inv.isVoided ? '#991b1b' : '#92400e'}; font-weight:700;">
+                ${inv.isVoided ? 'HÓA ĐƠN ĐÃ THU HỒI' : 'HÓA ĐƠN BÁN HÀNG'}
+              </span>
+              <span style="font-weight: 700; color: #64748b; font-size: 13px;">${inv.code}</span>
+            </div>
+            <!-- Số tiền đầu tiên to rõ nhất ngay tại đầu hóa đơn -->
+            <div style="font-size: 28px; font-weight: 900; color:${inv.isVoided ? '#991b1b' : '#047857'}; letter-spacing:-0.5px; line-height: 1.15; margin: 4px 0 2px 0;">
+              ${formatMoney(inv.amount)}
+            </div>
             <small style="color: #64748b; font-size: 12px; display:block; margin-top:2px;">Ngày tạo: <strong>${formatDateTime(inv.date)}</strong></small>
           </div>
           ${inv.isVoided || String(inv.status).includes("thu hồi") ? `
@@ -1304,15 +1310,6 @@
               ✓ Đã thanh toán
             </span>
           `}
-        </div>
-
-        <div class="inv-customer-box" style="margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h4 class="inv-customer-title" style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">Thông tin khách hàng</h4>
-          <div style="display: grid; gap: 5px; font-size: 13px;">
-            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Khách hàng:</span> <strong style="color:#0f172a;">${inv.customer}</strong></div>
-            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Điện thoại:</span> <strong style="color:#0f172a;">${inv.phone || "Không có SĐT"}</strong></div>
-            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#475569; flex-shrink:0;">Địa chỉ:</span> <span style="color:#1e293b; text-align:right; word-break:break-word;">${inv.address || "Mua trực tiếp tại showroom"}</span></div>
-          </div>
         </div>
 
         <div style="margin-bottom: 16px;">
@@ -1357,6 +1354,15 @@
                 Hóa đơn dịch vụ / Mua sắm lẻ tại quầy
               </div>
             `}
+          </div>
+        </div>
+
+        <div class="inv-customer-box" style="margin-bottom: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h4 class="inv-customer-title" style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">Thông tin khách hàng</h4>
+          <div style="display: grid; gap: 5px; font-size: 13px;">
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Khách hàng:</span> <strong style="color:#0f172a;">${inv.customer}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Điện thoại:</span> <strong style="color:#0f172a;">${inv.phone || "Không có SĐT"}</strong></div>
+            <div style="display:flex; justify-content:space-between; gap:12px;"><span style="color:#475569; flex-shrink:0;">Địa chỉ:</span> <span style="color:#1e293b; text-align:right; word-break:break-word;">${inv.address || "Mua trực tiếp tại showroom"}</span></div>
           </div>
         </div>
 
@@ -2349,45 +2355,72 @@
 
     panel.innerHTML = `
       <div class="side-detail-content">
-        <div class="side-detail-header" style="margin-bottom:14px;">
+        <div class="side-detail-header" style="align-items: flex-start; margin-bottom: 12px;">
           <div>
-            <p class="account-eyebrow" style="margin-bottom:5px;">CHI TIẾT PHIẾU NHẬP</p>
-            <h3 style="font-size:19px;">${escapeReceiptHtml(receipt.code)}</h3>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap;">
+              <span class="detail-badge" style="background: #fef3c7; color: #92400e; font-weight: 700;">
+                CHI TIẾT PHIẾU NHẬP
+              </span>
+              <strong style="color: #64748b; font-size: 13px;">${escapeReceiptHtml(receipt.code)}</strong>
+            </div>
+            <!-- Số tiền đầu tiên to rõ nhất ngay tại đầu phiếu nhập -->
+            <div style="font-size: 28px; font-weight: 900; color: #b45309; letter-spacing: -0.5px; line-height: 1.15; margin: 4px 0 2px 0;">
+              ${formatMoney(receipt.totalAmount)}
+            </div>
+            <small style="color: #64748b; font-size: 12px; display: block; margin-top: 2px;">
+              Ngày nhập: <strong>${escapeReceiptHtml(formatDate(receipt.date))}</strong>
+            </small>
           </div>
-          ${renderStatusBadge(RECEIPT_STATUS_LABELS[statusKey])}
+          <div>
+            ${renderStatusBadge(RECEIPT_STATUS_LABELS[statusKey])}
+          </div>
         </div>
 
-        <div style="margin-top:8px;">
-          <strong style="display:block;margin-bottom:9px;">Danh sách mặt hàng (${items.length})</strong>
-          <div style="display:grid;gap:8px;">
+        <div class="inv-customer-box" style="margin-bottom: 14px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+          <h4 class="inv-customer-title" style="margin: 0 0 8px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; letter-spacing: 0.5px;">Thông tin nhập kho</h4>
+          <div style="display: grid; gap: 5px; font-size: 13px;">
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Nhà cung cấp:</span> <strong style="color:#0f172a;">${escapeReceiptHtml(receipt.supplier || "Nhà cung cấp")}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Ngày nhập:</span> <strong style="color:#0f172a;">${escapeReceiptHtml(formatDate(receipt.date))}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span style="color:#475569;">Ghi chú:</span> <span style="color:#1e293b; text-align:right;">${escapeReceiptHtml(receipt.note || "Không có")}</span></div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <strong style="margin:0; font-size:12.5px; font-weight:800; text-transform:uppercase; color:#334155; letter-spacing:0.5px;">
+              Danh sách mặt hàng (${items.length} món)
+            </strong>
+            <span style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700; font-size:11.5px; padding:3px 9px; border-radius:12px;">
+              Tổng: ${totalQuantity} SP
+            </span>
+          </div>
+
+          <div style="display:grid; gap:8px;">
             ${items.length ? items.map((item) => `
-              <div style="display:grid;gap:5px;padding:10px 12px;border:1px solid var(--admin-line);border-radius:8px;font-size:12px;">
-                <strong>${escapeReceiptHtml(item.productName || "Sản phẩm")}</strong>
-                <div style="display:flex;justify-content:space-between;gap:8px;color:var(--admin-muted);">
-                  <span>SL: <strong>${Number(item.quantity) || 0}</strong></span>
-                  <span>Đơn giá: <strong>${formatMoney(item.unitCost)}</strong></span>
+              <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; gap:10px;">
+                  <strong style="font-size:13.5px; color:#0f172a; line-height:1.4; flex:1;">${escapeReceiptHtml(item.productName || "Sản phẩm")}</strong>
+                  <div style="text-align:right; flex-shrink:0;">
+                    <span style="font-size:11px; color:#64748b; margin-right:4px;">Thành tiền:</span>
+                    <strong style="font-size:14.5px; font-weight:800; color:#b45309;">${formatMoney(item.subtotal)}</strong>
+                  </div>
                 </div>
-                <div style="display:flex;justify-content:space-between;gap:8px;">
-                  <span style="color:var(--admin-muted);">Thành tiền</span>
-                  <strong>${formatMoney(item.subtotal)}</strong>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:5px 8px; border-radius:6px; font-size:12px;">
+                  <span>Số lượng: <strong style="color:#0f172a;">${Number(item.quantity) || 0}</strong></span>
+                  <span>Đơn giá nhập: <strong style="color:#0f172a;">${formatMoney(item.unitCost)}</strong></span>
                 </div>
               </div>
             `).join("") : '<div class="admin-empty">Phiếu chưa có chi tiết mặt hàng.</div>'}
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px;background:var(--admin-paper);border-radius:8px;margin-top:14px;">
-          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng số lượng</small><strong>${totalQuantity} sản phẩm</strong></div>
-          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Tổng tiền</small><strong style="color:var(--admin-gold);">${formatMoney(receipt.totalAmount)}</strong></div>
-        </div>
-
-        <div style="display:grid;gap:12px;margin-top:14px;">
-          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Nhà cung cấp</small><strong>${escapeReceiptHtml(receipt.supplier || "Nhà cung cấp")}</strong></div>
-          <div><small style="display:block;color:var(--admin-muted);margin-bottom:3px;">Ngày nhập</small><strong>${escapeReceiptHtml(formatDate(receipt.date))}</strong></div>
-        </div>
-
-        <div style="margin-top:14px;padding:10px 12px;background:var(--admin-paper);border-radius:8px;font-size:12px;">
-          <strong>Ghi chú:</strong> ${escapeReceiptHtml(receipt.note || "--")}
+        <div style="display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border:1.5px solid #f59e0b; border-radius:8px; padding:11px 14px; margin-top:8px; box-shadow:0 1px 3px rgba(245,158,11,0.1);">
+          <span style="font-size:13px; font-weight:800; color:#78350f; text-transform:uppercase; letter-spacing:0.5px;">
+            Tổng tiền phiếu nhập:
+          </span>
+          <strong style="font-size:19px; font-weight:900; color:#b45309;">
+            ${formatMoney(receipt.totalAmount)}
+          </strong>
         </div>
 
         ${actions ? `<div style="margin-top:16px;">${actions}</div>` : ""}
