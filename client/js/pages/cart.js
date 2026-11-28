@@ -48,6 +48,7 @@
     const total = cart.subtotal + cart.shipping;
     const blocked = cart.items.some((i) => !i.available || i.quantity > i.stock);
     const remain = cart.freeShippingFrom - cart.subtotal;
+    const directSaved = cart.items.reduce((sum, i) => i.hasDiscount && i.originalPrice > i.price ? sum + (i.originalPrice - i.price) * i.quantity : sum, 0);
     root.innerHTML = `
       <div class="layout-2">
         <section class="panel">
@@ -58,11 +59,17 @@
               <div>
                 <h4><a href="product.html?id=${i.productId}">${esc(i.name)}</a></h4>
                 <small>${esc(variantLabel(i))}</small>
-                <small>${money(i.price)}</small>
+                ${i.hasDiscount && i.originalPrice > i.price ? `
+                  <div style="display:flex;align-items:center;gap:6px;margin:2px 0;">
+                    <span style="color:#dc2626;font-weight:700;font-size:0.92rem;">${money(i.price)}</span>
+                    <span style="color:#94a3b8;text-decoration:line-through;font-size:0.8rem;">${money(i.originalPrice)}</span>
+                    <span style="background:#dc2626;color:#fff;font-size:0.72rem;font-weight:700;padding:1px 5px;border-radius:4px;">🔥 -${i.discountPercent}%</span>
+                  </div>
+                ` : `<small>${money(i.price)}</small>`}
                 ${!i.available ? '<span class="warn">Sản phẩm đã hết hàng hoặc ngừng kinh doanh</span>' : i.quantity > i.stock ? `<span class="warn">Chỉ còn ${i.stock} sản phẩm</span>` : ""}
               </div>
               <div class="right">
-                <strong class="price">${money(i.subtotal)}</strong>
+                <strong class="price" style="${i.hasDiscount ? "color:#dc2626;" : ""}">${money(i.subtotal)}</strong>
                 <div class="qty"><button data-act="dec" aria-label="Giảm">−</button><input type="number" class="qty-field cart-qty-inp" value="${i.quantity}" min="1" max="${i.stock || 99}"><button data-act="inc" aria-label="Tăng">+</button></div>
                 <button class="remove" data-act="rm">Xóa</button>
               </div>
@@ -72,6 +79,7 @@
         <aside class="panel">
           <h3>Tóm tắt đơn hàng</h3>
           <div class="sum-row"><span>Tạm tính</span><strong>${money(cart.subtotal)}</strong></div>
+          ${directSaved > 0 ? `<div class="sum-row" style="color:#16a34a;"><span>Tiết kiệm ưu đãi</span><strong>-${money(directSaved)}</strong></div>` : ""}
           <div class="sum-row"><span>Phí vận chuyển</span><strong>${cart.shipping ? money(cart.shipping) : "Miễn phí"}</strong></div>
           <div class="sum-row total"><span>Tổng cộng</span><strong>${money(total)}</strong></div>
           ${remain > 0 ? `<div class="free-ship">Mua thêm <b>${money(remain)}</b> để được miễn phí vận chuyển.</div>` : ""}

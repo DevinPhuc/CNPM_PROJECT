@@ -776,33 +776,22 @@
                 <label style="background:#f8f9fa; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
                   <strong style="color:var(--admin-dark); font-size:13px; display:block; margin-bottom:4px;">Hình thức khuyến mãi (Bắt buộc chọn)</strong>
                   <select name="type" id="promoTypeSelect" onchange="handlePromoTypeChange(this.value)" required style="font-weight:600; color:var(--admin-green);">
-                    <option value="product">🏷️ Khuyến mãi theo sản phẩm (Giảm % trực tiếp cho sản phẩm)</option>
+                    <option value="product">🏷️ Giảm sốc theo sản phẩm / danh mục (Thời gian thực trên Cửa hàng)</option>
                     <option value="voucher" selected>🎟️ Khuyến mãi theo voucher (Mã giảm giá nhập khi đặt hàng)</option>
                     <option value="invoice">🧾 Khuyến mãi theo hóa đơn (Giảm % khi đơn hàng đạt mức tối thiểu)</option>
+                    <option value="combo">🎁 Chương trình tổng hợp (Kết hợp sản phẩm & hóa đơn)</option>
                   </select>
                 </label>
 
                 <label>Tên chương trình khuyến mãi
-                  <input name="name" type="text" placeholder="Ví dụ: Giảm giá mùa cưới / Tri ân khách hàng" required />
+                  <input name="name" type="text" placeholder="Nhập tên chương trình khuyến mãi" required />
                 </label>
 
-                <!-- 2. CÁC TRƯỜNG ĐẶC THÙ THEO TỪNG LOẠI -->
-                <!-- A. Theo sản phẩm -->
-                <div id="promoFieldProduct" style="display:none; background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:12px;">
-                  <label>
-                    <strong style="color:#7e22ce;">💍 Chọn sản phẩm áp dụng giảm giá</strong>
-                    <select name="productId" id="promoProductSelect">
-                      <option value="">-- Đang tải danh sách sản phẩm... --</option>
-                    </select>
-                    <small style="color:#6b21a8; font-size:11px; margin-top:3px;">Sản phẩm này sẽ được chiết khấu % trực tiếp khi khách hàng chọn mua.</small>
-                  </label>
-                </div>
-
                 <!-- B. Theo voucher -->
-                <div id="promoFieldVoucher" style="background:#fefce8; border:1px solid #fef08a; border-radius:8px; padding:12px;">
+                <div id="promoFieldVoucher" style="background:#fefce8; border:1px solid #fef08a; border-radius:8px; padding:12px; margin-bottom:10px;">
                   <label style="margin-bottom:8px;">
-                    <strong style="color:#854d0e;">🎟️ Mã Voucher (Code khách nhập)</strong>
-                    <input name="code" id="promoCodeInput" type="text" placeholder="JEWELS20" style="text-transform: uppercase" />
+                    <strong style="color:#854d0e;">🎟️ Mã khuyến mãi (Khách nhập khi đặt hàng)</strong>
+                    <input name="code" id="promoCodeInput" type="text" placeholder="Nhập mã (ví dụ: GIANGSINH, TET2026...)" style="text-transform: uppercase" />
                   </label>
                   <label>
                     <span style="color:#854d0e;">Số lượng mã tối đa (Lượt dùng)</span>
@@ -810,19 +799,54 @@
                   </label>
                 </div>
 
-                <!-- C. Theo hóa đơn -->
-                <div id="promoFieldInvoice" style="display:none; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:12px;">
-                  <label>
-                    <strong style="color:#065f46;">🧾 Tổng tiền hóa đơn tối thiểu để được giảm (VNĐ)</strong>
-                    <input name="minInvoiceAmount" id="promoMinInvoiceInput" type="number" min="100000" step="100000" placeholder="10000000 (10 triệu VNĐ)" />
-                    <small style="color:#047857; font-size:11px; margin-top:3px;">Tổng tiền giỏ hàng phải đạt từ mức này trở lên mới được tự động chiết khấu %.</small>
+                <!-- A. Theo sản phẩm / danh mục -->
+                <div id="promoFieldProduct" style="display:none; background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:12px; margin-bottom:10px;">
+                  <label style="margin-bottom:8px;">
+                    <strong style="color:#7e22ce;">💍 Phạm vi áp dụng giảm giá</strong>
+                    <select name="scope" id="promoScopeSelect" onchange="handlePromoScopeChange(this.value)">
+                      <option value="category">Theo toàn bộ danh mục sản phẩm</option>
+                      <option value="product">Theo sản phẩm cụ thể</option>
+                    </select>
                   </label>
+                  <label id="promoCategoryWrap">
+                    <span style="color:#6b21a8; font-weight:600;">Chọn danh mục áp dụng:</span>
+                    <select name="categoryId" id="promoCategorySelect">
+                      <option value="1">💍 Nhẫn (Tất cả sản phẩm Nhẫn & Nhẫn cưới)</option>
+                      <option value="2">✨ Dây chuyền</option>
+                      <option value="3">💎 Bông tai</option>
+                      <option value="4">🌟 Lắc tay</option>
+                    </select>
+                  </label>
+                  <label id="promoProductWrap" style="display:none;">
+                    <span style="color:#6b21a8; font-weight:600;">Chọn sản phẩm cụ thể:</span>
+                    <select name="productId" id="promoProductSelect">
+                      <option value="">-- Đang tải danh sách sản phẩm... --</option>
+                    </select>
+                  </label>
+                  <small style="color:#6b21a8; font-size:11px; margin-top:4px; display:block;" id="promoProductDesc">
+                    Sản phẩm trong phạm vi này sẽ được giảm % trực tiếp theo thời gian thực trên Cửa hàng (khách không cần nhập mã).
+                  </small>
+                </div>
+
+                <!-- C. Theo hóa đơn -->
+                <div id="promoFieldInvoice" style="display:none; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:12px; margin-bottom:10px;">
+                  <label style="margin-bottom:8px;">
+                    <strong style="color:#065f46;">🧾 Tổng tiền hóa đơn tối thiểu để được giảm (VNĐ)</strong>
+                    <input name="minInvoiceAmount" id="promoMinInvoiceInput" type="number" min="100000" step="100000" placeholder="20000000 (20 triệu VNĐ)" />
+                    <small style="color:#047857; font-size:11px; margin-top:3px; display:block;">Tổng tiền giỏ hàng phải đạt từ mức này trở lên mới được chiết khấu.</small>
+                  </label>
+                  <div id="promoInvoiceDiscountWrap" style="display:none;">
+                    <label>
+                      <span style="color:#065f46; font-weight:600;">Mức giảm cho hóa đơn (%)</span>
+                      <input name="invoiceDiscount" id="promoInvoiceDiscountInput" type="number" min="1" max="100" placeholder="5 (Giảm thêm 5%)" />
+                    </label>
+                  </div>
                 </div>
 
                 <!-- 3. MỨC GIẢM VÀ THỜI GIAN ÁP DỤNG -->
-                <label>
-                  <strong>Mức giảm (%)</strong>
-                  <input name="discount" type="number" min="1" max="100" placeholder="Ví dụ: 15 (Giảm 15%)" required />
+                <label id="promoDiscountGeneralWrap">
+                  <strong id="promoDiscountGeneralLabel">Mức giảm (%)</strong>
+                  <input name="discount" type="number" min="1" max="100" placeholder="Nhập % giảm giá (1 - 100)" required />
                 </label>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">

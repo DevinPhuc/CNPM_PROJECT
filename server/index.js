@@ -1,7 +1,7 @@
 "use strict";
 // Backend Jewels: REST API (Supabase service_role) + phục vụ file tĩnh client/shared.
-require("dotenv").config();
 const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -297,6 +297,43 @@ const placeholder = "https://placehold.co/600x600/png?text=Jewels";
 const mainImage = (imgs = [], variantId) =>
   (imgs.find((i) => variantId && i.variant_id === variantId) || imgs.find((i) => i.is_primary) || imgs[0])?.image_url || placeholder;
 
+// Lấy các chiết khấu sản phẩm trực tiếp (Flash Sale) đang có hiệu lực trong ngày hôm nay theo thời gian thực
+async function getActiveRealtimeProductDiscounts() {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const { data: activeDiscounts } = await db.from("discounts")
+      .select("discount_id,name,code,begin_date,end_date,discount_by_product(variant_id,discount_percentage)")
+      .eq("is_active", true);
+
+    const validDiscounts = (activeDiscounts || []).filter((d) => {
+      const startOk = !d.begin_date || d.begin_date <= today;
+      const endOk = !d.end_date || d.end_date >= today;
+      return startOk && endOk;
+    });
+
+    const variantDiscounts = {};
+    validDiscounts.forEach((d) => {
+      const pRules = [].concat(d.discount_by_product || []).filter(Boolean);
+      pRules.forEach((rule) => {
+        if (rule.variant_id && Number(rule.discount_percentage) > 0) {
+          const cur = variantDiscounts[rule.variant_id];
+          if (!cur || cur.discountPercent < Number(rule.discount_percentage)) {
+            variantDiscounts[rule.variant_id] = {
+              discountPercent: Number(rule.discount_percentage),
+              promoName: d.name,
+              code: d.code,
+            };
+          }
+        }
+      });
+    });
+    return variantDiscounts;
+  } catch (err) {
+    console.warn("Lỗi lấy khuyến mãi thời gian thực:", err.message);
+    return {};
+  }
+}
+
 app.get("/api/products", wrap(async (req, res) => {
   const { cat, cats: multiCats, q, sort = "new", min, max, prices } = req.query;
   const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -360,20 +397,49 @@ app.get("/api/products", wrap(async (req, res) => {
   const rows = allRows || [];
   const data = [...rows.filter(rowInStock), ...rows.filter((p) => !rowInStock(p))]
     .slice((page - 1) * size, page * size);
-  const images = await imagesFor(data.map((p) => p.pro_id));
+  const [images, realtimeDiscounts] = await Promise.all([
+    imagesFor(data.map((p) => p.pro_id)),
+    getActiveRealtimeProductDiscounts(),
+  ]);
+
   const items = data.map((p) => {
     const variants = (p.product_variants || []).filter((v) => v.is_active);
-    const prices = variants.map((v) => Number(v.price ?? p.base_price));
     const inStockVariants = variants.filter((v) => Number(v.stock_quantity) > 0);
     const defVariant = inStockVariants[0] || variants[0] || null;
     const totalStock = inStockVariants.reduce((sum, v) => sum + (Number(v.stock_quantity) || 0), 0);
+
+    // Tính giá gốc và giá khuyến mãi thời gian thực
+    let maxDiscountPercent = 0;
+    variants.forEach((v) => {
+      const disc = realtimeDiscounts[v.variant_id];
+      if (disc && disc.discountPercent > maxDiscountPercent) {
+        maxDiscountPercent = disc.discountPercent;
+      }
+    });
+
+    const origPrices = variants.map((v) => Number(v.price ?? p.base_price));
+    const origMin = origPrices.length ? Math.min(...origPrices) : Number(p.base_price);
+    const origMax = origPrices.length ? Math.max(...origPrices) : Number(p.base_price);
+
+    const salePrices = variants.map((v) => {
+      const orig = Number(v.price ?? p.base_price);
+      const disc = realtimeDiscounts[v.variant_id];
+      return disc ? Math.round(orig * (100 - disc.discountPercent) / 100) : orig;
+    });
+    const finalPrice = salePrices.length ? Math.min(...salePrices) : origMin;
+    const finalMaxPrice = salePrices.length ? Math.max(...salePrices) : origMax;
+
     return {
       id: p.pro_id,
       name: p.name,
       category: p.categories?.name || "",
       image: mainImage(images[p.pro_id]),
-      price: prices.length ? Math.min(...prices) : Number(p.base_price),
-      maxPrice: prices.length ? Math.max(...prices) : Number(p.base_price),
+      price: finalPrice,
+      maxPrice: finalMaxPrice,
+      originalPrice: origMin,
+      originalMaxPrice: origMax,
+      hasDiscount: maxDiscountPercent > 0,
+      discountPercent: maxDiscountPercent,
       inStock: inStockVariants.length > 0 && totalStock > 0,
       stock: totalStock,
       stockQuantity: totalStock,
@@ -388,20 +454,46 @@ app.get("/api/products/:id", wrap(async (req, res) => {
     .select("pro_id,cat_id,name,description,base_price,categories(name),product_variants(variant_id,material,gemstone,certificate_code,size,price,stock_quantity,is_active)")
     .eq("pro_id", req.params.id).eq("is_active", true).limit(1)));
   if (!p) throw new HttpError(404, "Không tìm thấy sản phẩm.");
-  const [imagesMap, related] = await Promise.all([
+  const [imagesMap, related, realtimeDiscounts] = await Promise.all([
     imagesFor([p.pro_id]),
     db.from("products").select("pro_id,name,base_price").eq("is_active", true).eq("cat_id", p.cat_id).neq("pro_id", p.pro_id).limit(4).then(must),
+    getActiveRealtimeProductDiscounts(),
   ]);
   const images = imagesMap[p.pro_id] || [];
   const relImgs = await imagesFor(related.map((r) => r.pro_id));
+
+  let prodMaxDiscount = 0;
+  const processedVariants = (p.product_variants || []).filter((v) => v.is_active).map((v) => {
+    const disc = realtimeDiscounts[v.variant_id];
+    const origPrice = Number(v.price ?? p.base_price);
+    const discPercent = disc ? disc.discountPercent : 0;
+    if (discPercent > prodMaxDiscount) prodMaxDiscount = discPercent;
+    const finalPrice = discPercent > 0 ? Math.round(origPrice * (100 - discPercent) / 100) : origPrice;
+    return {
+      id: v.variant_id,
+      material: v.material,
+      gemstone: v.gemstone,
+      certificate: v.certificate_code,
+      size: v.size === null ? null : Number(v.size),
+      price: finalPrice,
+      originalPrice: origPrice,
+      hasDiscount: discPercent > 0,
+      discountPercent: discPercent,
+      stock: v.stock_quantity || 0,
+    };
+  });
+
+  const basePriceNum = Number(p.base_price);
+  const finalBasePrice = prodMaxDiscount > 0 ? Math.round(basePriceNum * (100 - prodMaxDiscount) / 100) : basePriceNum;
+
   res.json({
     id: p.pro_id, name: p.name, description: p.description, category: p.categories?.name || "", catId: p.cat_id,
-    basePrice: Number(p.base_price),
+    basePrice: finalBasePrice,
+    originalBasePrice: basePriceNum,
+    hasDiscount: prodMaxDiscount > 0,
+    discountPercent: prodMaxDiscount,
     images: images.length ? images.map((i) => ({ url: i.image_url, variantId: i.variant_id })) : [{ url: placeholder, variantId: null }],
-    variants: (p.product_variants || []).filter((v) => v.is_active).map((v) => ({
-      id: v.variant_id, material: v.material, gemstone: v.gemstone, certificate: v.certificate_code,
-      size: v.size === null ? null : Number(v.size), price: Number(v.price ?? p.base_price), stock: v.stock_quantity || 0,
-    })),
+    variants: processedVariants,
     related: related.map((r) => ({ id: r.pro_id, name: r.name, price: Number(r.base_price), image: mainImage(relImgs[r.pro_id]) })),
   });
 }));
@@ -414,7 +506,10 @@ async function getCartId(uid) {
 }
 
 async function loadCart(uid) {
-  const cartId = await getCartId(uid);
+  const [cartId, realtimeDiscounts] = await Promise.all([
+    getCartId(uid),
+    getActiveRealtimeProductDiscounts(),
+  ]);
   const rows = must(await db.from("cart_items")
     .select("cart_item_id,quantity,variant_id,product_variants(variant_id,pro_id,material,gemstone,size,price,stock_quantity,is_active,products(name,is_active))")
     .eq("cart_id", cartId).order("cart_item_id"));
@@ -422,11 +517,17 @@ async function loadCart(uid) {
   const lines = rows.filter((r) => r.product_variants).map((r) => {
     const v = r.product_variants;
     const available = v.is_active && v.products?.is_active && v.stock_quantity > 0;
+    const origPrice = Number(v.price);
+    const disc = realtimeDiscounts[v.variant_id];
+    const discPercent = disc ? disc.discountPercent : 0;
+    const finalPrice = discPercent > 0 ? Math.round(origPrice * (100 - discPercent) / 100) : origPrice;
+
     return {
       id: r.cart_item_id, variantId: v.variant_id, productId: v.pro_id, name: v.products?.name || "", material: v.material,
-      gemstone: v.gemstone, size: v.size === null ? null : Number(v.size), price: Number(v.price), quantity: r.quantity,
+      gemstone: v.gemstone, size: v.size === null ? null : Number(v.size), price: finalPrice, originalPrice: origPrice,
+      hasDiscount: discPercent > 0, discountPercent: discPercent, quantity: r.quantity,
       stock: v.stock_quantity || 0, available, image: mainImage(images[v.pro_id], v.variant_id),
-      subtotal: Number(v.price) * r.quantity,
+      subtotal: finalPrice * r.quantity,
     };
   });
   return { cartId, lines, subtotal: lines.reduce((s, l) => s + l.subtotal, 0) };
@@ -484,6 +585,7 @@ app.delete("/api/cart/items/:id", auth, wrap(async (req, res) => {
 
 // ---------- mã giảm giá ----------
 // Trả về { discount_id, label, amount } hoặc ném HttpError nếu mã không hợp lệ.
+// Hỗ trợ kết hợp đa quy tắc (Ví dụ mã NOEL: vừa giảm 10% cho sản phẩm A, vừa giảm 5% cho hóa đơn > 20tr)
 async function evaluateCode(code, lines, subtotal, uid) {
   const clean = String(code || "").trim().toUpperCase();
   if (!clean) throw new HttpError(400, "Vui lòng nhập mã giảm giá.");
@@ -498,31 +600,326 @@ async function evaluateCode(code, lines, subtotal, uid) {
   const voucher = list(d.discount_by_voucher)[0];
   const invoice = list(d.discount_by_invoice)[0];
   const products = list(d.discount_by_product);
-  let amount = 0;
 
+  let productDiscountAmount = 0;
+  let invoiceDiscountAmount = 0;
+  let voucherDiscountAmount = 0;
+  const appliedDetails = [];
+
+  // 1. Kiểm tra lượt dùng voucher (nếu có)
   if (voucher) {
-    if (voucher.usage_limit != null && voucher.times_used >= voucher.usage_limit) throw new HttpError(400, "Mã giảm giá đã hết lượt sử dụng.");
+    if (voucher.usage_limit != null && voucher.times_used >= voucher.usage_limit) {
+      throw new HttpError(400, "Mã giảm giá đã hết lượt sử dụng.");
+    }
     if (voucher.limit_per_cus != null) {
       const used = must(await db.from("orders").select("order_id").eq("customer_id", uid).eq("discount_id", d.discount_id).neq("status", "cancelled")).length;
       if (used >= voucher.limit_per_cus) throw new HttpError(400, "Bạn đã dùng hết lượt cho mã này.");
     }
-    amount = Math.round((subtotal * Number(voucher.discount_percentage)) / 100);
-  } else if (invoice) {
-    const min = Number(invoice.min_total_price);
-    const okCond = invoice.condition_type === "exact" ? subtotal === min : subtotal >= min;
-    if (!okCond) throw new HttpError(400, `Mã áp dụng cho đơn từ ${min.toLocaleString("vi-VN")}đ.`);
-    amount = Math.round((subtotal * Number(invoice.discount_percentage)) / 100);
-  } else if (products.length) {
+    if (Number(voucher.discount_percentage) > 0) {
+      voucherDiscountAmount = Math.round((subtotal * Number(voucher.discount_percentage)) / 100);
+      appliedDetails.push(`Giảm ${voucher.discount_percentage}% toàn đơn (-${voucherDiscountAmount.toLocaleString("vi-VN")}đ)`);
+    }
+  }
+
+  // 2. Kiểm tra giảm giá theo sản phẩm cụ thể cấu hình trong chương trình
+  const matchedLines = [];
+  if (products.length) {
     products.forEach((rule) => {
       const line = lines.find((l) => l.variantId === rule.variant_id);
-      if (line) amount += Math.round((line.subtotal * Number(rule.discount_percentage)) / 100);
+      if (line) {
+        const itemDisc = Math.round((line.subtotal * Number(rule.discount_percentage)) / 100);
+        productDiscountAmount += itemDisc;
+        matchedLines.push(line);
+        appliedDetails.push(`Giảm ${rule.discount_percentage}% cho "${line.name}" (-${itemDisc.toLocaleString("vi-VN")}đ)`);
+      }
     });
-    if (!amount) throw new HttpError(400, "Mã chỉ áp dụng cho sản phẩm cụ thể, giỏ hàng chưa có sản phẩm phù hợp.");
-  } else {
-    throw new HttpError(400, "Mã giảm giá chưa được cấu hình.");
   }
-  return { discount_id: d.discount_id, code: d.code, label: d.name, amount: Math.min(amount, subtotal), voucher: !!voucher };
+
+  // 3. Kiểm tra giảm giá theo hóa đơn nếu đạt mức tối thiểu
+  let invoiceMet = false;
+  let minInvoicePrice = 0;
+  if (invoice) {
+    minInvoicePrice = Number(invoice.min_total_price);
+    invoiceMet = invoice.condition_type === "exact" ? subtotal === minInvoicePrice : subtotal >= minInvoicePrice;
+    if (invoiceMet) {
+      invoiceDiscountAmount = Math.round((subtotal * Number(invoice.discount_percentage)) / 100);
+      appliedDetails.push(`Giảm ${invoice.discount_percentage}% cho hóa đơn từ ${minInvoicePrice.toLocaleString("vi-VN")}đ (-${invoiceDiscountAmount.toLocaleString("vi-VN")}đ)`);
+    }
+  }
+
+  // Lấy tên sản phẩm chỉ định nếu có để thông báo lỗi rõ ràng
+  let targetProductLabel = "sản phẩm chỉ định";
+  if (products.length) {
+    const vIds = products.map((p) => p.variant_id).filter(Boolean);
+    if (vIds.length) {
+      try {
+        const { data: vList } = await db.from("product_variants").select("products(name)").in("variant_id", vIds).limit(1);
+        if (vList && vList[0]?.products?.name) targetProductLabel = vList[0].products.name;
+      } catch {}
+    }
+  }
+
+  // RÀNG BUỘC ĐIỀU KIỆN ÁP DỤNG:
+  // Đối với chương trình COMBO: BẮT BUỘC PHẢI ĐỦ TẤT CẢ CÁC ĐIỀU KIỆN (cả sản phẩm VÀ hóa đơn) mới áp dụng được mã!
+  if (products.length && invoice) {
+    const hasProduct = matchedLines.length > 0;
+    if (!hasProduct && !invoiceMet) {
+      const missing = Math.max(0, minInvoicePrice - subtotal);
+      throw new HttpError(400, `Chương trình combo "${d.name}" yêu cầu giỏ hàng phải có "${targetProductLabel}" VÀ tổng đơn hàng từ ${minInvoicePrice.toLocaleString("vi-VN")}đ (hiện còn thiếu ${missing.toLocaleString("vi-VN")}đ).`);
+    }
+    if (!hasProduct) {
+      throw new HttpError(400, `Chương trình combo "${d.name}" yêu cầu giỏ hàng phải có "${targetProductLabel}" mới áp dụng được mã này.`);
+    }
+    if (!invoiceMet) {
+      const missing = Math.max(0, minInvoicePrice - subtotal);
+      throw new HttpError(400, `Chương trình combo "${d.name}" yêu cầu tổng đơn hàng đạt từ ${minInvoicePrice.toLocaleString("vi-VN")}đ (hiện còn thiếu ${missing.toLocaleString("vi-VN")}đ).`);
+    }
+  } else if (invoice && !invoiceMet) {
+    const missing = Math.max(0, minInvoicePrice - subtotal);
+    throw new HttpError(400, `Mã "${clean}" yêu cầu tổng đơn hàng từ ${minInvoicePrice.toLocaleString("vi-VN")}đ (hiện còn thiếu ${missing.toLocaleString("vi-VN")}đ).`);
+  } else if (products.length && !matchedLines.length) {
+    throw new HttpError(400, `Mã "${clean}" chỉ áp dụng cho sản phẩm "${targetProductLabel}", giỏ hàng chưa có sản phẩm phù hợp.`);
+  }
+
+  const totalDiscount = voucherDiscountAmount + productDiscountAmount + invoiceDiscountAmount;
+
+  if (totalDiscount <= 0) {
+    throw new HttpError(400, "Đơn hàng chưa đạt điều kiện áp dụng mã giảm giá này.");
+  }
+
+  const descLabel = appliedDetails.length ? `${d.name} (${appliedDetails.join(", ")})` : d.name;
+
+  return {
+    discount_id: d.discount_id,
+    code: d.code,
+    label: descLabel,
+    amount: Math.min(totalDiscount, subtotal),
+    voucher: !!voucher,
+    details: appliedDetails,
+  };
 }
+
+async function getAvailablePromotionsForCart(cart, uid) {
+  const today = new Date().toISOString().slice(0, 10);
+  const list = (x) => [].concat(x || []).filter(Boolean);
+
+  const { data: rawDiscounts } = await db.from("discounts")
+    .select("discount_id,name,code,begin_date,end_date,is_active,discount_by_voucher(*),discount_by_invoice(*),discount_by_product(*)")
+    .eq("is_active", true);
+
+  const activeDiscounts = (rawDiscounts || []).filter((d) => {
+    if (!d.code || !String(d.code).trim()) return false;
+    const startOk = !d.begin_date || d.begin_date <= today;
+    const endOk = !d.end_date || d.end_date >= today;
+    return startOk && endOk;
+  });
+
+  if (!activeDiscounts.length) return [];
+
+  // Lấy danh sách tên sản phẩm cho các variant trong quy tắc giảm giá
+  const allVarIds = [];
+  activeDiscounts.forEach((d) => {
+    list(d.discount_by_product).forEach((p) => {
+      if (p.variant_id) allVarIds.push(p.variant_id);
+    });
+  });
+
+  let varNameMap = {};
+  if (allVarIds.length) {
+    try {
+      const { data: vRows } = await db.from("product_variants")
+        .select("variant_id,pro_id,products(name)")
+        .in("variant_id", [...new Set(allVarIds)]);
+      (vRows || []).forEach((v) => {
+        varNameMap[v.variant_id] = v.products?.name || `Sản phẩm #${v.pro_id}`;
+      });
+    } catch (e) {
+      console.warn("Lỗi load product_variants cho promotions:", e.message);
+    }
+  }
+
+  // Lấy lịch sử dùng voucher của khách hàng
+  let userOrderCounts = {};
+  if (uid) {
+    try {
+      const { data: userOrders } = await db.from("orders")
+        .select("discount_id")
+        .eq("customer_id", uid)
+        .neq("status", "cancelled");
+      (userOrders || []).forEach((o) => {
+        if (o.discount_id) userOrderCounts[o.discount_id] = (userOrderCounts[o.discount_id] || 0) + 1;
+      });
+    } catch (e) {
+      console.warn("Lỗi load orders cho user promotions:", e.message);
+    }
+  }
+
+  const subtotal = cart?.subtotal || 0;
+  const lines = cart?.lines || [];
+
+  const evaluated = activeDiscounts.map((d) => {
+    const voucher = list(d.discount_by_voucher)[0];
+    const invoice = list(d.discount_by_invoice)[0];
+    const products = list(d.discount_by_product);
+
+    let eligible = true;
+    let reason = "Đủ điều kiện áp dụng";
+    let missingAmount = 0;
+    let targetProductNames = [];
+
+    // Tên các sản phẩm mục tiêu nếu có
+    products.forEach((p) => {
+      const name = varNameMap[p.variant_id];
+      if (name && !targetProductNames.includes(name)) targetProductNames.push(name);
+    });
+
+    // 1. Kiểm tra giới hạn lượt dùng
+    if (voucher) {
+      if (voucher.usage_limit != null && voucher.times_used >= voucher.usage_limit) {
+        eligible = false;
+        reason = "Mã giảm giá đã hết lượt sử dụng";
+      } else if (voucher.limit_per_cus != null && (userOrderCounts[d.discount_id] || 0) >= voucher.limit_per_cus) {
+        eligible = false;
+        reason = "Bạn đã dùng hết lượt cho mã này";
+      }
+    }
+
+    // 2. Tính toán mức giảm theo sản phẩm
+    let productDiscount = 0;
+    let matchedLines = [];
+    if (products.length) {
+      products.forEach((rule) => {
+        const line = lines.find((l) => l.variantId === rule.variant_id);
+        if (line) {
+          const disc = Math.round((line.subtotal * Number(rule.discount_percentage)) / 100);
+          productDiscount += disc;
+          matchedLines.push(line);
+        }
+      });
+    }
+
+    // 3. Tính toán mức giảm theo hóa đơn
+    let invoiceDiscount = 0;
+    let invoiceMet = false;
+    let minInvoice = 0;
+    if (invoice) {
+      minInvoice = Number(invoice.min_total_price || 0);
+      invoiceMet = invoice.condition_type === "exact" ? subtotal === minInvoice : subtotal >= minInvoice;
+      if (invoiceMet) {
+        invoiceDiscount = Math.round((subtotal * Number(invoice.discount_percentage)) / 100);
+      } else {
+        missingAmount = Math.max(0, minInvoice - subtotal);
+      }
+    }
+
+    // 4. Mức giảm voucher toàn đơn
+    let voucherDiscount = 0;
+    if (voucher && Number(voucher.discount_percentage) > 0) {
+      voucherDiscount = Math.round((subtotal * Number(voucher.discount_percentage)) / 100);
+    }
+
+    const totalDiscount = voucherDiscount + productDiscount + invoiceDiscount;
+
+    // Phân loại kiểu khuyến mãi
+    let type = "voucher";
+    let desc = "";
+    const prodLabel = targetProductNames.length ? targetProductNames.join(", ") : "sản phẩm chỉ định";
+
+    if (products.length && invoice) {
+      type = "combo";
+      const pDisc = products[0]?.discount_percentage || 10;
+      const iDisc = invoice.discount_percentage || 5;
+      desc = `Giảm ${pDisc}% cho ${prodLabel} & Giảm thêm ${iDisc}% cho đơn từ ${minInvoice.toLocaleString("vi-VN")}đ`;
+
+      if (eligible) {
+        const hasMatchedProduct = matchedLines.length > 0;
+        // Bắt buộc phải đủ TẤT CẢ các điều kiện (cả sản phẩm VÀ giá trị hóa đơn) mới đủ điều kiện
+        if (hasMatchedProduct && invoiceMet) {
+          eligible = true;
+          reason = "Đủ tất cả điều kiện combo (sản phẩm & hóa đơn)";
+        } else {
+          eligible = false;
+          if (!hasMatchedProduct && !invoiceMet) {
+            reason = `Cần có "${prodLabel}" trong giỏ VÀ mua thêm ${missingAmount.toLocaleString("vi-VN")}đ`;
+          } else if (!hasMatchedProduct) {
+            reason = `Cần có "${prodLabel}" trong giỏ hàng để áp dụng combo`;
+          } else {
+            reason = `Cần mua thêm ${missingAmount.toLocaleString("vi-VN")}đ để đạt mức ${minInvoice.toLocaleString("vi-VN")}đ`;
+          }
+        }
+      }
+    } else if (invoice) {
+      type = "invoice";
+      desc = `Giảm ${invoice.discount_percentage}% cho đơn hàng từ ${minInvoice.toLocaleString("vi-VN")}đ`;
+      if (eligible) {
+        if (invoiceMet) {
+          eligible = true;
+          reason = "Đơn hàng đủ điều kiện áp dụng";
+        } else {
+          eligible = false;
+          reason = `Đơn tối thiểu ${minInvoice.toLocaleString("vi-VN")}đ (còn thiếu ${missingAmount.toLocaleString("vi-VN")}đ)`;
+        }
+      }
+    } else if (products.length) {
+      type = "product";
+      const pDisc = products[0]?.discount_percentage || 10;
+      desc = `Giảm ${pDisc}% cho ${prodLabel}`;
+      if (eligible) {
+        if (matchedLines.length > 0) {
+          eligible = true;
+          reason = "Có sản phẩm áp dụng trong giỏ hàng";
+        } else {
+          eligible = false;
+          reason = `Áp dụng khi giỏ hàng có "${prodLabel}"`;
+        }
+      }
+    } else {
+      type = "voucher";
+      const vDisc = voucher?.discount_percentage || 10;
+      desc = `Giảm ${vDisc}% cho toàn bộ đơn hàng`;
+      if (eligible) {
+        eligible = true;
+        reason = "Mã áp dụng cho toàn bộ đơn hàng";
+      }
+    }
+
+    const calculatedDiscountAmount = eligible ? Math.min(totalDiscount, subtotal) : 0;
+
+    return {
+      id: d.discount_id,
+      code: d.code,
+      name: d.name,
+      description: desc,
+      type,
+      eligible,
+      discountAmount: calculatedDiscountAmount,
+      potentialDiscount: totalDiscount,
+      reason,
+      minTotal: minInvoice || null,
+      missingAmount,
+      endDate: d.end_date,
+      percent: invoice?.discount_percentage || voucher?.discount_percentage || products[0]?.discount_percentage || 0,
+    };
+  });
+
+  // Xếp mức độ ưu tiên từ trên xuống:
+  // 1. Đủ điều kiện xếp trước
+  // 2. Trong nhóm đủ điều kiện: Tiết kiệm nhiều nhất xếp trên
+  // 3. Trong nhóm chưa đủ điều kiện: Số tiền thiếu ít nhất xếp trên (dễ đạt nhất)
+  evaluated.sort((a, b) => {
+    if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+    if (a.eligible) return b.discountAmount - a.discountAmount;
+    return (a.missingAmount || Infinity) - (b.missingAmount || Infinity);
+  });
+
+  return evaluated;
+}
+
+app.get("/api/promotions/available", auth, wrap(async (req, res) => {
+  const cart = await loadCart(req.uid);
+  const items = await getAvailablePromotionsForCart(cart, req.uid);
+  res.json({ items });
+}));
 
 app.post("/api/vouchers/validate", auth, wrap(async (req, res) => {
   const cart = await loadCart(req.uid);

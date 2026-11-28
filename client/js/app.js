@@ -1017,13 +1017,15 @@
 
   // ---------- thành phần dùng chung ----------
   function productCard(p) {
-    const range =
-      p.maxPrice > p.price ? `Từ ${money(p.price)}` : money(p.price);
+    const range = money(p.price);
+    const origRange = money(p.originalPrice);
     const isOut =
       p.inStock === false || (typeof p.stock === "number" && p.stock <= 0);
     let badgeHtml = "";
     if (isOut) {
       badgeHtml = '<span class="tag" style="background:#555">Hết hàng</span>';
+    } else if (p.hasDiscount && p.discountPercent > 0) {
+      badgeHtml = `<span class="tag" style="background:linear-gradient(135deg, #dc2626, #b91c1c);color:#fff;font-weight:700;box-shadow:0 2px 6px rgba(220,38,38,0.35)">🔥 GIẢM -${p.discountPercent}%</span>`;
     } else if (p.id === 1 || p.isFeatured) {
       badgeHtml = '<span class="tag">✨ Tuyệt tác 2026</span>';
     } else if (p.id === 2 || (p.price && p.price >= 30000000)) {
@@ -1058,9 +1060,12 @@
       <div class="body">
         <span class="cat">${esc(p.category || "")}</span>
         <h3>${esc(p.name)}</h3>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-          <span class="price">${range}</span>
-          <span style="font-size:0.8rem;color:var(--gold);font-weight:600;letter-spacing:0.04em">Khám phá →</span>
+        <div class="card-price-row">
+          <div class="card-price-box">
+            <span class="price ${p.hasDiscount ? "price-sale" : ""}">${range}</span>
+            <span class="price-orig">${p.hasDiscount && p.originalPrice > p.price ? origRange : "&nbsp;"}</span>
+          </div>
+          <span class="card-explore">Khám phá →</span>
         </div>
         ${stockHtml}
         <div class="card-add-wrap">

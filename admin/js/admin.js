@@ -1233,16 +1233,14 @@
       state.selectedInvoiceId = rows[0].id;
     }
 
-    const grid = "minmax(90px, 1fr) minmax(130px, 1.3fr) minmax(105px, 1fr) minmax(120px, 1.2fr) minmax(90px, 0.9fr) minmax(110px, 1.1fr)";
-    table.innerHTML = buildRowHeader(["Mã HĐ", "Khách hàng", "Số điện thoại", "Ngày xuất", "Thuế VAT", "Tổng tiền"], grid) +
+    const grid = "minmax(110px, 1.1fr) minmax(140px, 1.3fr) minmax(110px, 1fr) minmax(130px, 1.2fr)";
+    table.innerHTML = buildRowHeader(["Mã hóa đơn", "Ngày xuất", "Thuế VAT", "Tổng tiền"], grid) +
       rows.map((item) => `
         <div class="admin-row clickable-row ${state.selectedInvoiceId === item.id ? 'selected-row' : ''}"
              id="invoice-row-${item.id}"
              onclick="selectInvoiceRow(${item.id})"
              style="grid-template-columns: ${grid};">
           <strong>${item.code}</strong>
-          <span>${item.customer}</span>
-          <span>${item.phone || "--"}</span>
           <div style="line-height:1.3;">${formatTableDateTime(item.date)}</div>
           <small style="color:#666;">${formatMoney(item.vatAmount)}</small>
           <strong style="color:var(--admin-green);">${formatMoney(item.amount)}</strong>
@@ -1519,6 +1517,13 @@
     renderPromotionsTable(searchVal);
   };
 
+  window.handlePromoScopeChange = (scope) => {
+    const catWrap = document.getElementById("promoCategoryWrap");
+    const prodWrap = document.getElementById("promoProductWrap");
+    if (catWrap) catWrap.style.display = scope === "category" ? "block" : "none";
+    if (prodWrap) prodWrap.style.display = scope === "product" ? "block" : "none";
+  };
+
   window.handlePromoTypeChange = (type) => {
     const fieldProd = document.getElementById("promoFieldProduct");
     const fieldVouch = document.getElementById("promoFieldVoucher");
@@ -1526,24 +1531,37 @@
     const codeInput = document.getElementById("promoCodeInput");
     const minInvInput = document.getElementById("promoMinInvoiceInput");
     const prodSelect = document.getElementById("promoProductSelect");
+    const invDiscWrap = document.getElementById("promoInvoiceDiscountWrap");
+    const generalLabel = document.getElementById("promoDiscountGeneralLabel");
+    const prodDesc = document.getElementById("promoProductDesc");
 
-    if (fieldProd) fieldProd.style.display = type === "product" ? "block" : "none";
-    if (fieldVouch) fieldVouch.style.display = (type === "voucher" || type === "invoice") ? "block" : "none";
-    if (fieldInv) fieldInv.style.display = type === "invoice" ? "block" : "none";
+    if (fieldProd) fieldProd.style.display = (type === "product" || type === "combo") ? "block" : "none";
+    if (fieldVouch) fieldVouch.style.display = (type === "voucher" || type === "combo") ? "block" : "none";
+    if (fieldInv) fieldInv.style.display = (type === "invoice" || type === "combo") ? "block" : "none";
+    if (invDiscWrap) invDiscWrap.style.display = type === "combo" ? "block" : "none";
+
+    if (prodDesc) {
+      if (type === "combo") {
+        prodDesc.textContent = "Khách hàng nhập mã khuyến mãi sẽ được giảm % cho sản phẩm này trong giỏ hàng.";
+      } else {
+        prodDesc.textContent = "Sản phẩm trong phạm vi này sẽ được giảm % trực tiếp theo thời gian thực trên Cửa hàng (khách không cần nhập mã).";
+      }
+    }
+
+    if (generalLabel) {
+      if (type === "combo") generalLabel.textContent = "Mức giảm cho sản phẩm (%)";
+      else if (type === "product") generalLabel.textContent = "Mức giảm giá sản phẩm trực tiếp (%)";
+      else if (type === "invoice") generalLabel.textContent = "Mức giảm hóa đơn (%)";
+      else generalLabel.textContent = "Mức giảm voucher (%)";
+    }
 
     if (codeInput) {
-      if (type === "product") codeInput.removeAttribute("required");
-      else if (type === "voucher") codeInput.setAttribute("required", "required");
+      if (type === "voucher" || type === "combo") codeInput.setAttribute("required", "required");
       else codeInput.removeAttribute("required");
     }
 
-    if (prodSelect) {
-      if (type === "product") prodSelect.setAttribute("required", "required");
-      else prodSelect.removeAttribute("required");
-    }
-
     if (minInvInput) {
-      if (type === "invoice") minInvInput.setAttribute("required", "required");
+      if (type === "invoice" || type === "combo") minInvInput.setAttribute("required", "required");
       else minInvInput.removeAttribute("required");
     }
   };
@@ -1633,9 +1651,12 @@
         let typeBadge = "";
         let applyTarget = "";
 
-        if (item.type === "product") {
-          typeBadge = '<span class="table-tag" style="background:#f3e8ff; color:#7e22ce; font-weight:700; border:1px solid #d8b4fe;">🏷️ Theo sản phẩm</span>';
-          applyTarget = `<strong style="color:#6b21a8; font-size:12px;">💍 ${item.productName || 'Sản phẩm chỉ định'}</strong>`;
+        if (item.type === "combo") {
+          typeBadge = '<span class="table-tag" style="background:#fffbeb; color:#b45309; font-weight:700; border:1px solid #fde68a;">🎁 Combo (SP + HĐ)</span>';
+          applyTarget = `<span>Mã: <code style="background:#fdf6ec; border:1px solid #e7d6b8; padding:2px 6px; font-weight:700; color:var(--admin-gold);">${item.code}</code> (SP: -${item.discount}%, Đơn: -${item.invoiceDiscount || 5}%)</span>`;
+        } else if (item.type === "product") {
+          typeBadge = '<span class="table-tag" style="background:#f3e8ff; color:#7e22ce; font-weight:700; border:1px solid #d8b4fe;">🏷️ Giảm sốc SP</span>';
+          applyTarget = `<strong style="color:#6b21a8; font-size:12px;">💍 ${item.productName || 'Toàn bộ danh mục'}</strong>`;
         } else if (item.type === "invoice") {
           typeBadge = '<span class="table-tag" style="background:#ecfdf5; color:#047857; font-weight:700; border:1px solid #a7f3d0;">🧾 Theo hóa đơn</span>';
           applyTarget = `<span>Đơn từ <strong>${formatMoney(item.minInvoiceAmount || 10000000)}</strong></span>`;
@@ -1699,15 +1720,28 @@
     let typeColor = "#b45309";
     let ruleHtml = "";
 
-    if (promo.type === "product") {
+    if (promo.type === "combo") {
+      typeTitle = "🎁 Chương trình kết hợp (Combo)";
+      typeColor = "#b45309";
+      ruleHtml = `
+        <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <strong style="color:#92400e; display:block; font-size:12px; margin-bottom:6px; text-transform:uppercase;">Ưu đãi kết hợp khi áp dụng mã ${promo.code}:</strong>
+          <ul style="margin:0; padding-left:18px; font-size:13px; color:#78350f; line-height:1.6;">
+            <li>Giảm <strong>${promo.discount}%</strong> cho sản phẩm: <strong>${promo.productName || 'Sản phẩm chỉ định'}</strong>.</li>
+            <li>Giảm thêm <strong>${promo.invoiceDiscount || 5}%</strong> cho tổng hóa đơn từ <strong>${formatMoney(promo.minInvoiceAmount || 20000000)}</strong>.</li>
+            <li>Giới hạn: <strong>${promo.timesUsed} / ${promo.usageLimit} lượt dùng</strong>.</li>
+          </ul>
+        </div>
+      `;
+    } else if (promo.type === "product") {
       typeTitle = "🏷️ Khuyến mãi theo Sản phẩm";
       typeColor = "#7e22ce";
       ruleHtml = `
         <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:12px; margin-bottom:12px;">
-          <strong style="color:#6b21a8; display:block; font-size:12px; margin-bottom:4px; text-transform:uppercase;">Quy tắc giảm theo sản phẩm:</strong>
+          <strong style="color:#6b21a8; display:block; font-size:12px; margin-bottom:4px; text-transform:uppercase;">Quy tắc giảm trực tiếp thời gian thực:</strong>
           <p style="margin:0; font-size:13px; color:#4c1d95;">
-            Áp dụng giảm trực tiếp <strong>${promo.discount}%</strong> vào giá bán của sản phẩm:
-            <br>💎 <strong>${promo.productName || 'Sản phẩm chỉ định'}</strong>
+            Áp dụng giảm trực tiếp <strong>${promo.discount}%</strong> vào giá bán của sản phẩm trên Cửa hàng (khách không cần nhập mã):
+            <br>💎 <strong>${promo.productName || 'Toàn bộ danh mục'}</strong>
           </p>
         </div>
       `;
@@ -1851,15 +1885,18 @@
       e.preventDefault();
       const fd = new FormData(promotionForm);
       const id = fd.get("id");
+      const scope = fd.get("scope");
       const body = {
         type: fd.get("type") || "voucher",
         name: fd.get("name"),
         code: fd.get("code") || "",
         discount: Number(fd.get("discount")),
+        invoiceDiscount: fd.get("invoiceDiscount") ? Number(fd.get("invoiceDiscount")) : null,
         beginDate: fd.get("beginDate") || null,
         endDate: fd.get("endDate") || null,
         usageLimit: Number(fd.get("usageLimit") || 100),
-        productId: fd.get("productId") ? Number(fd.get("productId")) : null,
+        productId: scope === "product" && fd.get("productId") ? Number(fd.get("productId")) : (fd.get("productId") ? Number(fd.get("productId")) : null),
+        categoryId: scope === "category" && fd.get("categoryId") ? Number(fd.get("categoryId")) : null,
         minInvoiceAmount: fd.get("minInvoiceAmount") ? Number(fd.get("minInvoiceAmount")) : null,
         status: fd.get("status"),
       };

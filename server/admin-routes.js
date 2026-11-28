@@ -1581,13 +1581,15 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       { data: productDiscounts },
       { data: productsList },
       { data: variantsList },
+      { data: categoriesList },
     ] = await Promise.all([
       db.from("discounts").select("*").order("discount_id", { ascending: false }),
       safeQuery(db.from("discount_by_voucher").select("*")),
       safeQuery(db.from("discount_by_invoice").select("*")),
       safeQuery(db.from("discount_by_product").select("*")),
-      safeQuery(db.from("products").select("pro_id,name,base_price,image_url")),
+      safeQuery(db.from("products").select("pro_id,cat_id,name,base_price")),
       safeQuery(db.from("product_variants").select("variant_id,pro_id,price")),
+      safeQuery(db.from("categories").select("cat_id,name")),
     ]);
     if (dErr) throw new HttpError(500, dErr.message);
 
@@ -1598,7 +1600,10 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     for (const inv of invoices || []) invMap[inv.discount_id] = inv;
 
     const prodDiscMap = {};
-    for (const pd of productDiscounts || []) prodDiscMap[pd.discount_id] = pd;
+    for (const pd of productDiscounts || []) {
+      if (!prodDiscMap[pd.discount_id]) prodDiscMap[pd.discount_id] = [];
+      prodDiscMap[pd.discount_id].push(pd);
+    }
 
     const prodMap = {};
     for (const p of productsList || []) prodMap[p.pro_id] = p;
@@ -1606,25 +1611,58 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
     const varMap = {};
     for (const va of variantsList || []) varMap[va.variant_id] = va;
 
+    const catMap = {};
+    for (const c of categoriesList || []) catMap[c.cat_id] = c.name;
+
     const now = new Date();
     const promoList = (discounts || []).map((d) => {
       const v = vMap[d.discount_id];
       const inv = invMap[d.discount_id];
-      const pd = prodDiscMap[d.discount_id];
+      const pds = prodDiscMap[d.discount_id] || [];
+      const pd = pds[0];
+
+      // Tìm sản phẩm và tên sản phẩm áp dụng chính xác
+      let targetProduct = null;
+      let resolvedProductName = null;
+      if (pds.length) {
+        const pNames = [];
+        const catIds = new Set();
+        pds.forEach((item) => {
+          const matchedVar = item.variant_id ? varMap[item.variant_id] : null;
+          const pId = item.pro_id || matchedVar?.pro_id;
+          const p = pId ? prodMap[pId] : null;
+          if (p) {
+            targetProduct = p;
+            if (!pNames.includes(p.name)) pNames.push(p.name);
+            if (p.cat_id) catIds.add(p.cat_id);
+          }
+        });
+        if (pNames.length === 1) {
+          resolvedProductName = pNames[0];
+        } else if (pNames.length > 1 && catIds.size === 1) {
+          const catName = catMap[Array.from(catIds)[0]];
+          resolvedProductName = catName ? `Toàn bộ ${catName}` : pNames.join(", ");
+        } else if (pNames.length > 1) {
+          resolvedProductName = pNames.join(", ");
+        }
+      }
 
       let type = "voucher";
       let typeLabel = "Theo voucher";
       let discountVal = 10;
-      let targetProduct = null;
+      let invoiceDiscountVal = null;
       let minInvoiceAmount = null;
 
-      if (pd) {
+      if (pd && inv) {
+        type = "combo";
+        typeLabel = "Chương trình kết hợp (Sản phẩm + Hóa đơn)";
+        discountVal = Number(pd.discount_percentage || 10);
+        invoiceDiscountVal = Number(inv.discount_percentage || 5);
+        minInvoiceAmount = Number(inv.min_total_price || 20000000);
+      } else if (pd) {
         type = "product";
         typeLabel = "Theo sản phẩm";
         discountVal = Number(pd.discount_percentage || 15);
-        const matchedVar = pd.variant_id ? varMap[pd.variant_id] : null;
-        const pId = pd.pro_id || matchedVar?.pro_id;
-        targetProduct = pId ? prodMap[pId] : null;
       } else if (inv) {
         type = "invoice";
         typeLabel = "Theo hóa đơn";
@@ -1662,8 +1700,9 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
         type,
         typeLabel,
         discount: discountVal,
+        invoiceDiscount: invoiceDiscountVal,
         productId: targetProduct?.pro_id || null,
-        productName: targetProduct?.name || (type === "product" ? "Nhẫn Kim Cương Vàng 18K" : null),
+        productName: resolvedProductName || targetProduct?.name || (type === "product" ? "Sản phẩm áp dụng" : (type === "combo" ? "Sản phẩm chỉ định" : null)),
         minInvoiceAmount: minInvoiceAmount || (type === "invoice" ? 10000000 : null),
         usageLimit: v?.usage_limit || 100,
         timesUsed: v?.times_used || 0,
@@ -1756,46 +1795,134 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
       name,
       code,
       discount = 10,
+      invoiceDiscount = 5,
       beginDate,
       endDate,
       usageLimit = 100,
       productId,
+      categoryId,
       minInvoiceAmount,
     } = req.body || {};
 
     if (!name) throw new HttpError(400, "Vui lòng nhập tên chương trình khuyến mãi.");
 
-    let finalCode = String(code || "").trim().toUpperCase();
-    if (!finalCode) {
-      if (type === "product") finalCode = "SP" + (productId || "SALE") + "_" + Math.round(discount);
-      else if (type === "invoice") finalCode = "BILL" + Math.round((Number(minInvoiceAmount || 10000000)) / 1000000) + "M";
-      else finalCode = "VOUCHER" + Math.round(discount);
+    let finalCode = "";
+    if (code && String(code).trim()) {
+      finalCode = String(code).trim().toUpperCase();
+      const { data: dupCheck } = await db.from("discounts")
+        .select("discount_id,name,is_active")
+        .ilike("code", finalCode)
+        .limit(1);
+      if (dupCheck && dupCheck.length > 0) {
+        throw new HttpError(400, `Mã khuyến mãi "${finalCode}" đã tồn tại trên hệ thống (thuộc chương trình: "${dupCheck[0].name}"). Vui lòng chọn một mã khác (ví dụ: ${finalCode}2026)!`);
+      }
+    } else {
+      let baseCode = "";
+      if (type === "product") baseCode = "SP" + (productId || (categoryId ? "CAT" + categoryId : "SALE")) + "_" + Math.round(discount);
+      else if (type === "invoice") baseCode = "BILL" + Math.round((Number(minInvoiceAmount || 10000000)) / 1000000) + "M";
+      else if (type === "combo") baseCode = "COMBO" + Math.round(discount);
+      else baseCode = "VOUCHER" + Math.round(discount);
+
+      let candidate = baseCode;
+      let counter = 1;
+      while (true) {
+        const { data: exist } = await db.from("discounts").select("discount_id").ilike("code", candidate).limit(1);
+        if (!exist || exist.length === 0) {
+          finalCode = candidate;
+          break;
+        }
+        counter++;
+        candidate = `${baseCode}_${counter}`;
+      }
     }
 
-    const disc = one(must(await db.from("discounts").insert({
-      name: String(name).trim(),
-      code: finalCode,
-      begin_date: beginDate || new Date().toISOString().split("T")[0],
-      end_date: endDate || null,
-      is_active: true,
-    }).select("discount_id")));
-
-    if (type === "product") {
-      let varId = null;
-      if (productId) {
-        try {
-          const { data: vList } = await db.from("product_variants").select("variant_id").eq("pro_id", productId).limit(1);
-          if (vList && vList[0]) varId = vList[0].variant_id;
-        } catch {}
+    let disc;
+    try {
+      disc = one(must(await db.from("discounts").insert({
+        name: String(name).trim(),
+        code: finalCode,
+        begin_date: beginDate || new Date().toISOString().split("T")[0],
+        end_date: endDate || null,
+        is_active: true,
+      }).select("discount_id")));
+    } catch (err) {
+      if (err.message && err.message.includes("discounts_code_key")) {
+        throw new HttpError(400, `Mã khuyến mãi "${finalCode}" đã được sử dụng. Vui lòng chọn một mã khác!`);
       }
+      throw err;
+    }
+
+    // Lấy danh sách variantIds áp dụng (theo sản phẩm hoặc theo toàn bộ danh mục)
+    let targetVariantIds = [];
+    if (productId) {
       try {
-        await db.from("discount_by_product").insert({
+        const { data: vList } = await db.from("product_variants").select("variant_id").eq("pro_id", productId);
+        if (vList && vList.length) targetVariantIds = vList.map((v) => v.variant_id);
+      } catch {}
+    } else if (categoryId) {
+      try {
+        const { data: allCats } = await db.from("categories").select("cat_id,parent_cat_id");
+        const targetCatIds = [Number(categoryId)];
+        (allCats || []).forEach((c) => {
+          if (c.parent_cat_id === Number(categoryId)) targetCatIds.push(c.cat_id);
+        });
+        const { data: prods } = await db.from("products").select("pro_id").in("cat_id", targetCatIds);
+        const proIds = (prods || []).map((p) => p.pro_id);
+        if (proIds.length) {
+          const { data: vList } = await db.from("product_variants").select("variant_id").in("pro_id", proIds);
+          if (vList && vList.length) targetVariantIds = vList.map((v) => v.variant_id);
+        }
+      } catch {}
+    }
+
+    if (type === "combo") {
+      // 1. Giảm theo sản phẩm / danh mục
+      if (targetVariantIds.length) {
+        for (const varId of targetVariantIds) {
+          try {
+            await db.from("discount_by_product").insert({
+              discount_id: disc.discount_id,
+              variant_id: varId,
+              discount_percentage: Number(discount || 10),
+            });
+          } catch {}
+        }
+      }
+      // 2. Giảm theo hóa đơn
+      try {
+        await db.from("discount_by_invoice").insert({
           discount_id: disc.discount_id,
-          variant_id: varId,
-          discount_percentage: Number(discount),
+          min_total_price: Number(minInvoiceAmount || 20000000),
+          discount_percentage: Number(invoiceDiscount || discount || 5),
+          condition_type: "at_least",
         });
       } catch (err) {
-        console.warn("Lưu discount_by_product:", err.message);
+        console.warn("Lưu discount_by_invoice cho combo:", err.message);
+      }
+      // 3. Voucher record
+      try {
+        await db.from("discount_by_voucher").insert({
+          discount_id: disc.discount_id,
+          voucher_name: String(name).trim(),
+          discount_percentage: 0,
+          usage_limit: Number(usageLimit || 100),
+          times_used: 0,
+          limit_per_cus: 1,
+        });
+      } catch {}
+    } else if (type === "product") {
+      if (targetVariantIds.length) {
+        for (const varId of targetVariantIds) {
+          try {
+            await db.from("discount_by_product").insert({
+              discount_id: disc.discount_id,
+              variant_id: varId,
+              discount_percentage: Number(discount),
+            });
+          } catch (err) {
+            console.warn("Lưu discount_by_product:", err.message);
+          }
+        }
       }
     } else if (type === "invoice") {
       try {
@@ -1803,7 +1930,7 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
           discount_id: disc.discount_id,
           min_total_price: Number(minInvoiceAmount || 10000000),
           discount_percentage: Number(discount),
-          condition_type: "greater_or_equal",
+          condition_type: "at_least",
         });
       } catch (err) {
         console.warn("Lưu discount_by_invoice:", err.message);
@@ -1833,12 +1960,30 @@ function createAdminRouter({ db, HttpError, wrap, must, one, splitName, fullName
 
     const updates = {};
     if (name) updates.name = String(name).trim();
-    if (code) updates.code = String(code).trim().toUpperCase();
+    if (code) {
+      const cleanCode = String(code).trim().toUpperCase();
+      const { data: dupCheck } = await db.from("discounts")
+        .select("discount_id,name")
+        .ilike("code", cleanCode)
+        .neq("discount_id", id)
+        .limit(1);
+      if (dupCheck && dupCheck.length > 0) {
+        throw new HttpError(400, `Mã khuyến mãi "${cleanCode}" đã trùng với chương trình: "${dupCheck[0].name}". Vui lòng chọn một mã khác!`);
+      }
+      updates.code = cleanCode;
+    }
     if (endDate !== undefined) updates.end_date = endDate || null;
     if (status !== undefined) updates.is_active = status === "Hoạt động";
     updates.updated_at = new Date().toISOString();
 
-    must(await db.from("discounts").update(updates).eq("discount_id", id));
+    try {
+      must(await db.from("discounts").update(updates).eq("discount_id", id));
+    } catch (err) {
+      if (err.message && err.message.includes("discounts_code_key")) {
+        throw new HttpError(400, `Mã khuyến mãi "${updates.code}" đã được sử dụng. Vui lòng chọn mã khác!`);
+      }
+      throw err;
+    }
 
     if (discount !== undefined) {
       try {

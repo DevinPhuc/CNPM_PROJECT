@@ -10,7 +10,7 @@
     ["credit_card", "Thẻ quốc tế Visa / MasterCard / JCB", "Thanh toán trực tuyến bảo mật chuẩn PCI-DSS."],
   ];
 
-  let cart, addresses = [], method = "cod", voucher = null;
+  let cart, addresses = [], method = "cod", voucher = null, availablePromotions = [], showManualCodeInput = false;
 
   let orderInfo = {
     recipientName: "",
@@ -79,7 +79,14 @@
     if (!orderInfo.phone) orderInfo.phone = Jewels.state.user.phone || "";
 
     try {
-      [cart, addresses] = await Promise.all([api("/cart"), api("/addresses")]);
+      const [cartData, addrData, promoData] = await Promise.all([
+        api("/cart"),
+        api("/addresses"),
+        api("/promotions/available").catch(() => ({ items: [] })),
+      ]);
+      cart = cartData;
+      addresses = addrData;
+      availablePromotions = promoData?.items || [];
     } catch (e) {
       root.innerHTML = `<div class="empty"><h3>${esc(e.message)}</h3></div>`;
       return;
@@ -298,8 +305,11 @@
                   <div>
                     <h4>${esc(i.name)}</h4>
                     <small>${esc(variantLabel(i))} · SL ${i.quantity}</small>
+                    ${i.hasDiscount && i.originalPrice > i.price ? `
+                      <small style="color:#dc2626;display:block;margin-top:2px;font-weight:600;">🔥 Giảm -${i.discountPercent}% <span style="text-decoration:line-through;color:#94a3b8;font-weight:normal;">(${money(i.originalPrice)})</span></small>
+                    ` : ""}
                   </div>
-                  <strong class="price">${money(i.subtotal)}</strong>
+                  <strong class="price" style="${i.hasDiscount ? "color:#dc2626;" : ""}">${money(i.subtotal)}</strong>
                 </div>`).join("")}
             </div>
           </section>
@@ -308,11 +318,110 @@
         <!-- TÓM TẮT ĐƠN HÀNG & NÚT ĐẶT HÀNG -->
         <aside class="panel" style="position:sticky;top:100px">
           <h3>Tóm tắt đơn hàng</h3>
-          <div class="voucher">
-            <input id="code" placeholder="Mã giảm giá" value="${esc(voucher?.code || "")}" ${voucher ? "readonly" : ""}>
-            ${voucher ? '<button class="btn sm outline" id="rmVoucher" type="button">Bỏ</button>' : '<button class="btn sm" id="applyVoucher" type="button">Áp dụng</button>'}
+
+          <!-- KHU VỰC CHỌN MÃ KHUYẾN MÃI (ƯU TIÊN MÃ ĐỦ ĐIỀU KIỆN XẾP TRÊN) -->
+          <div class="checkout-promotions-section">
+            <div class="promo-section-head">
+              <div class="promo-head-title">
+                <span class="promo-head-icon">🎁</span>
+                <strong>Mã khuyến mãi & Ưu đãi</strong>
+              </div>
+              ${availablePromotions.filter((p) => p.eligible).length > 0 ? `<span class="promo-head-badge">${availablePromotions.filter((p) => p.eligible).length} mã khả dụng</span>` : ""}
+            </div>
+
+            ${voucher ? `
+              <div class="promo-applied-card">
+                <div class="promo-applied-left">
+                  <div class="promo-applied-badge">✓ ĐANG ÁP DỤNG MÃ</div>
+                  <div class="promo-applied-code">${esc(voucher.code)}</div>
+                  <div class="promo-applied-label">${esc(voucher.label || 'Đã áp dụng mã')}</div>
+                </div>
+                <div class="promo-applied-right">
+                  <div class="promo-applied-amount">-${money(voucher.amount)}</div>
+                  <button type="button" class="btn-remove-promo" id="rmVoucher">Bỏ chọn</button>
+                </div>
+              </div>
+            ` : ""}
+
+            <div class="promo-cards-list">
+              ${!availablePromotions.length 
+                ? `<div class="promo-empty">Hiện chưa có chương trình khuyến mãi nào đang diễn ra.</div>`
+                : availablePromotions.map((p) => {
+                    const isSelected = voucher && voucher.code === p.code;
+                    const isEligible = p.eligible;
+
+                    let typeIcon = "🎟️";
+                    let typeBadgeText = "VOUCHER";
+                    let typeBadgeStyle = "background:#fef3c7; color:#92400e;";
+                    if (p.type === "combo") {
+                      typeIcon = "🎁";
+                      typeBadgeText = "COMBO";
+                      typeBadgeStyle = "background:#fdf2f8; color:#9d174d;";
+                    } else if (p.type === "invoice") {
+                      typeIcon = "🧾";
+                      typeBadgeText = "HÓA ĐƠN";
+                      typeBadgeStyle = "background:#eff6ff; color:#1e40af;";
+                    } else if (p.type === "product") {
+                      typeIcon = "🏷️";
+                      typeBadgeText = "SẢN PHẨM";
+                      typeBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+                    }
+
+                    return `
+                      <div class="promo-item-card ${isEligible ? "eligible" : "ineligible"} ${isSelected ? "selected" : ""}" data-code="${esc(p.code)}">
+                        <div class="promo-card-top">
+                          <div class="promo-card-left">
+                            <span class="promo-type-tag" style="${typeBadgeStyle}">${typeIcon} ${typeBadgeText}</span>
+                            <span class="promo-code-pill">${esc(p.code)}</span>
+                          </div>
+                          <div class="promo-card-right">
+                            ${isEligible 
+                              ? `<span class="promo-status-tag tag-eligible">✓ Đủ điều kiện</span>`
+                              : `<span class="promo-status-tag tag-ineligible">Chưa đủ điều kiện</span>`
+                            }
+                          </div>
+                        </div>
+
+                        <div class="promo-card-body">
+                          <div class="promo-card-name">${esc(p.name)}</div>
+                          <div class="promo-card-desc">${esc(p.description)}</div>
+                          ${!isEligible && p.reason ? `<div class="promo-card-reason">⚠️ ${esc(p.reason)}</div>` : ""}
+                        </div>
+
+                        <div class="promo-card-footer">
+                          <div class="promo-card-savings">
+                            ${isEligible 
+                              ? `Tiết kiệm: <strong class="text-gold">-${money(p.discountAmount)}</strong>`
+                              : `<span class="promo-savings-hint">${p.percent ? 'Ưu đãi: -' + p.percent + '%' : 'Chưa đạt điều kiện'}</span>`
+                            }
+                          </div>
+                          <div class="promo-card-action">
+                            ${isSelected 
+                              ? `<button type="button" class="btn-promo-action btn-promo-selected" data-action="remove" data-code="${esc(p.code)}">✓ Đang dùng</button>`
+                              : isEligible
+                                ? `<button type="button" class="btn-promo-action btn-promo-apply" data-action="apply" data-code="${esc(p.code)}">Áp dụng</button>`
+                                : `<button type="button" class="btn-promo-action btn-promo-locked" disabled>Chưa đạt ĐK</button>`
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  }).join("")
+              }
+            </div>
+
+            <div class="promo-manual-entry">
+              <button type="button" class="promo-toggle-manual" id="toggleManualCode">
+                ${showManualCodeInput ? "▲ Thu gọn ô nhập mã" : "▼ Bạn có mã giảm giá khác? Nhập tại đây"}
+              </button>
+              <div class="promo-manual-form" id="manualPromoWrap" style="display:${showManualCodeInput ? 'flex' : 'none'};">
+                <input id="code" placeholder="Nhập mã ưu đãi..." value="${esc(voucher?.code || "")}">
+                <button class="btn sm" id="applyVoucher" type="button">Áp dụng</button>
+              </div>
+              <p class="feedback ${voucher ? "ok" : ""}" id="voucherFb">${voucher ? "✓ " + esc(voucher.label) : ""}</p>
+            </div>
           </div>
-          <p class="feedback ${voucher ? "ok" : ""}" id="voucherFb">${voucher ? "✓ " + esc(voucher.label) : ""}</p>
+
           <div class="sum-row"><span>Tạm tính tiền hàng</span><strong>${money(cart.subtotal)}</strong></div>
           ${discount > 0 ? `<div class="sum-row" style="color:var(--ok)"><span>Giảm giá</span><strong>-${money(discount)}</strong></div>` : ""}
           
@@ -339,25 +448,74 @@
     $("#orderAddress")?.addEventListener("input", (e) => { orderInfo.address = e.target.value; });
   }
 
-  async function applyVoucher() {
-    const code = $("#code")?.value.trim();
+  async function applyVoucher(targetCode) {
+    const code = (targetCode || $("#code")?.value || "").trim();
     const fb = $("#voucherFb");
-    if (!fb) return;
-    fb.className = "feedback";
-    fb.textContent = "";
+    if (fb) {
+      fb.className = "feedback";
+      fb.textContent = "";
+    }
+    if (!code) {
+      if (fb) fb.textContent = "Vui lòng chọn hoặc nhập mã khuyến mãi.";
+      return;
+    }
     try {
       voucher = await api("/vouchers/validate", { method: "POST", body: { code } });
+      try {
+        const refreshed = await api("/promotions/available");
+        availablePromotions = refreshed?.items || availablePromotions;
+      } catch {}
       render();
     } catch (e) {
-      fb.textContent = e.message;
+      if (fb) fb.textContent = e.message;
+      toast(e.message, "warn");
     }
   }
 
+  async function removeVoucher() {
+    voucher = null;
+    try {
+      const refreshed = await api("/promotions/available");
+      availablePromotions = refreshed?.items || availablePromotions;
+    } catch {}
+    render();
+  }
+
   root.addEventListener("click", async (e) => {
-    const id = e.target.id;
-    if (id === "applyVoucher") applyVoucher();
-    else if (id === "rmVoucher") { voucher = null; render(); }
-    else if (id === "placeOrder") handleOrderSubmit(e.target);
+    const btn = e.target.closest("button");
+    if (btn) {
+      if (btn.id === "applyVoucher") {
+        applyVoucher();
+        return;
+      }
+      if (btn.id === "rmVoucher" || btn.dataset.action === "remove") {
+        removeVoucher();
+        return;
+      }
+      if (btn.dataset.action === "apply") {
+        const code = btn.dataset.code;
+        if (code) applyVoucher(code);
+        return;
+      }
+      if (btn.id === "toggleManualCode") {
+        showManualCodeInput = !showManualCodeInput;
+        render();
+        return;
+      }
+      if (btn.id === "placeOrder") {
+        handleOrderSubmit(btn);
+        return;
+      }
+    }
+
+    // Nhấp vào thẻ khuyến mãi đủ điều kiện để áp dụng nhanh
+    const card = e.target.closest(".promo-item-card.eligible");
+    if (card && !btn) {
+      const code = card.dataset.code;
+      if (code && (!voucher || voucher.code !== code)) {
+        applyVoucher(code);
+      }
+    }
   });
 
   root.addEventListener("change", (e) => {

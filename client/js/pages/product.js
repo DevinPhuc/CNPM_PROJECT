@@ -43,11 +43,15 @@
 
   function render() {
     const price = variant ? variant.price : p.basePrice;
+    const origPrice = variant ? (variant.originalPrice || variant.price) : (p.originalBasePrice || p.basePrice);
+    const hasDisc = variant ? (variant.hasDiscount || false) : (p.hasDiscount || false);
+    const discPercent = variant ? (variant.discountPercent || 0) : (p.discountPercent || 0);
     const canBuy = variant && variant.stock > 0;
     root.innerHTML = `
       <div class="product">
         <div class="gallery">
           <div class="main">
+            ${hasDisc && discPercent > 0 ? `<span class="tag" style="background:linear-gradient(135deg, #dc2626, #b91c1c);color:#fff;font-weight:700;box-shadow:0 2px 6px rgba(220,38,38,0.35);position:absolute;top:16px;left:16px;z-index:5;">🔥 GIẢM -${discPercent}%</span>` : ""}
             <img id="mainImg" src="${esc(p.images[imgIndex].url)}" alt="${esc(p.name)}">
             <div class="sparkle-container" aria-hidden="true">
               <span class="sparkle sp-1">✦</span>
@@ -60,10 +64,18 @@
         <div class="info">
           <p class="eyebrow">${esc(p.category)}</p>
           <h1>${esc(p.name)}</h1>
-          <span class="price">${money(price)}</span>
+          <div style="display:flex;align-items:baseline;gap:12px;margin:8px 0 12px;flex-wrap:wrap;">
+            <span class="price" style="${hasDisc ? "color:#dc2626;font-size:1.8rem;font-weight:700;" : ""}">${money(price)}</span>
+            ${hasDisc && origPrice > price ? `<span style="font-size:1.1rem;color:#888;text-decoration:line-through;">${money(origPrice)}</span>` : ""}
+            ${hasDisc && discPercent > 0 ? `<span class="tag" style="background:#dc2626;color:#fff;font-weight:700;padding:3px 8px;border-radius:6px;font-size:0.85rem">🔥 -${discPercent}%</span>` : ""}
+          </div>
+          ${hasDisc && discPercent > 0 ? `
+          <div style="margin-bottom:12px;padding:8px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:0.85rem;color:#991b1b;display:flex;align-items:center;gap:6px">
+            <span>⚡ <b>Khuyến mãi thời gian thực:</b> Sản phẩm đang được áp dụng mức giảm <b>-${discPercent}%</b> trực tiếp hôm nay!</span>
+          </div>` : ""}
           <p class="muted">${esc(p.description || "")}</p>
           ${p.variants.length ? `<div class="opt-group"><span>Phiên bản</span><div class="chips">
-            ${p.variants.map((v) => `<button class="chip ${variant && v.id === variant.id ? "active" : ""}" data-v="${v.id}" ${v.stock <= 0 ? "disabled" : ""}>${esc(variantLabel(v) || "Tiêu chuẩn")}</button>`).join("")}
+            ${p.variants.map((v) => `<button class="chip ${variant && v.id === variant.id ? "active" : ""}" data-v="${v.id}" ${v.stock <= 0 ? "disabled" : ""}>${esc(variantLabel(v) || "Tiêu chuẩn")}${v.hasDiscount && v.discountPercent > 0 ? ` <span style="color:#dc2626;font-weight:700;font-size:0.75rem;">(-${v.discountPercent}%)</span>` : ""}</button>`).join("")}
           </div></div>` : ""}
           ${stockHtml(variant)}
           <div class="buy-row">
